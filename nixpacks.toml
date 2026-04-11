@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.build]
+cmds = ["npm ci --omit=dev"]
+
+[start]
+cmd = "node apps/api/src/server.js"
