@@ -1,0 +1,38 @@
+import { Router } from 'express';
+import { protect, blockIfMustChangePassword, adminOnly, authorize } from '../../middleware/auth.js';
+import requireFeature from '../../middleware/requireFeature.js';
+import {
+  createTimetable,
+  listTimetables,
+  getTimetable,
+  updateSlots,
+  deleteTimetable,
+} from './timetable.controller.js';
+import {
+  validateCreateTimetable,
+  validateListTimetables,
+  validateUpdateSlots,
+} from './timetable.validator.js';
+import { ROLES, PLAN_FEATURES } from '../../constants/index.js';
+
+const router = Router();
+
+// ── Feature gate: timetable module ───────────────────────────────────────────
+// TODO: Assign to correct plan tier in PLAN_FEATURE_MAP once pricing is finalised.
+router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.TIMETABLE));
+
+// Read access: admins + teachers
+const canRead = authorize(
+  ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
+  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.SECRETARY
+);
+
+router.get('/',   canRead, validateListTimetables, listTimetables);
+router.get('/:id', canRead, getTimetable);
+
+// Write access: admins only
+router.post('/',            adminOnly, validateCreateTimetable, createTimetable);
+router.put('/:id/slots',    adminOnly, validateUpdateSlots, updateSlots);
+router.delete('/:id',       adminOnly, deleteTimetable);
+
+export default router;

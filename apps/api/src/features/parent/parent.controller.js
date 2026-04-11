@@ -1,0 +1,220 @@
+/**
+ * Parent Portal — read-only API for parents/guardians.
+ *
+ * All endpoints verify that the requested studentId is in req.user.children
+ * (the parent's own linked children). No cross-tenant leakage is possible
+ * because the student lookup always filters by schoolId AND _id.
+ */
+import Student from '../students/Student.model.js';
+import Attendance from '../attendance/Attendance.model.js';
+import Result from '../results/Result.model.js';
+import Payment from '../fees/Payment.model.js';
+import FeeStructure from '../fees/FeeStructure.model.js';
+import ReportCard from '../report-cards/ReportCard.model.js';
+import asyncHandler from '../../utils/asyncHandler.js';
+import { sendSuccess, sendError } from '../../utils/response.js';
+import { paginate } from '../../utils/pagination.js';
+import { PAYMENT_STATUSES } from '../../constants/index.js';
+
+// ── Guard helper — verify student belongs to this parent ──────────────────────
+
+const resolveChild = async (req, studentId) => {
+  // Parent's children array is set at enrollment time
+  const isLinked = req.user.children?.some((id) => id.toString() === studentId);
+  if (!isLinked) return null;
+
+  return Student.findOne({ _id: studentId, schoolId: req.user.schoolId })
+    .populate('classId', 'name stream levelCategory academicYear term');
+};
+
+// ── Controllers ───────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/parent/children
+ * Lists all students linked to the logged-in parent.
+ */
+export const getMyChildren = asyncHandler(async (req, res) => {
+  const children = await Student.find({
+    _id: { $in: req.user.children ?? [] },
+    schoolId: req.user.schoolId,
+  })
+    .populate('classId', 'name stream levelCategory academicYear term')
+    .sort({ lastName: 1, firstName: 1 });
+
+  return sendSuccess(res, { children });
+});
+
+/**
+ * GET /api/v1/parent/children/:studentId/fees
+ * Fee balance summary for a child.
+ * Query: ?academicYear=2025&term=Term%201
+ */
+export const getChildFees = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+  const { academicYear, term } = req.query;
+
+  if (!academicYear || !term) {
+    return sendError(res, 'academicYear and term query params are required.', 400);
+  }
+
+  const student = await resolveChild(req, studentId);
+  if (!student) return sendError(res, 'Child not found.', 404);
+
+  const structure = await FeeStructure.findOne({
+    schoolId: req.user.schoolId,
+    classId: student.classId,
+    academicYear,
+    term,
+  });
+
+  const [agg] = await Payment.aggregate([
+    {
+      $match: {
+        schoolId: req.user.schoolId,
+        studentId: student._id,
+        academicYear,
+        term,
+        status: PAYMENT_STATUSES.COMPLETED,
+      },
+    },
+    { $group: { _id: null, totalPaid: { $sum: '$amount' } } },
+  ]);
+
+  const totalPaid = agg?.totalPaid ?? 0;
+  const expectedFee = structure?.totalAmount ?? 0;
+  const outstanding = Math.max(0, expectedFee - totalPaid);
+
+  // Recent payments (latest 10 — enough for parent view)
+  const recentPayments = await Payment.find({
+    schoolId: req.user.schoolId,
+    studentId: student._id,
+    academicYear,
+    term,
+    status: PAYMENT_STATUSES.COMPLETED,
+  })
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .select('amount method reference createdAt receiptUrl');
+
+  return sendSuccess(res, {
+    student: {
+      _id: student._id,
+      firstName: student.firstName,
+      lastName: student.lastName,
+      admissionNumber: student.admissionNumber,
+    },
+    academicYear,
+    term,
+    expectedFee,
+    totalPaid,
+    outstanding,
+    isPaidUp: outstanding === 0,
+    recentPayments,
+  });
+});
+
+/**
+ * GET /api/v1/parent/children/:studentId/attendance
+ * Attendance summary and register list for a child.
+ * Query: ?academicYear=2025&term=Term%201
+ */
+export const getChildAttendance = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+  const { academicYear, term } = req.query;
+
+  const student = await resolveChild(req, studentId);
+  if (!student) return sendError(res, 'Child not found.', 404);
+
+  const filter = {
+    schoolId: req.user.schoolId,
+    'entries.studentId': student._id,
+    status: 'submitted', // only show finalised registers
+  };
+  if (academicYear) filter.academicYear = academicYear;
+  if (term) filter.term = term;
+
+  const total = await Attendance.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const registers = await Attendance.find(filter)
+    .sort({ date: -1 })
+    .skip(skip)
+    .limit(limit)
+    .select('date academicYear term entries.$');
+
+  // Flatten to just this student's entry per day
+  const days = registers.map((r) => {
+    const entry = r.entries.find((e) => e.studentId.toString() === studentId);
+    return {
+      date: r.date,
+      academicYear: r.academicYear,
+      term: r.term,
+      status: entry?.status ?? 'unknown',
+      note: entry?.note,
+    };
+  });
+
+  return sendSuccess(res, { student: { firstName: student.firstName, lastName: student.lastName }, days, meta });
+});
+
+/**
+ * GET /api/v1/parent/children/:studentId/results
+ * Exam results for a child.
+ * Query: ?academicYear=2025&term=Term%201
+ */
+export const getChildResults = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+  const { academicYear, term } = req.query;
+
+  const student = await resolveChild(req, studentId);
+  if (!student) return sendError(res, 'Child not found.', 404);
+
+  const filter = { schoolId: req.user.schoolId, studentId: student._id };
+  if (academicYear) filter.academicYear = academicYear;
+  if (term) filter.term = term;
+
+  const total = await Result.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const results = await Result.find(filter)
+    .sort({ academicYear: -1, term: -1, percentage: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('examId', 'name type term academicYear')
+    .populate('subjectId', 'name code');
+
+  return sendSuccess(res, {
+    student: { firstName: student.firstName, lastName: student.lastName },
+    results,
+    meta,
+  });
+});
+
+/**
+ * GET /api/v1/parent/children/:studentId/report-cards
+ * Published report cards only — parents cannot see drafts.
+ */
+export const getChildReportCards = asyncHandler(async (req, res) => {
+  const { studentId } = req.params;
+
+  const student = await resolveChild(req, studentId);
+  if (!student) return sendError(res, 'Child not found.', 404);
+
+  const filter = {
+    schoolId: req.user.schoolId,
+    studentId: student._id,
+    status: 'published', // strictly no drafts for parents
+  };
+
+  const total = await ReportCard.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const reportCards = await ReportCard.find(filter)
+    .sort({ academicYear: -1, term: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('classId', 'name stream levelCategory')
+    .select('-teacherRemarks -principalRemarks'); // remarks are for school records, not parent view
+
+  return sendSuccess(res, { reportCards, meta });
+});
