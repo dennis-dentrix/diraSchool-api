@@ -23,6 +23,11 @@ export default defineConfig({
     // mongodb-memory-server writes / reads from the same persistent location.
     env: {
       MONGOMS_DOWNLOAD_DIR: MONGO_BIN_DIR,
+      NODE_ENV: 'test',
+      MONGO_URI: 'mongodb://localhost:27017/test',
+      JWT_SECRET: 'test-secret-that-is-at-least-32-characters-long-xx',
+      CLIENT_URL: 'http://localhost:3000',
+      REDIS_URL: 'redis://localhost:6379',
     },
     // With the growing integration suite and MongoMemory replica set startup,
     // some transactional tests can exceed 30s under load.

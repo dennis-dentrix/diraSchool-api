@@ -1,0 +1,36 @@
+# Dependencies (reinstalled in Docker)
+node_modules
+apps/*/node_modules
+packages/*/node_modules
+
+# Environment secrets
+.env
+.env.*
+
+# Logs
+apps/api/logs/*.log
+
+# Dev/test files
+apps/api/tests
+**/__tests__
+**/*.test.js
+coverage
+
+# Editor / OS
+.DS_Store
+.vscode
+.idea
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+
+# Docs
+apps/api/docs
+
+# Docker itself
+Dockerfile
+.dockerignore
+docker-compose.yml

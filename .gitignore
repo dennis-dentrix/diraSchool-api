@@ -1,6 +1,29 @@
+# ── Dependencies ─────────────────────────────────────────────
 node_modules/
+
+# ── Environment variables (never commit secrets) ─────────────
 .env
+.env.local
+.env.*.local
+
+# ── Logs (keep the directory, ignore the files) ──────────────
+apps/api/logs/*.log
+apps/api/logs/*.log.*
+# Keep the directory itself tracked
+!apps/api/logs/.gitkeep
+
+# ── Build outputs ────────────────────────────────────────────
 dist/
+build/
+
+# ── Test coverage ────────────────────────────────────────────
 coverage/
-*.log
+
+# ── OS / Editor ──────────────────────────────────────────────
 .DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+
+# ── MongoDB memory server binary cache ───────────────────────
+.mongodb-binaries/

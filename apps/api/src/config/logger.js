@@ -14,11 +14,17 @@
  */
 import winston from 'winston';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOG_DIR = path.join(__dirname, '../../logs');
 const isProd = process.env.NODE_ENV === 'production';
+
+// Create logs directory if it doesn't exist (Railway, Docker, fresh clones)
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR, { recursive: true });
+}
 const isTest = process.env.NODE_ENV === 'test';
 
 // ── Custom format ─────────────────────────────────────────────────────────────
