@@ -7,9 +7,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace=apps/api",
-    "test": "npm test --workspace=apps/api",
-    "lint": "npm run lint --workspace=apps/api"
+    "dev":    "npm run dev    --workspace=apps/api",
+    "start":  "npm run start  --workspace=apps/api",
+    "worker": "npm run worker --workspace=apps/api",
+    "test":   "npm test       --workspace=apps/api",
+    "lint":   "npm run lint   --workspace=apps/api"
   },
   "engines": {
     "node": ">=20.0.0",

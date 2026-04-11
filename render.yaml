@@ -1,0 +1,91 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Diraschool — Render Blueprint
+# https://render.com/docs/blueprint-spec
+#
+# Two services:
+#   1. diraschool-api    — Express REST API  (Web Service)
+#   2. diraschool-worker — BullMQ job worker (Background Worker)
+#
+# Both services share the same repo and build step.
+# Secrets (MONGO_URI, REDIS_URL, JWT_SECRET) must be set manually in the
+# Render dashboard — they are marked sync: false below.
+#
+# External dependencies (free tiers work fine for MVP):
+#   MongoDB  → MongoDB Atlas M0  https://www.mongodb.com/atlas
+#   Redis    → Upstash           https://upstash.com
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── 1. REST API ─────────────────────────────────────────────────────────────
+  - type: web
+    name: diraschool-api
+    runtime: node
+    # Run npm ci from the monorepo root so the workspace lock file is found
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run start --workspace=apps/api
+    healthCheckPath: /health
+    autoDeploy: true
+    # Render auto-sets PORT — our server reads process.env.PORT
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # ── Secrets — set these in the Render dashboard ─────────────────────
+      - key: MONGO_URI
+        sync: false   # MongoDB Atlas connection string
+      - key: REDIS_URL
+        sync: false   # Upstash Redis URL (rediss://...)
+      - key: JWT_SECRET
+        sync: false   # openssl rand -hex 32
+
+      # ── Non-secret config ────────────────────────────────────────────────
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: CLIENT_URL
+        sync: false   # Your frontend URL (e.g. https://app.diraschool.co.ke)
+      - key: CLIENT_URL_STAGING
+        sync: false   # Optional staging frontend URL
+      - key: SCHOOL_RATE_LIMIT
+        value: "300"
+
+      # ── AfricasTalking (SMS) — add when subscription is ready ────────────
+      # - key: AT_USERNAME
+      #   sync: false
+      # - key: AT_API_KEY
+      #   sync: false
+      # - key: AT_SENDER_ID
+      #   value: DIRASCHOOL
+
+      # ── Cloudinary (PDF storage) — add when account is ready ─────────────
+      # - key: CLOUDINARY_CLOUD_NAME
+      #   sync: false
+      # - key: CLOUDINARY_API_KEY
+      #   sync: false
+      # - key: CLOUDINARY_API_SECRET
+      #   sync: false
+
+  # ── 2. BullMQ Background Worker ──────────────────────────────────────────────
+  - type: worker
+    name: diraschool-worker
+    runtime: node
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run worker --workspace=apps/api
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Must match the API service secrets exactly
+      - key: MONGO_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+
+      # Optional — only needed when PDF receipts / report cards are enabled
+      # - key: CLOUDINARY_CLOUD_NAME
+      #   sync: false
+      # - key: CLOUDINARY_API_KEY
+      #   sync: false
+      # - key: CLOUDINARY_API_SECRET
+      #   sync: false
