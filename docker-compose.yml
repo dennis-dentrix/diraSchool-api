@@ -1,7 +1,7 @@
 services:
   mongodb:
     image: mongo:7
-    container_name: edusaas-mongo
+    container_name: diraschool-mongo
     ports:
       - '27017:27017'
     volumes:
@@ -10,14 +10,14 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: edusaas-redis
+    container_name: diraschool-redis
     ports:
       - '6379:6379'
     restart: unless-stopped
 
   mongo-express:
     image: mongo-express
-    container_name: edusaas-mongo-ui
+    container_name: diraschool-mongo-ui
     ports:
       - '8081:8081'
     environment:
@@ -28,4 +28,5 @@ services:
     restart: unless-stopped
 
 volumes:
+  # Diraschool data volume — persists MongoDB data across container restarts
   mongo_data:

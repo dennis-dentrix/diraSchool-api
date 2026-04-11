@@ -1,7 +1,7 @@
 # Diraschool — REST API Reference
 
 > **Version:** 1.0  
-> **Base URL:** `https://api.diraschool.co.ke/api/v1`  
+> **Production URL:** `https://api.diraschool.co.ke/api/v1`  
 > **Local dev:** `http://localhost:5000/api/v1`
 
 ---
@@ -9,30 +9,34 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Authentication & Cookies](#authentication--cookies)
-3. [Standard Response Format](#standard-response-format)
-4. [Pagination](#pagination)
-5. [Error Codes](#error-codes)
-6. [Rate Limiting](#rate-limiting)
-7. [Subscription Plans & Feature Gates](#subscription-plans--feature-gates)
-8. [Roles & Permissions](#roles--permissions)
-9. [Auth](#auth)
-10. [Users](#users)
-11. [Schools](#schools)
-12. [Classes](#classes)
-13. [Students](#students)
-14. [Attendance](#attendance)
-15. [Subjects](#subjects)
-16. [Exams](#exams)
-17. [Results](#results)
-18. [Fees](#fees)
-19. [Report Cards](#report-cards) *(plan-gated)*
-20. [Parent Portal](#parent-portal) *(plan-gated)*
-21. [Audit Logs](#audit-logs) *(plan-gated)*
-22. [School Settings](#school-settings)
-23. [Timetables](#timetables) *(plan-gated)*
-24. [Library](#library) *(plan-gated)*
-25. [Transport](#transport) *(plan-gated)*
+2. [Deployment & Hosting](#deployment--hosting)
+3. [Security](#security)
+4. [Authentication & Cookies](#authentication--cookies)
+5. [mustChangePassword Flow](#mustchangepassword-flow)
+6. [Standard Response Format](#standard-response-format)
+7. [Pagination](#pagination)
+8. [Error Codes](#error-codes)
+9. [Rate Limiting](#rate-limiting)
+10. [Subscription Plans & Feature Gates](#subscription-plans--feature-gates)
+11. [Roles & Permissions](#roles--permissions)
+12. [Health](#health)
+13. [Auth](#auth)
+14. [Users](#users)
+15. [Schools](#schools)
+16. [Classes](#classes)
+17. [Students](#students)
+18. [Attendance](#attendance)
+19. [Subjects](#subjects)
+20. [Exams](#exams)
+21. [Results](#results)
+22. [Fees](#fees)
+23. [Report Cards](#report-cards) *(plan-gated)*
+24. [Parent Portal](#parent-portal) *(plan-gated)*
+25. [Audit Logs](#audit-logs) *(plan-gated)*
+26. [School Settings](#school-settings)
+27. [Timetables](#timetables) *(plan-gated)*
+28. [Library](#library) *(plan-gated)*
+29. [Transport](#transport) *(plan-gated)*
 
 ---
 
@@ -47,6 +51,56 @@ File uploads use **multipart/form-data**.
 
 ---
 
+## Deployment & Hosting
+
+### Railway.app *(recommended)*
+
+- Subdomain: `*.railway.app`  
+- No spin-down — the API stays warm 24/7 (important for BullMQ background workers)  
+- GitHub auto-deploy on push to main  
+- $5/month hobby plan  
+- Required add-ons: **MongoDB Atlas** (free M0 tier) + **Upstash Redis** (free tier)
+
+### Render.com *(good alternative)*
+
+- Subdomain: `*.onrender.com`  
+- Free tier spins down after 15 min of inactivity — **do not use the free tier** for an API with BullMQ workers; use the $7/month paid plan  
+- GitHub auto-deploy supported  
+
+### Custom Domain
+
+Add a custom domain (`api.diraschool.co.ke`) in the Railway/Render dashboard at no extra cost, then point your DNS A/CNAME records once the domain is acquired.
+
+### Required Environment Variables
+
+Set these on the hosting platform:
+
+| Variable | Notes |
+|----------|-------|
+| `NODE_ENV` | `production` |
+| `MONGO_URI` | Atlas connection string |
+| `REDIS_URL` | Upstash Redis URL |
+| `JWT_SECRET` | Minimum 32 random characters (`openssl rand -hex 32`) |
+| `CLIENT_URL` | Frontend origin (used for CORS) |
+| `PORT` | Railway/Render auto-set this — do not hardcode |
+
+---
+
+## Security
+
+All requests pass through the following security layers in order:
+
+| Layer | Implementation | Purpose |
+|-------|---------------|---------|
+| **Helmet** | `helmet()` middleware | Sets secure HTTP headers (CSP, HSTS, etc.) |
+| **CORS whitelist** | `cors({ origin: CLIENT_URL })` | Only allows requests from known frontend origins |
+| **JWT cookie** | HTTP-only, Secure, SameSite=Strict | Prevents XSS token theft and CSRF via cross-site form posts |
+| **Origin/Referer CSRF middleware** | Custom middleware checks `Origin`/`Referer` header | Rejects requests that don't originate from the whitelisted frontend |
+| **Per-school rate limiting** | Redis-backed; 300 req/60 s per school | Prevents API abuse and limits blast radius of a single school |
+| **Auth rate limiting** | 20 req/15 min on login/register | Limits brute-force attacks |
+
+---
+
 ## Authentication & Cookies
 
 Authentication uses **HTTP-only cookies** (no `Authorization` header needed from browsers).  
@@ -54,7 +108,7 @@ The cookie name is `token` and it contains a signed JWT.
 
 | Cookie | Type | TTL |
 |--------|------|-----|
-| `token` | HTTP-only, Secure, SameSite=Strict | 7 days |
+| `token` | HTTP-only, Secure, SameSite=Strict | 1 day |
 
 Include credentials on every request:
 ```
@@ -62,6 +116,18 @@ fetch('/api/v1/...', { credentials: 'include' })
 ```
 
 For API clients (Postman, mobile), the cookie is set automatically on login.
+
+---
+
+## mustChangePassword Flow
+
+When a staff user is created by an admin (via `POST /users`), or when a parent account is auto-created during student enrollment, the flag `mustChangePassword: true` is set on the user.
+
+- The **login response** includes `"mustChangePassword": true` when this flag is set.
+- Until the user calls `POST /auth/change-password`, **all other endpoints return `HTTP 403`** with the message `"Password change required before continuing"`.
+- `POST /auth/change-password` and `POST /auth/logout` are the only endpoints that remain accessible.
+
+Clients should detect `mustChangePassword: true` on login and immediately redirect to a change-password screen.
 
 ---
 
@@ -123,7 +189,7 @@ Response always includes a `meta` object:
 |--------|---------|
 | 400 | Validation error — check `message` for details |
 | 401 | Not authenticated — login required |
-| 403 | Forbidden — wrong role, plan gate, or account suspended |
+| 403 | Forbidden — wrong role, plan gate, account suspended, or password change required |
 | 404 | Resource not found |
 | 409 | Conflict — duplicate record or business rule violation |
 | 422 | Unprocessable — logically invalid request |
@@ -150,7 +216,7 @@ Schools have a `planTier` (trial / basic / standard / premium) and a `subscripti
 **Subscription status** determines if the school can access the API at all.  
 **Plan tier** determines which feature modules are available.
 
-> ⚠️ Pricing and exact tier allocations are **TBD**. All features are currently available on all tiers (including trial) — feature gates are wired but open. Once pricing is set, update `PLAN_FEATURE_MAP` in `src/constants/index.js`.
+> Pricing and exact tier allocations are **TBD**. All features are currently available on all tiers (including trial) — feature gates are wired but open. Once pricing is set, update `PLAN_FEATURE_MAP` in `src/constants/index.js`.
 
 | Feature Module | Feature Key | Gated Endpoints |
 |---------------|-------------|-----------------|
@@ -194,10 +260,27 @@ HTTP 403
 
 ---
 
+## Health
+
+### `GET /health`
+Service liveness check. No authentication required. Used by hosting platforms (Railway/Render) and uptime monitors.
+
+**Auth:** None (public)
+
+**Response:** `200`
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-04-10T08:00:00.000Z"
+}
+```
+
+---
+
 ## Auth
 
 ### `POST /auth/register`
-Create a new school and its first admin user.
+Create a new school and its first admin user. Password must be **at least 8 characters**.
 
 **Auth:** None (public)
 
@@ -215,7 +298,7 @@ Create a new school and its first admin user.
 }
 ```
 
-**Response:** `201` — Sets `token` cookie. Returns `{ user, school }`.
+**Response:** `201` — Sets `token` cookie (1-day TTL). Returns `{ user, school }`.
 
 ---
 
@@ -233,6 +316,8 @@ Log in and receive a session cookie.
 ```
 
 **Response:** `200` — Sets `token` cookie. Returns `{ user }`.
+
+> If the user has `mustChangePassword: true`, the response body includes `"mustChangePassword": true`. See [mustChangePassword Flow](#mustchangepassword-flow).
 
 ---
 
@@ -255,9 +340,9 @@ Returns the currently authenticated user.
 ---
 
 ### `POST /auth/change-password`
-Change your own password. Clears `mustChangePassword` flag.
+Change your own password. Clears the `mustChangePassword` flag. New password must be **at least 8 characters**.
 
-**Auth:** Cookie
+**Auth:** Cookie (accessible even when `mustChangePassword: true`)
 
 **Body:**
 ```json
@@ -276,7 +361,8 @@ Change your own password. Clears `mustChangePassword` flag.
 > Admin roles only (except `GET /users/:id` which any school user can call for their own profile).
 
 ### `POST /users`
-Create a school staff user (not a parent — parents are created via student enrollment).
+Create a school staff user (not a parent — parents are created via student enrollment).  
+Sets `mustChangePassword: true` on the created user. Password must be **at least 8 characters**.
 
 **Auth:** Admin
 
@@ -337,6 +423,8 @@ Update a user's details or activate/deactivate them.
 ---
 
 ## Schools
+
+The school object includes a `planTier` field (`trial` | `basic` | `standard` | `premium`) alongside `subscriptionStatus`.
 
 ### `GET /schools/me`
 Get the logged-in user's school profile.
@@ -527,8 +615,11 @@ Bulk promote all active students in this class to a target class.
 
 ## Students
 
+Student objects include a `routeId` field (ObjectId, optional) — this is populated when a transport route has been assigned to the student via `POST /transport/routes/:id/assign`.
+
 ### `POST /students`
-Enroll a new student. Optionally create or link a parent user.
+Enroll a new student. Optionally create or link a parent user.  
+If a new parent user is created, `mustChangePassword: true` is set on the parent account.
 
 **Auth:** Admin
 
@@ -1020,6 +1111,8 @@ Record a fee payment for a student. Automatically enqueues a PDF receipt job.
 
 **Response:** `201` — Returns `{ payment }`.
 
+> **`receiptUrl` note:** The `receiptUrl` field on the payment is initially `null`. It is populated asynchronously (typically within a few seconds) once the PDF receipt worker generates the receipt and uploads it to Cloudinary. If you need the PDF link immediately after recording a payment, poll `GET /fees/payments/:id` until `receiptUrl` is non-null.
+
 ---
 
 ### `GET /fees/payments`
@@ -1134,7 +1227,12 @@ Cross-term comparison for one student across all three terms.
 
 **Auth:** Admin
 
-**Query:** `?studentId=64f...&academicYear=2025`
+**Query (both params are required):**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `studentId` | ObjectId | **Yes** | The student to summarise |
+| `academicYear` | string | **Yes** | e.g. `2025` |
 
 **Response:** Returns all available term report cards plus a per-subject `annualAvgPct`.
 
@@ -1690,7 +1788,7 @@ Bulk-assign students to this route (sets `Student.routeId`).
 ---
 
 ### `POST /transport/routes/:id/unassign`
-Remove students from this route (`unsets Student.routeId`).
+Remove students from this route (unsets `Student.routeId`).
 
 **Auth:** Admin
 
