@@ -1,27 +1,28 @@
 /**
- * Queue instances — imported by controllers to enqueue jobs,
+ * BullMQ Queue instances — imported by controllers to enqueue jobs
  * and by workers to register processors.
  *
- * All queues share the same Redis connection (ioredis).
- * BullMQ requires maxRetriesPerRequest: null on the connection.
+ * Uses buildRedisOptions() so TLS, keepAlive, and family settings
+ * are applied consistently whether connecting to local Redis or Upstash.
  */
 import { Queue } from 'bullmq';
 import { QUEUE_NAMES } from '../constants/index.js';
 import { env } from '../config/env.js';
+import { buildRedisOptions } from '../config/redis.js';
 
+// BullMQ connection — built from the full REDIS_URL with all TLS options
 const connection = {
-  host: new URL(env.REDIS_URL).hostname,
-  port: Number(new URL(env.REDIS_URL).port) || 6379,
-  password: new URL(env.REDIS_URL).password || undefined,
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
+  url: env.REDIS_URL,          // BullMQ accepts full URL directly
+  ...buildRedisOptions(),
+  maxRetriesPerRequest: null,  // Required by BullMQ
+  enableReadyCheck: false,     // Required by BullMQ
 };
 
 export const smsQueue = new Queue(QUEUE_NAMES.SMS, {
   connection,
   defaultJobOptions: {
     attempts: 3,
-    backoff: { type: 'exponential', delay: 5000 }, // 5s, 10s, 20s
+    backoff: { type: 'exponential', delay: 5000 },
     removeOnComplete: { count: 500 },
     removeOnFail: { count: 1000 },
   },
@@ -40,7 +41,7 @@ export const reportQueue = new Queue(QUEUE_NAMES.REPORT, {
 export const importQueue = new Queue(QUEUE_NAMES.IMPORT, {
   connection,
   defaultJobOptions: {
-    attempts: 1,          // import is not safe to retry blindly
+    attempts: 1,
     removeOnComplete: { count: 100 },
     removeOnFail: { count: 200 },
   },

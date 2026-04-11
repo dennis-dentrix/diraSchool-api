@@ -3,38 +3,55 @@ import { env } from './env.js';
 
 let redisClient = null;
 
+/**
+ * Builds a shared ioredis options object from the REDIS_URL.
+ * Works with:
+ *   redis://   — local Docker / plain Redis
+ *   rediss://  — Upstash, Redis Cloud, DO Managed Redis (TLS)
+ */
+export const buildRedisOptions = () => {
+  const isTLS = env.REDIS_URL?.startsWith('rediss://');
+
+  return {
+    // Upstash closes idle connections — keepAlive prevents the reconnect loop
+    keepAlive: 5000,
+    // Support both IPv4 and IPv6 (required for Upstash)
+    family: 0,
+    // TLS for rediss:// URLs
+    tls: isTLS ? { rejectUnauthorized: false } : undefined,
+    // Sane reconnect backoff — 200ms → 400ms → ... → 2s max
+    retryStrategy(times) {
+      return Math.min(times * 200, 2000);
+    },
+    connectTimeout: 10_000,
+    commandTimeout: 5_000,
+  };
+};
+
 export const connectRedis = () => {
   redisClient = new Redis(env.REDIS_URL, {
-    maxRetriesPerRequest: null, // Required for BullMQ
-    enableReadyCheck: false,    // Required for BullMQ
-    lazyConnect: false,
+    ...buildRedisOptions(),
+    // BullMQ requirements
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
   });
 
-  redisClient.on('connect', () => {
-    console.log('[Redis] Connected');
-  });
-
-  redisClient.on('error', (err) => {
-    console.error(`[Redis] Error: ${err.message}`);
-  });
-
-  redisClient.on('reconnecting', () => {
-    console.warn('[Redis] Reconnecting...');
-  });
+  redisClient.on('connect',      () => console.log('[Redis] Connected'));
+  redisClient.on('reconnecting', () => console.log('[Redis] Reconnecting...'));
+  redisClient.on('error',        (err) => console.error(`[Redis] Error: ${err.message}`));
 
   return redisClient;
 };
 
 export const getRedis = () => {
   if (!redisClient) {
-    // In test environment Redis isn't started — callers must handle null
     if (process.env.NODE_ENV === 'test') return null;
     throw new Error('Redis client not initialised. Call connectRedis() first.');
   }
   return redisClient;
 };
 
-// Cache helpers
+// ── Cache helpers ─────────────────────────────────────────────────────────────
 
 export const cacheGet = async (key) => {
   const value = await getRedis().get(key);
@@ -51,7 +68,5 @@ export const cacheDel = async (key) => {
 
 export const cacheDelPattern = async (pattern) => {
   const keys = await getRedis().keys(pattern);
-  if (keys.length > 0) {
-    await getRedis().del(...keys);
-  }
+  if (keys.length > 0) await getRedis().del(...keys);
 };

@@ -17,6 +17,7 @@ import { validateEnv, env } from '../config/env.js';
 import { connectDB } from '../config/db.js';
 import logger from '../config/logger.js';
 import { QUEUE_NAMES } from '../constants/index.js';
+import { buildRedisOptions } from '../config/redis.js';
 import { processSmsJob } from './workers/sms.worker.js';
 import { processReportJob } from './workers/report.worker.js';
 import { processReceiptJob } from './workers/receipt.worker.js';
@@ -25,9 +26,8 @@ import { processImportJob } from './workers/import.worker.js';
 validateEnv();
 
 const connection = {
-  host: new URL(env.REDIS_URL).hostname,
-  port: Number(new URL(env.REDIS_URL).port) || 6379,
-  password: new URL(env.REDIS_URL).password || undefined,
+  url: env.REDIS_URL,
+  ...buildRedisOptions(),
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
 };
