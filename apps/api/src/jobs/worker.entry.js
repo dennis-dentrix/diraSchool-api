@@ -17,7 +17,7 @@ import { validateEnv, env } from '../config/env.js';
 import { connectDB } from '../config/db.js';
 import logger from '../config/logger.js';
 import { QUEUE_NAMES } from '../constants/index.js';
-import { buildRedisOptions } from '../config/redis.js';
+import { createBullMQConnection } from '../config/redis.js';
 import { processSmsJob } from './workers/sms.worker.js';
 import { processReportJob } from './workers/report.worker.js';
 import { processReceiptJob } from './workers/receipt.worker.js';
@@ -25,12 +25,8 @@ import { processImportJob } from './workers/import.worker.js';
 
 validateEnv();
 
-const connection = {
-  url: env.REDIS_URL,
-  ...buildRedisOptions(),
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-};
+// Must be a Redis *instance* — see redis.js createBullMQConnection() for details.
+const connection = createBullMQConnection();
 
 // ── Start DB then register workers ────────────────────────────────────────────
 

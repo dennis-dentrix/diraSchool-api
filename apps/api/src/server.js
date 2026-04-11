@@ -61,17 +61,23 @@ if (env.NODE_ENV !== 'test') {
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
+  // Redis is non-critical for health — a transient reconnect must not kill the container.
+  let redisStatus = 'not_connected';
   try {
     const redis = getRedis();
-    if (redis) await redis.ping();
-    return res.status(200).json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      services: { api: 'up', mongodb: 'up', redis: redis ? 'up' : 'not_connected' },
-    });
-  } catch (err) {
-    return res.status(503).json({ status: 'degraded', error: err.message });
+    if (redis) {
+      await redis.ping();
+      redisStatus = 'up';
+    }
+  } catch {
+    redisStatus = 'degraded';
   }
+
+  return res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    services: { api: 'up', mongodb: 'up', redis: redisStatus },
+  });
 });
 
 // ── API routes ────────────────────────────────────────────────────────────────

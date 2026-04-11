@@ -28,10 +28,27 @@ export const buildRedisOptions = () => {
   };
 };
 
+/**
+ * Creates a dedicated ioredis instance for BullMQ.
+ *
+ * IMPORTANT: Must use new Redis(url, options) — NOT { url: '...', ...options }.
+ * ioredis only parses URLs when the string is passed as the first constructor
+ * argument. Passing { url: '...' } as options silently ignores the URL and
+ * connects to localhost:6379 instead.
+ *
+ * BullMQ calls duplicate() on this instance internally for blocking commands,
+ * so each Queue/Worker gets its own connection automatically.
+ */
+export const createBullMQConnection = () =>
+  new Redis(env.REDIS_URL, {
+    ...buildRedisOptions(),
+    maxRetriesPerRequest: null,  // required by BullMQ
+    enableReadyCheck: false,     // required by BullMQ
+  });
+
 export const connectRedis = () => {
   redisClient = new Redis(env.REDIS_URL, {
     ...buildRedisOptions(),
-    // BullMQ requirements
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
   });

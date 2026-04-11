@@ -7,16 +7,12 @@
  */
 import { Queue } from 'bullmq';
 import { QUEUE_NAMES } from '../constants/index.js';
-import { env } from '../config/env.js';
-import { buildRedisOptions } from '../config/redis.js';
+import { createBullMQConnection } from '../config/redis.js';
 
-// BullMQ connection — built from the full REDIS_URL with all TLS options
-const connection = {
-  url: env.REDIS_URL,          // BullMQ accepts full URL directly
-  ...buildRedisOptions(),
-  maxRetriesPerRequest: null,  // Required by BullMQ
-  enableReadyCheck: false,     // Required by BullMQ
-};
+// Shared ioredis instance for all queues.
+// BullMQ will duplicate() it internally for each Queue/Worker connection.
+// Must be a Redis *instance* — passing { url: '...' } as options is silently ignored by ioredis.
+const connection = createBullMQConnection();
 
 export const smsQueue = new Queue(QUEUE_NAMES.SMS, {
   connection,
