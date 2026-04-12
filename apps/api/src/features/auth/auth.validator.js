@@ -41,6 +41,16 @@ const changePasswordSchema = z.object({
     .min(8, 'New password must be at least 8 characters'),
 });
 
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email('Invalid email address'),
+});
+
+const resetPasswordSchema = z.object({
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters'),
+});
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validate = (schema) => (req, res, next) => {
@@ -53,6 +63,8 @@ const validate = (schema) => (req, res, next) => {
   next();
 };
 
-export const validateRegisterSchool = validate(registerSchoolSchema);
-export const validateLogin = validate(loginSchema);
-export const validateChangePassword = validate(changePasswordSchema);
+export const validateRegisterSchool  = validate(registerSchoolSchema);
+export const validateLogin           = validate(loginSchema);
+export const validateChangePassword  = validate(changePasswordSchema);
+export const validateForgotPassword  = validate(forgotPasswordSchema);
+export const validateResetPassword   = validate(resetPasswordSchema);

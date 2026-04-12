@@ -1,10 +1,12 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
-import { registerSchool, login, logout, getMe, changePassword } from './auth.controller.js';
+import { registerSchool, login, logout, getMe, changePassword, forgotPassword, resetPassword } from './auth.controller.js';
 import {
   validateRegisterSchool,
   validateLogin,
   validateChangePassword,
+  validateForgotPassword,
+  validateResetPassword,
 } from './auth.validator.js';
 import { protect, blockIfMustChangePassword } from '../../middleware/auth.js';
 
@@ -24,8 +26,10 @@ const authLimiter =
       });
 
 // ── Public routes ─────────────────────────────────────────────────────────────
-router.post('/register', authLimiter, validateRegisterSchool, registerSchool);
-router.post('/login', authLimiter, validateLogin, login);
+router.post('/register',       authLimiter, validateRegisterSchool, registerSchool);
+router.post('/login',          authLimiter, validateLogin,          login);
+router.post('/forgot-password',authLimiter, validateForgotPassword, forgotPassword);
+router.post('/reset-password/:token',       validateResetPassword,  resetPassword);
 
 // ── Protected routes ──────────────────────────────────────────────────────────
 router.post('/logout', protect, logout);

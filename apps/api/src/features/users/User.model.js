@@ -65,6 +65,17 @@ const userSchema = new mongoose.Schema(
     lastLoginAt: {
       type: Date,
     },
+    // ── Password reset ────────────────────────────────────────────────────────
+    // Raw token is sent to the user (email/SMS). Only the SHA-256 hash is stored
+    // so a DB leak cannot be used to reset passwords.
+    passwordResetToken: {
+      type: String,
+      select: false,
+    },
+    passwordResetExpiry: {
+      type: Date,
+      select: false,
+    },
   },
   { timestamps: true }
 );

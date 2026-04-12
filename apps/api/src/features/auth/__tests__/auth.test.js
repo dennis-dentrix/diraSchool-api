@@ -154,6 +154,89 @@ describe('POST /auth/logout', () => {
   });
 });
 
+describe('POST /auth/forgot-password', () => {
+  it('returns 200 and resetToken when email exists', async () => {
+    await register();
+    const res = await request(app)
+      .post(`${BASE}/forgot-password`)
+      .send({ email: validRegistration.email });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.resetToken).toBeDefined();
+    expect(res.body.data.resetToken).toHaveLength(64); // 32 bytes hex
+  });
+
+  it('returns 200 even when email does not exist (no enumeration)', async () => {
+    const res = await request(app)
+      .post(`${BASE}/forgot-password`)
+      .send({ email: 'nobody@nonexistent.com' });
+
+    expect(res.status).toBe(200);
+    // No resetToken in response when user not found
+    expect(res.body.data.resetToken).toBeUndefined();
+  });
+
+  it('returns 400 on invalid email format', async () => {
+    const res = await request(app)
+      .post(`${BASE}/forgot-password`)
+      .send({ email: 'not-an-email' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /auth/reset-password/:token', () => {
+  it('resets password with valid token and logs user in', async () => {
+    await register();
+
+    // Get a reset token
+    const forgot = await request(app)
+      .post(`${BASE}/forgot-password`)
+      .send({ email: validRegistration.email });
+    const { resetToken } = forgot.body.data;
+
+    // Reset the password
+    const res = await request(app)
+      .post(`${BASE}/reset-password/${resetToken}`)
+      .send({ password: 'NewPassword99!' });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['set-cookie']).toBeDefined(); // auto-login cookie set
+    expect(res.body.data.message).toMatch(/reset successfully/i);
+
+    // Old password should be rejected
+    const oldLogin = await login(validRegistration.email, validRegistration.password);
+    expect(oldLogin.status).toBe(401);
+
+    // New password should work
+    const newLogin = await login(validRegistration.email, 'NewPassword99!');
+    expect(newLogin.status).toBe(200);
+  });
+
+  it('returns 400 for an invalid token', async () => {
+    const res = await request(app)
+      .post(`${BASE}/reset-password/thisisatotallywrongtoken`)
+      .send({ password: 'NewPassword99!' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/invalid or has expired/i);
+  });
+
+  it('returns 400 when password is too short', async () => {
+    await register();
+    const forgot = await request(app)
+      .post(`${BASE}/forgot-password`)
+      .send({ email: validRegistration.email });
+    const { resetToken } = forgot.body.data;
+
+    const res = await request(app)
+      .post(`${BASE}/reset-password/${resetToken}`)
+      .send({ password: 'short' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('POST /auth/change-password', () => {
   it('changes password and clears mustChangePassword', async () => {
     await register();

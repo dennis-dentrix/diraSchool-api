@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import School from '../schools/School.model.js';
@@ -152,6 +153,91 @@ export const logout = asyncHandler(async (req, res) => {
 export const getMe = asyncHandler(async (req, res) => {
   // req.user is already loaded by the protect middleware
   return sendSuccess(res, { user: req.user });
+});
+
+/**
+ * POST /api/v1/auth/forgot-password
+ * Generates a password reset token and (in production) sends it via email/SMS.
+ * Public route — no auth required.
+ *
+ * Security: always returns the same success message whether the email exists or
+ * not — prevents user-enumeration attacks.
+ */
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({
+    email: email.toLowerCase().trim(),
+    isActive: true,
+  }).select('+passwordResetToken +passwordResetExpiry');
+
+  // Always respond with 200 — don't leak whether the email exists
+  if (!user) {
+    return sendSuccess(res, {
+      message: 'If an account with that email exists, a reset token has been generated.',
+    });
+  }
+
+  // Generate a cryptographically secure random token
+  const rawToken = crypto.randomBytes(32).toString('hex');
+
+  // Store only the hash — raw token is sent to the user
+  user.passwordResetToken  = crypto.createHash('sha256').update(rawToken).digest('hex');
+  user.passwordResetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  await user.save({ validateBeforeSave: false });
+
+  // ── TODO: Replace this block with email/SMS delivery in production ──────────
+  // When AfricasTalking is active:
+  //   await smsQueue.add('send-sms', { phone: user.phone, message: `Reset token: ${rawToken}` });
+  // When an email provider (SendGrid / Resend) is added:
+  //   await sendResetEmail(user.email, rawToken);
+  // ────────────────────────────────────────────────────────────────────────────
+
+  return sendSuccess(res, {
+    message: 'Password reset token generated. Use it within 1 hour.',
+    // Returned in the response until email/SMS delivery is wired up.
+    // Remove this field once a delivery channel is configured.
+    resetToken: rawToken,
+  });
+});
+
+/**
+ * POST /api/v1/auth/reset-password/:token
+ * Validates the reset token and sets a new password.
+ * Public route — no auth required.
+ */
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  // Hash the incoming token to compare against the stored hash
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const user = await User.findOne({
+    passwordResetToken:  hashedToken,
+    passwordResetExpiry: { $gt: new Date() }, // not expired
+    isActive: true,
+  }).select('+passwordResetToken +passwordResetExpiry');
+
+  if (!user) {
+    return sendError(res, 'Reset token is invalid or has expired.', 400);
+  }
+
+  // Set new password and clear reset fields
+  user.password            = password;
+  user.passwordResetToken  = undefined;
+  user.passwordResetExpiry = undefined;
+  user.mustChangePassword  = false;
+  await user.save();
+
+  // Sign them in immediately after reset
+  const jwtToken = signToken(user._id);
+  attachCookie(res, jwtToken);
+
+  return sendSuccess(res, {
+    message: 'Password reset successfully. You are now logged in.',
+    user: user.toSafeObject(),
+  });
 });
 
 /**

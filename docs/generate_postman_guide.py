@@ -559,66 +559,104 @@ def s3_health(story):
 
 def s3_auth(story):
     grp(story, "1", "Auth", "/api/v1/auth",
-        "Rate-limited (20 req / 15 min). Registration creates the school + first admin atomically.")
+        "Rate-limited (20 req / 15 min). Registration creates the school + first admin atomically. "
+        "Token is set as an httpOnly cookie — Postman handles it automatically.")
+
+    story.append(info_box(
+        "<b>Cookie auth:</b> The JWT is set as an httpOnly cookie, NOT in the response body. "
+        "Postman sends it automatically on every subsequent request — no manual token copying needed. "
+        "Make sure Postman Settings > General > 'Automatically follow redirects' is ON "
+        "and 'Send cookies' is enabled (it is by default)."
+    ))
+    story.append(Spacer(1, 4))
 
     story += ep_title("1.1", "Register School — creates school + SCHOOL_ADMIN user")
     story += endpoint("POST", "/api/v1/auth/register",
         body_json=(
             '{\n'
-            '  "schoolName":    "Sunrise Academy",\n'
-            '  "schoolEmail":   "admin@sunrise.ac.ke",\n'
-            '  "schoolPhone":   "+254700000001",\n'
-            '  "county":        "Nairobi",\n'
-            '  "adminName":     "John Kamau",\n'
-            '  "adminEmail":    "john@sunrise.ac.ke",\n'
-            '  "adminPassword": "Admin@1234!",\n'
-            '  "adminPhone":    "+254700000002"\n'
+            '  "schoolName":  "Sunrise Academy",\n'
+            '  "schoolEmail": "admin@sunrise.ac.ke",\n'
+            '  "schoolPhone": "+254700000001",\n'
+            '  "county":      "Nairobi",\n'
+            '  "firstName":   "John",\n'
+            '  "lastName":    "Kamau",\n'
+            '  "email":       "john@sunrise.ac.ke",\n'
+            '  "password":    "Admin@1234!",\n'
+            '  "phone":       "+254700000002"\n'
             '}'
         ),
         expected="201 Created",
-        verify="Response contains token, school._id, user._id",
+        verify="data.school._id, data.user._id present. Cookie set in response headers.",
+        note="CRITICAL: field names are firstName/lastName/email/password — NOT adminName/adminEmail/adminPassword.",
         script=(
-            'const res = pm.response.json();\n'
-            'pm.environment.set("token",    res.token);\n'
-            'pm.environment.set("schoolId", res.school._id);\n'
-            'pm.environment.set("adminId",  res.user._id);'
+            'const d = pm.response.json().data;\n'
+            'pm.environment.set("schoolId", d.school._id);\n'
+            'pm.environment.set("adminId",  d.user._id);\n'
+            '// Token is in the cookie — Postman handles it automatically'
         ))
 
     story += ep_title("1.2", "Login")
     story += endpoint("POST", "/api/v1/auth/login",
         body_json='{\n  "email":    "john@sunrise.ac.ke",\n  "password": "Admin@1234!"\n}',
         expected="200 OK",
-        verify="token returned in response body",
-        script='const res = pm.response.json();\npm.environment.set("token", res.token);')
+        verify="Cookie set in response headers. data.user.role === school_admin",
+        note="Token is a cookie — check Headers tab for 'Set-Cookie: token=...'")
 
     story += ep_title("1.3", "Get Current User")
     story += endpoint("GET", "/api/v1/auth/me",
         expected="200 OK",
-        verify="user.role === SCHOOL_ADMIN, schoolId matches {{schoolId}}")
+        verify="data.user.role === school_admin, data.user.schoolId matches {{schoolId}}")
 
     story += ep_title("1.4", "Change Password")
     story += endpoint("POST", "/api/v1/auth/change-password",
         body_json='{\n  "currentPassword": "Admin@1234!",\n  "newPassword":     "Admin@5678!"\n}',
         expected="200 OK",
-        verify="Success message. Re-login with new password to confirm.",
-        note="After changing password, update your login body and re-run 1.2 to refresh the token.")
+        verify="Success message. Re-run 1.2 with the new password to confirm.",
+        note="After changing password, re-run Login (1.2) with the new password to refresh the cookie.")
 
-    story += ep_title("1.5", "Logout")
+    story += ep_title("1.5", "Forgot Password — generate reset token")
+    story += endpoint("POST", "/api/v1/auth/forgot-password",
+        body_json='{\n  "email": "john@sunrise.ac.ke"\n}',
+        expected="200 OK",
+        verify="data.resetToken returned (64-char hex string). Save this as {{resetToken}}.",
+        note="Always returns 200 even if the email doesn't exist — prevents user enumeration. "
+             "In production this token will be sent via SMS/email once those channels are active.",
+        script='pm.environment.set("resetToken", pm.response.json().data.resetToken);')
+
+    story += ep_title("1.6", "Reset Password — use the token from 1.5")
+    story += endpoint("POST", "/api/v1/auth/reset-password/{{resetToken}}",
+        body_json='{\n  "password": "NewPassword99!"\n}',
+        expected="200 OK",
+        verify="Cookie set (auto-login). data.message contains 'reset successfully'. "
+               "Old password now returns 401 on login.")
+
+    story += ep_title("1.7", "Logout")
     story += endpoint("POST", "/api/v1/auth/logout",
         expected="200 OK",
-        verify="Clears httpOnly cookie (check response headers)")
+        verify="Cookie cleared. Subsequent GET /me returns 401.")
 
-    story += ep_title("1.6", "Wrong Password (negative test)")
+    story += ep_title("1.8", "Wrong Password (negative test)")
     story += endpoint("POST", "/api/v1/auth/login",
         body_json='{\n  "email":    "john@sunrise.ac.ke",\n  "password": "wrongpassword"\n}',
         expected="401 Unauthorized",
-        verify='{ "message": "Invalid credentials" }')
+        verify='message: "Invalid email or password."')
 
-    story += ep_title("1.7", "Rate Limit Test")
-    story += endpoint("POST", "/api/v1/auth/login",
-        note="Send this request 21 times in quick succession (use Postman Runner with 21 iterations).",
-        expected="429 Too Many Requests on the 21st attempt",
-        verify="Retry-After header present")
+    story += ep_title("1.9", "Rate Limit Test — 429")
+    story.append(Paragraph("How to run in Postman:", H4))
+    story.append(Paragraph(
+        "1. Select the <b>Login</b> request (1.2) with wrong credentials so it always returns 401.<br/>"
+        "2. Click <b>Run collection</b> (the runner icon at the top).<br/>"
+        "3. Select only the Login request → set <b>Iterations: 21</b> → set <b>Delay: 0 ms</b>.<br/>"
+        "4. Click <b>Run Diraschool API</b>.<br/>"
+        "5. The 21st request should return <b>429 Too Many Requests</b>.", BODY_SM))
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("What to verify:", H4))
+    story.append(Paragraph(
+        "Response status 429. Body: <code>{ \"message\": \"Too many attempts...\" }</code>. "
+        "Response headers include <code>RateLimit-Remaining: 0</code> and <code>RateLimit-Reset</code>.", BODY_SM))
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=GREY_MID))
+    story.append(Spacer(1, 4))
 
 
 def s3_users(story):
@@ -630,30 +668,32 @@ def s3_users(story):
     story += endpoint("POST", "/api/v1/users",
         body_json=(
             '{\n'
-            '  "name":    "Mary Wanjiku",\n'
-            '  "email":   "mary@sunrise.ac.ke",\n'
-            '  "phone":   "+254711000001",\n'
-            '  "role":    "TEACHER",\n'
-            '  "staffId": "TCH-001"\n'
+            '  "firstName": "Mary",\n'
+            '  "lastName":  "Wanjiku",\n'
+            '  "email":     "mary@sunrise.ac.ke",\n'
+            '  "phone":     "+254711000001",\n'
+            '  "role":      "TEACHER",\n'
+            '  "staffId":   "TCH-001"\n'
             '}'
         ),
         expected="201 Created",
-        verify="user._id present, mustChangePassword: true",
-        script='pm.environment.set("userId", pm.response.json().user._id);')
+        verify="data.user._id present, data.user.mustChangePassword: true",
+        script='pm.environment.set("userId", pm.response.json().data.user._id);')
 
     story += ep_title("2.2", "Create Accountant User")
     story += endpoint("POST", "/api/v1/users",
         body_json=(
             '{\n'
-            '  "name":    "Peter Otieno",\n'
-            '  "email":   "peter@sunrise.ac.ke",\n'
-            '  "phone":   "+254711000002",\n'
-            '  "role":    "ACCOUNTANT",\n'
-            '  "staffId": "ACC-001"\n'
+            '  "firstName": "Peter",\n'
+            '  "lastName":  "Otieno",\n'
+            '  "email":     "peter@sunrise.ac.ke",\n'
+            '  "phone":     "+254711000002",\n'
+            '  "role":      "ACCOUNTANT",\n'
+            '  "staffId":   "ACC-001"\n'
             '}'
         ),
         expected="201 Created",
-        verify="temporaryPassword returned — share with the user to log in for the first time")
+        verify="data.temporaryPassword returned — share with the user to log in for the first time")
 
     story += ep_title("2.3", "List Users")
     story += endpoint("GET", "/api/v1/users",
@@ -1543,51 +1583,116 @@ def s_collection(story):
 
 # ── Railway smoke test ────────────────────────────────────────────────────────
 def s_railway(story):
-    story += section_header("Section 23 — Railway Production Testing",
-                            "Create a second Postman Environment: Diraschool Railway")
+    story += section_header("Section 23 — Railway Production Testing & Logs",
+                            "Test against the live deployment and read production logs")
 
+    story.append(Paragraph("Step 1 — Create a Railway Postman Environment", H3))
     story.append(Paragraph(
         "Duplicate the <b>Diraschool Dev</b> environment and name it <b>Diraschool Railway</b>. "
-        "Change only <code>base_url</code> to your Railway deployment URL "
+        "Change only <code>base_url</code> to your Railway URL "
         "(e.g. <code>https://diraschool-api-production.up.railway.app</code>). "
-        "All other variables are the same. Switch environments using the dropdown in the top-right of Postman.", BODY))
+        "All other variables are the same. Switch environments via the dropdown (top-right).", BODY))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph("Step 2 — Where to view Railway logs", H3))
+    story.append(Paragraph(
+        "Railway has two separate log views. Use <b>both</b> when debugging:", BODY))
+    story.append(Spacer(1, 3))
+
+    log_rows = [
+        [Paragraph("Build Logs", make_style("BL", fontName="Helvetica-Bold", fontSize=8, leading=11)),
+         Paragraph("Railway dashboard > your service > Deployments > click a deployment > Build Logs tab. "
+                   "Shows npm install, Nixpacks steps, any build errors.", BODY_SM)],
+        [Paragraph("Runtime Logs", make_style("RL", fontName="Helvetica-Bold", fontSize=8, leading=11,
+                                               textColor=GREEN)),
+         Paragraph("Same deployment > Runtime Logs tab (or 'Logs' in the left sidebar). "
+                   "This is where server startup, MongoDB/Redis connections, and request errors appear. "
+                   "ALWAYS check this tab when health check fails.", BODY_SM)],
+        [Paragraph("Live tail", make_style("LT", fontName="Helvetica-Bold", fontSize=8, leading=11)),
+         Paragraph("Railway CLI: run  railway logs  in your project folder after  railway login. "
+                   "Streams logs in real-time to your terminal.", BODY_SM)],
+    ]
+    lt = Table(log_rows, colWidths=[60, W - 40*mm - 60])
+    lt.setStyle(TableStyle([
+        ("FONTSIZE",      (0, 0), (-1, -1), 8.5),
+        ("TOPPADDING",    (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+        ("ROWBACKGROUNDS",(0, 0), (-1, -1), [WHITE, GREY_LT]),
+        ("GRID",          (0, 0), (-1, -1), 0.3, GREY_MID),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+    ]))
+    story.append(lt)
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph("What healthy startup looks like in Runtime Logs:", H3))
+    story.append(CodeBlock(
+        "==================================================\n"
+        "[Boot] Diraschool API starting...\n"
+        "[Boot] NODE_ENV  : production\n"
+        "[Boot] PORT      : 8080\n"
+        "[Boot] MONGO_URI : checkmark set\n"
+        "[Boot] REDIS_URL : checkmark set\n"
+        "[Boot] JWT_SECRET: checkmark set\n"
+        "[Boot] CLIENT_URL: https://...\n"
+        "==================================================\n"
+        "[Boot] HTTP server listening on port 8080\n"
+        "[MongoDB] Connected\n"
+        "[Redis] TCP connected\n"
+        "[Redis] Ready -- auth complete"
+    ))
     story.append(Spacer(1, 6))
 
-    story.append(Paragraph("Minimum Smoke Test Sequence (run in order):", H3))
-    smoke_rows = [
-        ["1", "GET  /health",                   "200 — api: up, mongodb: up"],
-        ["2", "POST /api/v1/auth/register",      "201 — saves token + schoolId"],
-        ["3", "POST /api/v1/auth/login",         "200 — refreshes token"],
-        ["4", "GET  /api/v1/auth/me",            "200 — correct user returned"],
-        ["5", "POST /api/v1/classes",            "201 — confirms DB writes work"],
-        ["6", "POST /api/v1/students",           "201 — multi-collection write"],
-        ["7", "POST /api/v1/fees/payments",      "201 — confirms feeStructure + payment"],
-        ["8", "GET  /api/v1/audit-logs",         "200 — confirms audit trail"],
+    story.append(Paragraph("What a missing env var looks like:", H3))
+    story.append(CodeBlock(
+        "[Boot] MONGO_URI : MISSING -- server will exit\n"
+        "[ENV ERROR] Missing required environment variables:\n"
+        "  MONGO_URI\n"
+        "Copy .env.example to .env and fill in all required values."
+    ))
+    story.append(info_box(
+        "<b>Fix:</b> Railway dashboard > your service > Variables tab > add the missing variable > redeploy."
+    ))
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph("Step 3 — Required Railway environment variables", H3))
+    var_rows = [
+        [Paragraph(v, make_style("VN2", fontName="Courier", fontSize=8, textColor=TEAL, leading=11)),
+         Paragraph(ex, BODY_SM), Paragraph(note, BODY_SM)]
+        for v, ex, note in [
+            ("NODE_ENV",    "production",                    "Must be exactly 'production'"),
+            ("MONGO_URI",   "mongodb+srv://user:pass@cluster.mongodb.net/diraschool",
+                            "From MongoDB Atlas > Connect > Drivers"),
+            ("JWT_SECRET",  "any-32+-char-random-string",   "Run: openssl rand -hex 32"),
+            ("CLIENT_URL",  "https://your-app.up.railway.app",
+                            "Your Railway URL. Used for CORS. Any valid URL works for now."),
+            ("REDIS_URL",   "rediss://default:PASSWORD@host.upstash.io:6379",
+                            "From Upstash > TCP tab (NOT REST tab). Must start with rediss://"),
+        ]
     ]
-    hdrs2 = [Paragraph(h, make_style("TH", fontName="Helvetica-Bold", fontSize=8,
+    hdrs3 = [Paragraph(h, make_style("TH3", fontName="Helvetica-Bold", fontSize=8,
+                                      textColor=WHITE, leading=11))
+             for h in ["Variable", "Example value", "Notes"]]
+    t3 = make_table(hdrs3, var_rows, [75, 105, W - 40*mm - 180])
+    story.append(t3)
+    story.append(Spacer(1, 8))
+
+    story.append(Paragraph("Step 4 — Minimum Smoke Test Sequence", H3))
+    smoke_rows = [
+        ["1", "GET  /health",                    "200 — api: up, mongodb: up, redis: up"],
+        ["2", "POST /api/v1/auth/register",       "201 — school + admin created, cookie set"],
+        ["3", "GET  /api/v1/auth/me",             "200 — user object returned"],
+        ["4", "POST /api/v1/classes",             "201 — confirms DB writes work"],
+        ["5", "POST /api/v1/auth/forgot-password","200 — resetToken returned"],
+        ["6", "GET  /api/v1/audit-logs",          "200 — audit trail populated"],
+    ]
+    hdrs2 = [Paragraph(h, make_style("TH2", fontName="Helvetica-Bold", fontSize=8,
                                       textColor=WHITE, leading=11))
              for h in ["#", "Request", "Pass Condition"]]
     rows2 = [[Paragraph(n, CENTER), Paragraph(r, CODE), Paragraph(p, BODY_SM)]
              for n, r, p in smoke_rows]
     t = make_table(hdrs2, rows2, [18, 160, W - 40*mm - 178])
     story.append(t)
-    story.append(Spacer(1, 8))
-
-    story.append(Paragraph("Reading Railway Logs:", H3))
-    story.append(CodeBlock(
-        "# In Railway dashboard: your-service > Deployments > View Logs\n"
-        "# Look for these on a healthy boot:\n"
-        "[info] MongoDB connected\n"
-        "[info] [Redis] Connected\n"
-        "[info] API server running on port 3000"
-    ))
-    story.append(Spacer(1, 6))
-
-    story.append(info_box(
-        "<b>REDIS_URL check:</b> If you see ECONNRESET in Railway logs, verify your "
-        "REDIS_URL env var starts with <code>rediss://</code> (with the extra 's'). "
-        "Upstash requires TLS. Using <code>redis://</code> causes immediate disconnects."
-    ))
 
 
 # ── Page header / footer ──────────────────────────────────────────────────────
