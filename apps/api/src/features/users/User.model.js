@@ -24,6 +24,13 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    staffId: {
+      type: String,
+      trim: true,
+    },
+    tscNumber: {
+      type: String,
+    },
     password: {
       type: String,
       required: [true, 'Password is required'],
@@ -66,7 +73,7 @@ const userSchema = new mongoose.Schema(
       type: Date,
     },
     // ── Password reset ────────────────────────────────────────────────────────
-    // Raw token is sent to the user (email/SMS). Only the SHA-256 hash is stored
+    // Raw token is sent to the user via email. Only the SHA-256 hash is stored
     // so a DB leak cannot be used to reset passwords.
     passwordResetToken: {
       type: String,
@@ -75,6 +82,24 @@ const userSchema = new mongoose.Schema(
     passwordResetExpiry: {
       type: Date,
       select: false,
+    },
+    // ── Account invite ────────────────────────────────────────────────────────
+    // Sent when an admin creates a new staff account. User clicks the email link
+    // to set their own password. Raw token is emailed; only hash stored here.
+    // Also reused for admin "re-send invite" / "reset password" actions.
+    inviteToken: {
+      type: String,
+      select: false,
+    },
+    inviteTokenExpiry: {
+      type: Date,
+      select: false,
+    },
+    // True until the user accepts their invite (sets their own password).
+    // Blocks login — user must complete invite flow first.
+    invitePending: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }

@@ -51,6 +51,13 @@ const resetPasswordSchema = z.object({
     .min(8, 'Password must be at least 8 characters'),
 });
 
+// Same shape as resetPassword — user picks a password when accepting their invite
+const acceptInviteSchema = z.object({
+  password: z
+    .string()
+    .min(8, 'Password must be at least 8 characters'),
+});
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validate = (schema) => (req, res, next) => {
@@ -68,3 +75,4 @@ export const validateLogin           = validate(loginSchema);
 export const validateChangePassword  = validate(changePasswordSchema);
 export const validateForgotPassword  = validate(forgotPasswordSchema);
 export const validateResetPassword   = validate(resetPasswordSchema);
+export const validateAcceptInvite    = validate(acceptInviteSchema);

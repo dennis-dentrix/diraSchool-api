@@ -16,12 +16,14 @@ const ASSIGNABLE_ROLES = [
 ];
 
 const createUserSchema = z.object({
-  firstName: z.string().trim().min(1, 'First name is required'),
-  lastName: z.string().trim().min(1, 'Last name is required'),
-  email: z.string().trim().email('Invalid email address'),
-  phone: z.string().trim().regex(phoneRegex, 'Invalid phone number (Kenyan format required)').optional(),
-  role: z.enum(ASSIGNABLE_ROLES, { message: `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}` }),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  firstName:  z.string().trim().min(1, 'First name is required'),
+  lastName:   z.string().trim().min(1, 'Last name is required'),
+  email:      z.string().trim().email('Invalid email address'),
+  phone:      z.string().trim().regex(phoneRegex, 'Invalid phone number (Kenyan format required)').optional(),
+  role:       z.enum(ASSIGNABLE_ROLES, { message: `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}` }),
+  staffId:    z.string().trim().optional(),
+  tscNumber:  z.string().trim().optional(),
+  // No password — the user sets their own via the invite email link
 });
 
 const updateUserSchema = z.object({

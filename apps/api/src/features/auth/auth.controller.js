@@ -6,8 +6,9 @@ import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { env } from '../../config/env.js';
-import { ROLES, SUBSCRIPTION_STATUSES } from '../../constants/index.js';
+import { ROLES, SUBSCRIPTION_STATUSES, JOB_NAMES } from '../../constants/index.js';
 import { normalisePhone } from '../../utils/phone.js';
+import { emailQueue } from '../../jobs/queues.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,15 @@ export const login = asyncHandler(async (req, res) => {
     return sendError(res, 'Invalid email or password.', 401);
   }
 
+  // Block login until the user accepts their invite and sets a real password
+  if (user.invitePending) {
+    return sendError(
+      res,
+      'Your account setup is incomplete. Please check your email for an invitation link.',
+      403
+    );
+  }
+
   // Update last login timestamp
   user.lastLoginAt = new Date();
   await user.save({ validateBeforeSave: false });
@@ -186,18 +196,21 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   user.passwordResetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
   await user.save({ validateBeforeSave: false });
 
-  // ── TODO: Replace this block with email/SMS delivery in production ──────────
-  // When AfricasTalking is active:
-  //   await smsQueue.add('send-sms', { phone: user.phone, message: `Reset token: ${rawToken}` });
-  // When an email provider (SendGrid / Resend) is added:
-  //   await sendResetEmail(user.email, rawToken);
-  // ────────────────────────────────────────────────────────────────────────────
+  // Build the reset link and enqueue the email job (non-blocking)
+  const resetUrl = `${env.CLIENT_URL}/reset-password?token=${rawToken}`;
+
+  await emailQueue.add(JOB_NAMES.SEND_RESET_EMAIL, {
+    type: JOB_NAMES.SEND_RESET_EMAIL,
+    payload: {
+      to:             user.email,
+      firstName:      user.firstName,
+      resetUrl,
+      expiresInHours: 1,
+    },
+  });
 
   return sendSuccess(res, {
-    message: 'Password reset token generated. Use it within 1 hour.',
-    // Returned in the response until email/SMS delivery is wired up.
-    // Remove this field once a delivery channel is configured.
-    resetToken: rawToken,
+    message: 'If an account with that email exists, a password reset link has been sent.',
   });
 });
 
@@ -236,6 +249,56 @@ export const resetPassword = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, {
     message: 'Password reset successfully. You are now logged in.',
+    user: user.toSafeObject(),
+  });
+});
+
+/**
+ * POST /api/v1/auth/accept-invite/:token
+ * Validates an account invitation token and sets the user's password.
+ * This is how newly created staff accounts are activated.
+ *
+ * Flow:
+ *   1. Admin creates user → invite email sent with token in URL
+ *   2. User clicks link → frontend POSTs here with their chosen password
+ *   3. Token validated → password set → invitePending cleared → auto-login
+ *
+ * Public route — no auth required (user has no password yet).
+ */
+export const acceptInvite = asyncHandler(async (req, res) => {
+  const { token } = req.params;
+  const { password } = req.body;
+
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const user = await User.findOne({
+    inviteToken:       hashedToken,
+    inviteTokenExpiry: { $gt: new Date() },
+    isActive:          true,
+  }).select('+inviteToken +inviteTokenExpiry');
+
+  if (!user) {
+    return sendError(
+      res,
+      'This invitation link is invalid or has expired. Ask your administrator to resend the invite.',
+      400
+    );
+  }
+
+  // Set the user's chosen password and mark the account as active
+  user.password           = password;
+  user.inviteToken        = undefined;
+  user.inviteTokenExpiry  = undefined;
+  user.invitePending      = false;
+  user.mustChangePassword = false;
+  await user.save();
+
+  // Auto-sign the user in immediately
+  const jwtToken = signToken(user._id);
+  attachCookie(res, jwtToken);
+
+  return sendSuccess(res, {
+    message: 'Your account is set up. Welcome!',
     user: user.toSafeObject(),
   });
 });

@@ -120,6 +120,7 @@ export const QUEUE_NAMES = {
   IMPORT: 'import',
   RECEIPT: 'receipt',
   NOTIFICATION: 'notification',
+  EMAIL: 'email',
 };
 
 export const JOB_NAMES = {
@@ -128,6 +129,8 @@ export const JOB_NAMES = {
   GENERATE_PDF: 'generate-pdf',
   IMPORT_STUDENTS_CSV: 'import-students-csv',
   IN_APP_NOTIFICATION: 'in-app-notification',
+  SEND_INVITE_EMAIL: 'send-invite-email',
+  SEND_RESET_EMAIL: 'send-reset-email',
 };
 
 export const AUDIT_ACTIONS = {

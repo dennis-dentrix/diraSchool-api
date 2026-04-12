@@ -5,10 +5,12 @@
  * Uses MongoMemoryReplSet (replica set required for transactions).
  * BullMQ queues are mocked so tests run without Redis.
  */
+import crypto from 'crypto';
 import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import app from '../../../server.js';
 import { setup, clearDatabase, teardown } from '../../../config/vitest.setup.js';
+import User from '../../users/User.model.js';
 
 // Mock BullMQ queues — prevents attempts to connect to Redis during tests
 vi.mock('../../../jobs/queues.js', () => ({
@@ -16,6 +18,7 @@ vi.mock('../../../jobs/queues.js', () => ({
   reportQueue:  { add: vi.fn().mockResolvedValue({ id: 'mock-report' }) },
   receiptQueue: { add: vi.fn().mockResolvedValue({ id: 'mock-receipt' }) },
   importQueue:  { add: vi.fn().mockResolvedValue({ id: 'mock-import' }) },
+  emailQueue:   { add: vi.fn().mockResolvedValue({ id: 'mock-email' }) },
 }));
 
 const BASE = '/api/v1/auth';
@@ -155,15 +158,16 @@ describe('POST /auth/logout', () => {
 });
 
 describe('POST /auth/forgot-password', () => {
-  it('returns 200 and resetToken when email exists', async () => {
+  it('returns 200 (no token in body) when email exists — token sent by email', async () => {
     await register();
     const res = await request(app)
       .post(`${BASE}/forgot-password`)
       .send({ email: validRegistration.email });
 
     expect(res.status).toBe(200);
-    expect(res.body.data.resetToken).toBeDefined();
-    expect(res.body.data.resetToken).toHaveLength(64); // 32 bytes hex
+    // Token is no longer in the response — it's sent via email (mocked in tests)
+    expect(res.body.resetToken).toBeUndefined();
+    expect(res.body.message).toMatch(/reset link/i);
   });
 
   it('returns 200 even when email does not exist (no enumeration)', async () => {
@@ -172,8 +176,7 @@ describe('POST /auth/forgot-password', () => {
       .send({ email: 'nobody@nonexistent.com' });
 
     expect(res.status).toBe(200);
-    // No resetToken in response when user not found
-    expect(res.body.data.resetToken).toBeUndefined();
+    expect(res.body.resetToken).toBeUndefined();
   });
 
   it('returns 400 on invalid email format', async () => {
@@ -185,24 +188,37 @@ describe('POST /auth/forgot-password', () => {
   });
 });
 
+/**
+ * Helper: trigger forgot-password then read the raw token straight from the DB
+ * (simulates what the user gets via their email link).
+ */
+const getRawResetToken = async (email) => {
+  await request(app).post(`${BASE}/forgot-password`).send({ email });
+  const user = await User.findOne({ email }).select('+passwordResetToken');
+  if (!user?.passwordResetToken) return null;
+  // passwordResetToken in DB is the SHA-256 hash.
+  // We can't reverse it — instead we regenerate a raw token that hashes to it.
+  // For tests we patch the DB to store a known raw token hash directly.
+  // Simpler approach: store a known rawToken and hash it ourselves in setup.
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  user.passwordResetToken  = crypto.createHash('sha256').update(rawToken).digest('hex');
+  user.passwordResetExpiry = new Date(Date.now() + 60 * 60 * 1000);
+  await user.save({ validateBeforeSave: false });
+  return rawToken;
+};
+
 describe('POST /auth/reset-password/:token', () => {
   it('resets password with valid token and logs user in', async () => {
     await register();
+    const resetToken = await getRawResetToken(validRegistration.email);
 
-    // Get a reset token
-    const forgot = await request(app)
-      .post(`${BASE}/forgot-password`)
-      .send({ email: validRegistration.email });
-    const { resetToken } = forgot.body.data;
-
-    // Reset the password
     const res = await request(app)
       .post(`${BASE}/reset-password/${resetToken}`)
       .send({ password: 'NewPassword99!' });
 
     expect(res.status).toBe(200);
     expect(res.headers['set-cookie']).toBeDefined(); // auto-login cookie set
-    expect(res.body.data.message).toMatch(/reset successfully/i);
+    expect(res.body.message).toMatch(/reset successfully/i);
 
     // Old password should be rejected
     const oldLogin = await login(validRegistration.email, validRegistration.password);
@@ -224,10 +240,7 @@ describe('POST /auth/reset-password/:token', () => {
 
   it('returns 400 when password is too short', async () => {
     await register();
-    const forgot = await request(app)
-      .post(`${BASE}/forgot-password`)
-      .send({ email: validRegistration.email });
-    const { resetToken } = forgot.body.data;
+    const resetToken = await getRawResetToken(validRegistration.email);
 
     const res = await request(app)
       .post(`${BASE}/reset-password/${resetToken}`)

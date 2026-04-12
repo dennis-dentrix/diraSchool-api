@@ -27,3 +27,4 @@ Thumbs.db
 
 # ── MongoDB memory server binary cache ───────────────────────
 .mongodb-binaries/
+docs/__pycache__/

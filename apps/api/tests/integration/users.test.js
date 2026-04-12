@@ -1,7 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+
+// Mock BullMQ queues — prevents Redis connection attempts in tests
+vi.mock('../../src/jobs/queues.js', () => ({
+  smsQueue:     { add: vi.fn().mockResolvedValue({ id: 'mock-sms' }) },
+  reportQueue:  { add: vi.fn().mockResolvedValue({ id: 'mock-report' }) },
+  receiptQueue: { add: vi.fn().mockResolvedValue({ id: 'mock-receipt' }) },
+  importQueue:  { add: vi.fn().mockResolvedValue({ id: 'mock-import' }) },
+  emailQueue:   { add: vi.fn().mockResolvedValue({ id: 'mock-email' }) },
+}));
 
 beforeAll(setup);
 afterAll(teardown);
@@ -48,7 +57,7 @@ async function createStaff(agent, overrides = {}) {
     email: `staff${Date.now()}@school.ke`,
     phone: '0712345678',
     role: 'teacher',
-    password: 'TempPass123!',
+    // No password — the user receives an invite email and sets their own
     ...overrides,
   };
   const res = await agent.post('/api/v1/users').send(payload);
@@ -65,7 +74,8 @@ describe('POST /api/v1/users', () => {
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('success');
     expect(res.body.user.role).toBe('teacher');
-    expect(res.body.user.mustChangePassword).toBe(true);
+    expect(res.body.user.invitePending).toBe(true);   // invite flow — not mustChangePassword
+    expect(res.body.user.mustChangePassword).toBe(false);
     expect(res.body.user.password).toBeUndefined();
   });
 
@@ -100,10 +110,10 @@ describe('POST /api/v1/users', () => {
     const email = 'shared@staff.ke';
 
     const r1 = await agentA.post('/api/v1/users').send({
-      firstName: 'X', lastName: 'Y', email, role: 'teacher', password: 'TempPass123!',
+      firstName: 'X', lastName: 'Y', email, role: 'teacher',
     });
     const r2 = await agentB.post('/api/v1/users').send({
-      firstName: 'X', lastName: 'Y', email, role: 'teacher', password: 'TempPass123!',
+      firstName: 'X', lastName: 'Y', email, role: 'teacher',
     });
 
     expect(r1.status).toBe(201);
@@ -112,7 +122,7 @@ describe('POST /api/v1/users', () => {
 
   it('returns 401 when unauthenticated', async () => {
     const res = await request(app).post('/api/v1/users').send({
-      firstName: 'X', lastName: 'Y', email: 'x@y.ke', role: 'teacher', password: 'TempPass123!',
+      firstName: 'X', lastName: 'Y', email: 'x@y.ke', role: 'teacher',
     });
     expect(res.status).toBe(401);
   });
@@ -262,44 +272,26 @@ describe('PATCH /api/v1/users/:id', () => {
   });
 });
 
-// ── POST /api/v1/users/:id/reset-password ─────────────────────────────────────
+// ── POST /api/v1/users/:id/resend-invite ──────────────────────────────────────
 
-describe('POST /api/v1/users/:id/reset-password', () => {
-  it('resets password and sets mustChangePassword', async () => {
+describe('POST /api/v1/users/:id/resend-invite', () => {
+  it('re-issues invite token and enqueues email', async () => {
     const agent = await registerAndLogin(schoolA);
     const { res: createRes } = await createStaff(agent);
     const userId = createRes.body.user._id;
 
-    const res = await agent.post(`/api/v1/users/${userId}/reset-password`);
+    const res = await agent.post(`/api/v1/users/${userId}/resend-invite`);
 
     expect(res.status).toBe(200);
-    expect(res.body.tempPassword).toBeDefined();
-    expect(typeof res.body.tempPassword).toBe('string');
-    expect(res.body.tempPassword.length).toBeGreaterThanOrEqual(12);
+    expect(res.body.message).toMatch(/re-sent/i);
   });
 
-  it('user can login with the new temp password', async () => {
-    const agent = await registerAndLogin(schoolA);
-    const { res: createRes, payload } = await createStaff(agent);
-    const userId = createRes.body.user._id;
-
-    const resetRes = await agent.post(`/api/v1/users/${userId}/reset-password`);
-    const { tempPassword } = resetRes.body;
-
-    const loginRes = await request(app).post('/api/v1/auth/login').send({
-      email: payload.email,
-      password: tempPassword,
-    });
-
-    expect(loginRes.status).toBe(200);
-  });
-
-  it('returns 400 when trying to reset own password', async () => {
+  it('returns 400 when trying to resend invite to yourself', async () => {
     const agent = await registerAndLogin(schoolA);
     const me = await agent.get('/api/v1/auth/me');
     const myId = me.body.user._id;
 
-    const res = await agent.post(`/api/v1/users/${myId}/reset-password`);
+    const res = await agent.post(`/api/v1/users/${myId}/resend-invite`);
     expect(res.status).toBe(400);
   });
 
@@ -310,7 +302,7 @@ describe('POST /api/v1/users/:id/reset-password', () => {
     const { res: createRes } = await createStaff(agentA);
     const userId = createRes.body.user._id;
 
-    const res = await agentB.post(`/api/v1/users/${userId}/reset-password`);
+    const res = await agentB.post(`/api/v1/users/${userId}/resend-invite`);
     expect(res.status).toBe(404);
   });
 });

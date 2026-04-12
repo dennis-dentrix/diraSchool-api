@@ -22,6 +22,7 @@ import { processSmsJob } from './workers/sms.worker.js';
 import { processReportJob } from './workers/report.worker.js';
 import { processReceiptJob } from './workers/receipt.worker.js';
 import { processImportJob } from './workers/import.worker.js';
+import { startEmailWorker } from './workers/email.worker.js';
 
 validateEnv();
 
@@ -52,6 +53,8 @@ const importWorker = new Worker(QUEUE_NAMES.IMPORT, processImportJob, {
   concurrency: 1,    // serial imports prevent DB contention and transaction conflicts
 });
 
+const emailWorker = startEmailWorker();
+
 // ── Event logging ─────────────────────────────────────────────────────────────
 
 for (const [name, worker] of [
@@ -59,6 +62,7 @@ for (const [name, worker] of [
   ['report',  reportWorker],
   ['receipt', receiptWorker],
   ['import',  importWorker],
+  ['email',   emailWorker],
 ]) {
   worker.on('completed', (job) => {
     logger.info(`[Worker:${name}] Job ${job.id} completed`);
@@ -83,6 +87,7 @@ const shutdown = async (signal) => {
   await reportWorker.close();
   await receiptWorker.close();
   await importWorker.close();
+  await emailWorker.close();
   await mongoose.disconnect();
   process.exit(0);
 };
