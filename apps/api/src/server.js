@@ -31,17 +31,21 @@ import timetableRoutes from './features/timetable/timetable.routes.js';
 import libraryRoutes from './features/library/library.routes.js';
 import transportRoutes from './features/transport/transport.routes.js';
 
-// Validate env before anything else — exits if required vars missing
-validateEnv();
-
-// ── Startup diagnostic (visible in Railway logs) ─────────────────────────────
-console.log(`[Boot] NODE_ENV  : ${process.env.NODE_ENV}`);
+// ── Startup diagnostic — always runs first, visible in Railway logs ──────────
+// This prints BEFORE validateEnv() so missing vars are visible even if we crash.
+console.log('='.repeat(50));
+console.log('[Boot] Diraschool API starting…');
+console.log(`[Boot] NODE_ENV  : ${process.env.NODE_ENV ?? '(not set)'}`);
 console.log(`[Boot] PORT      : ${process.env.PORT ?? '(not set — will use 3000)'}`);
-console.log(`[Boot] MONGO_URI : ${process.env.MONGO_URI ? '✓ set' : '✗ MISSING'}`);
-console.log(`[Boot] REDIS_URL : ${process.env.REDIS_URL ? '✓ set' : '✗ MISSING'}`);
-console.log(`[Boot] JWT_SECRET: ${process.env.JWT_SECRET ? '✓ set' : '✗ MISSING'}`);
-console.log(`[Boot] CLIENT_URL: ${process.env.CLIENT_URL ?? '(not set)'}`);
+console.log(`[Boot] MONGO_URI : ${process.env.MONGO_URI  ? '✓ set' : '✗ MISSING — server will exit'}`);
+console.log(`[Boot] REDIS_URL : ${process.env.REDIS_URL  ? '✓ set' : '✗ MISSING — server will exit'}`);
+console.log(`[Boot] JWT_SECRET: ${process.env.JWT_SECRET ? '✓ set' : '✗ MISSING — server will exit'}`);
+console.log(`[Boot] CLIENT_URL: ${process.env.CLIENT_URL ?? '✗ MISSING — server will exit'}`);
+console.log('='.repeat(50));
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Validate env — exits with clear error if any required var is missing
+validateEnv();
 
 const app = express();
 
@@ -134,14 +138,45 @@ const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 
 if (isMain) {
   const start = async () => {
-    await connectDB();
-    connectRedis();
-    app.listen(env.PORT, () => {
-      logger.info(`API server running on port ${env.PORT}`, { env: env.NODE_ENV });
-      logger.info(`Health check: http://localhost:${env.PORT}/health`);
+    // 1. Start HTTP server FIRST so Railway's health check gets a response
+    //    immediately — even before MongoDB and Redis are fully connected.
+    //    Without this, Railway waits for connectDB() (can take 5-15 s on Atlas cold
+    //    start) before the server listens, and the health check times out.
+    const server = app.listen(env.PORT, () => {
+      logger.info(`[Boot] HTTP server listening on port ${env.PORT}`);
+      logger.info(`[Boot] Health: http://localhost:${env.PORT}/health`);
     });
+
+    // 2. Connect to MongoDB — retry is handled by mongoose internally
+    try {
+      await connectDB();
+    } catch (err) {
+      logger.error(`[Boot] MongoDB connection failed: ${err.message}`);
+      // Non-fatal at this point — mongoose will keep retrying in the background
+    }
+
+    // 3. Connect to Redis — errors are non-fatal, app degrades gracefully
+    connectRedis();
+
+    // 4. Graceful shutdown on SIGTERM (Railway sends this before replacing deploys)
+    const shutdown = (signal) => {
+      logger.info(`[Boot] ${signal} received — shutting down gracefully`);
+      server.close(() => {
+        logger.info('[Boot] HTTP server closed');
+        process.exit(0);
+      });
+      // Force-exit after 10 s if connections hang
+      setTimeout(() => process.exit(1), 10_000).unref();
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
   };
-  start();
+
+  start().catch((err) => {
+    console.error('[Boot] Fatal startup error:', err);
+    process.exit(1);
+  });
 }
 
 export default app;
