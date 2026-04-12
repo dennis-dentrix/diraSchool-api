@@ -61,22 +61,35 @@ if (env.NODE_ENV !== 'test') {
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
-  // Redis is non-critical for health — a transient reconnect must not kill the container.
+  // Redis is non-critical — a transient reconnect must not kill the container.
+  // We always return HTTP 200 so Railway does not restart on Redis blips.
   let redisStatus = 'not_connected';
+  let redisError  = null;
+
   try {
     const redis = getRedis();
     if (redis) {
-      await redis.ping();
-      redisStatus = 'up';
+      const state = redis.status; // 'connecting' | 'connect' | 'ready' | 'reconnecting' | 'end'
+      if (state === 'ready') {
+        await redis.ping();       // only ping when already ready — avoids 3 s hangs
+        redisStatus = 'up';
+      } else {
+        // Still connecting or reconnecting — report the state but don't block
+        redisStatus = state;      // e.g. "connecting", "reconnecting"
+      }
     }
-  } catch {
+  } catch (err) {
     redisStatus = 'degraded';
+    redisError  = err.message;
+    logger.warn(`[Health] Redis degraded: ${err.message}`);
   }
 
   return res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     services: { api: 'up', mongodb: 'up', redis: redisStatus },
+    // Always include redisError when present so we can debug in Railway logs
+    ...(redisError && { redisError }),
   });
 });
 
