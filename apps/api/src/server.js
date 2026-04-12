@@ -34,6 +34,15 @@ import transportRoutes from './features/transport/transport.routes.js';
 // Validate env before anything else — exits if required vars missing
 validateEnv();
 
+// ── Startup diagnostic (visible in Railway logs) ─────────────────────────────
+console.log(`[Boot] NODE_ENV  : ${process.env.NODE_ENV}`);
+console.log(`[Boot] PORT      : ${process.env.PORT ?? '(not set — will use 3000)'}`);
+console.log(`[Boot] MONGO_URI : ${process.env.MONGO_URI ? '✓ set' : '✗ MISSING'}`);
+console.log(`[Boot] REDIS_URL : ${process.env.REDIS_URL ? '✓ set' : '✗ MISSING'}`);
+console.log(`[Boot] JWT_SECRET: ${process.env.JWT_SECRET ? '✓ set' : '✗ MISSING'}`);
+console.log(`[Boot] CLIENT_URL: ${process.env.CLIENT_URL ?? '(not set)'}`);
+// ─────────────────────────────────────────────────────────────────────────────
+
 const app = express();
 
 // ── Security middleware ──────────────────────────────────────────────────────
