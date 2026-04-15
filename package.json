@@ -7,14 +7,22 @@
     "packages/*"
   ],
   "scripts": {
-    "dev":    "npm run dev    --workspace=apps/api",
-    "start":  "npm run start  --workspace=apps/api",
+    "dev": "npm run dev    --workspace=apps/api",
+    "dev:web": "npm run dev    --workspace=apps/web",
+    "dev:all": "concurrently \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
+    "build:web": "npm run build  --workspace=apps/web",
+    "start:web": "npm run start  --workspace=apps/web",
+    "start": "npm run start  --workspace=apps/api",
     "worker": "npm run worker --workspace=apps/api",
-    "test":   "npm test       --workspace=apps/api",
-    "lint":   "npm run lint   --workspace=apps/api"
+    "test": "npm test       --workspace=apps/api",
+    "lint": "npm run lint   --workspace=apps/api",
+    "lint:web": "npm run lint   --workspace=apps/web"
   },
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }

@@ -8,17 +8,16 @@ const phoneRegex = /^(\+254|0|254)?[17]\d{8}$/;
 const registerSchoolSchema = z.object({
   // School details
   schoolName: z.string().trim().min(2, 'School name must be at least 2 characters'),
-  schoolEmail: z.string().trim().email('Invalid school email'),
   schoolPhone: z
     .string()
     .trim()
     .regex(phoneRegex, 'Invalid school phone number (Kenyan format required)'),
   county: z.string().trim().optional(),
 
-  // Admin user details
+  // Admin user details (email is also used as the school's contact email)
   firstName: z.string().trim().min(1, 'First name is required'),
   lastName: z.string().trim().min(1, 'Last name is required'),
-  email: z.string().trim().email('Invalid admin email'),
+  email: z.string().trim().email('Invalid email address'),
   phone: z
     .string()
     .trim()
@@ -58,6 +57,10 @@ const acceptInviteSchema = z.object({
     .min(8, 'Password must be at least 8 characters'),
 });
 
+const resendVerificationSchema = z.object({
+  email: z.string().trim().email('Invalid email address'),
+});
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validate = (schema) => (req, res, next) => {
@@ -70,9 +73,10 @@ const validate = (schema) => (req, res, next) => {
   next();
 };
 
-export const validateRegisterSchool  = validate(registerSchoolSchema);
-export const validateLogin           = validate(loginSchema);
-export const validateChangePassword  = validate(changePasswordSchema);
-export const validateForgotPassword  = validate(forgotPasswordSchema);
-export const validateResetPassword   = validate(resetPasswordSchema);
-export const validateAcceptInvite    = validate(acceptInviteSchema);
+export const validateRegisterSchool      = validate(registerSchoolSchema);
+export const validateLogin               = validate(loginSchema);
+export const validateChangePassword      = validate(changePasswordSchema);
+export const validateForgotPassword      = validate(forgotPasswordSchema);
+export const validateResetPassword       = validate(resetPasswordSchema);
+export const validateAcceptInvite        = validate(acceptInviteSchema);
+export const validateResendVerification  = validate(resendVerificationSchema);

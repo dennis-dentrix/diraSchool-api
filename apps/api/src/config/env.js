@@ -44,12 +44,13 @@ export const env = {
   AT_USERNAME:  process.env.AT_USERNAME,
   AT_API_KEY:   process.env.AT_API_KEY,
   AT_SENDER_ID: process.env.AT_SENDER_ID || 'SCHOOL',
-  // Resend — optional until email feature is activated
-  // Get your key at: https://resend.com/api-keys
-  RESEND_API_KEY: process.env.RESEND_API_KEY,
-  // Sender address — must match a domain verified in Resend dashboard.
-  // Falls back to Resend's sandbox sender so dev works without a domain.
-  EMAIL_FROM: process.env.EMAIL_FROM,
+  // Email — Resend (primary) + ZeptoMail (fallback)
+  // Set both for automatic failover; at least one must be configured.
+  EMAIL_FROM:           process.env.EMAIL_FROM,
+  RESEND_API_KEY:       process.env.RESEND_API_KEY,
+  ZEPTOMAIL_SERVER:     process.env.ZEPTOMAIL_SERVER     || 'smtp.zeptomail.com',
+  ZEPTOMAIL_USERNAME:   process.env.ZEPTOMAIL_USERNAME   || 'emailapikey',
+  ZEPTOMAIL_API_KEY:    process.env.ZEPTOMAIL_API_KEY,
   // Cloudinary — optional, PDF uploads skipped when not set
   CLOUDINARY_CLOUD_NAME:  process.env.CLOUDINARY_CLOUD_NAME,
   CLOUDINARY_API_KEY:     process.env.CLOUDINARY_API_KEY,

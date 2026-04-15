@@ -1,40 +1,106 @@
 /**
- * Email service — wraps Resend.
+ * Email service — Resend (primary) with ZeptoMail fallback.
  *
- * All outbound email goes through this module so the delivery provider can be
- * swapped without touching any feature code.
+ * Send flow:
+ *   1. Try Resend API first (clean API, 3k free/month).
+ *   2. If Resend fails for any reason (rate limit, network, quota), retry
+ *      immediately via ZeptoMail SMTP (10k one-time free, then pay-as-you-go).
+ *   3. If both fail the error is thrown — the BullMQ worker will retry the job
+ *      with exponential backoff.
  *
- * Resend docs: https://resend.com/docs
- * Free tier  : 3,000 emails/month, 100/day — enough for an MVP.
+ * This gives you resilience at zero extra cost:
+ *   - Resend free tier handles normal volume.
+ *   - ZeptoMail catches the overflow or any Resend outage.
+ *   - Both use your verified domain so deliverability stays high.
  *
- * Required env var:
- *   RESEND_API_KEY — get from https://resend.com/api-keys
- *   EMAIL_FROM     — e.g. "Diraschool <noreply@diraschool.co.ke>"
- *                    Must match a verified domain in your Resend dashboard.
- *                    Falls back to the Resend sandbox sender for dev.
+ * Required env vars:
+ *   RESEND_API_KEY        — https://resend.com/api-keys
+ *   ZEPTOMAIL_API_KEY     — ZeptoMail dashboard → SMTP → API key
+ *   EMAIL_FROM            — "Diraschool <noreply@yourdomain.co.ke>"
+ *                           Domain must be verified in BOTH Resend and ZeptoMail.
+ *
+ * ZeptoMail domain setup:
+ *   1. zeptomail.com → Mail Agents → Add Mail Agent → your domain
+ *   2. Add the SPF + DKIM + bounce DNS records they provide
+ *   3. Verify in dashboard → copy the API key from the SMTP tab
+ *   SMTP username is always the literal string: emailapikey
+ *   SMTP password is your API key
  */
+import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 import { env } from '../config/env.js';
 
+const FROM = env.EMAIL_FROM ?? 'Diraschool <noreply@diraschool.co.ke>';
+
+// ── Resend client (primary) ───────────────────────────────────────────────────
+
 let _resend = null;
 
-/**
- * Returns (and lazily creates) the Resend client.
- * Throws clearly when the API key is missing — better than a cryptic 401.
- */
-const client = () => {
+const getResendClient = () => {
   if (!_resend) {
     if (!env.RESEND_API_KEY) {
-      throw new Error('[Email] RESEND_API_KEY is not set. Email delivery is disabled.');
+      throw new Error('[Email] RESEND_API_KEY is not set.');
     }
     _resend = new Resend(env.RESEND_API_KEY);
   }
   return _resend;
 };
 
-// Default sender — override with EMAIL_FROM env var once you verify a domain.
-// The onboarding@resend.dev address works for testing without domain verification.
-const FROM = env.EMAIL_FROM ?? 'Diraschool <onboarding@resend.dev>';
+// ── ZeptoMail SMTP transport (fallback) ──────────────────────────────────────
+
+let _zepto = null;
+
+const getZeptoTransport = () => {
+  if (!_zepto) {
+    if (!env.ZEPTOMAIL_API_KEY) {
+      throw new Error('[Email] ZEPTOMAIL_API_KEY is not set.');
+    }
+    _zepto = nodemailer.createTransport({
+      host:   env.ZEPTOMAIL_SERVER,    // smtp.zeptomail.com (or region-specific)
+      port:   587,
+      secure: false,                   // STARTTLS on port 587
+      auth: {
+        user: env.ZEPTOMAIL_USERNAME,  // 'emailapikey' (ZeptoMail's fixed SMTP username)
+        pass: env.ZEPTOMAIL_API_KEY,
+      },
+    });
+  }
+  return _zepto;
+};
+
+// ── Unified send with automatic fallback ─────────────────────────────────────
+
+/**
+ * Send a transactional email.
+ * Tries Resend first; falls back to ZeptoMail on any failure.
+ *
+ * @param {{ to: string, subject: string, html: string }} opts
+ */
+const sendEmail = async ({ to, subject, html }) => {
+  // ── Primary: Resend ───────────────────────────────────────
+  if (env.RESEND_API_KEY) {
+    try {
+      const result = await getResendClient().emails.send({
+        from: FROM, to, subject, html,
+      });
+      // Resend returns { data: { id }, error: null } on success
+      // and { data: null, error: {...} } on failure
+      if (!result.error) {
+        return result;
+      }
+      console.warn(`[Email] Resend failed (${result.error.message}), switching to ZeptoMail…`);
+    } catch (err) {
+      console.warn(`[Email] Resend threw (${err.message}), switching to ZeptoMail…`);
+    }
+  }
+
+  // ── Fallback: ZeptoMail ───────────────────────────────────
+  if (env.ZEPTOMAIL_API_KEY) {
+    return getZeptoTransport().sendMail({ from: FROM, to, subject, html });
+  }
+
+  throw new Error('[Email] No email provider is configured. Set RESEND_API_KEY and/or ZEPTOMAIL_API_KEY.');
+};
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
@@ -42,15 +108,14 @@ const FROM = env.EMAIL_FROM ?? 'Diraschool <onboarding@resend.dev>';
  * Send an account invitation email to a newly created staff member.
  *
  * @param {object} opts
- * @param {string} opts.to          Recipient email address
- * @param {string} opts.firstName   Recipient first name (personalisation)
- * @param {string} opts.schoolName  School display name
- * @param {string} opts.inviteUrl   Full URL the user clicks to set their password
+ * @param {string} opts.to            Recipient email
+ * @param {string} opts.firstName     Recipient first name
+ * @param {string} opts.schoolName    School display name
+ * @param {string} opts.inviteUrl     Full URL the user clicks to set their password
  * @param {number} [opts.expiresInDays=7]
  */
 export const sendInviteEmail = async ({ to, firstName, schoolName, inviteUrl, expiresInDays = 7 }) => {
-  return client().emails.send({
-    from:    FROM,
+  return sendEmail({
     to,
     subject: `You've been added to ${schoolName} — set your password`,
     html:    _inviteTemplate({ firstName, schoolName, inviteUrl, expiresInDays }),
@@ -58,17 +123,34 @@ export const sendInviteEmail = async ({ to, firstName, schoolName, inviteUrl, ex
 };
 
 /**
+ * Send an email verification email to a newly registered school admin.
+ *
+ * @param {object} opts
+ * @param {string} opts.to              Recipient email
+ * @param {string} opts.firstName       Recipient first name
+ * @param {string} opts.schoolName      School name
+ * @param {string} opts.verifyUrl       Full URL with token
+ * @param {number} [opts.expiresInHours=24]
+ */
+export const sendVerificationEmail = async ({ to, firstName, schoolName, verifyUrl, expiresInHours = 24 }) => {
+  return sendEmail({
+    to,
+    subject: `Verify your email to activate ${schoolName} on Diraschool`,
+    html:    _verifyTemplate({ firstName, schoolName, verifyUrl, expiresInHours }),
+  });
+};
+
+/**
  * Send a password-reset email.
  *
  * @param {object} opts
- * @param {string} opts.to             Recipient email address
- * @param {string} opts.firstName      Recipient first name
- * @param {string} opts.resetUrl       Full URL with embedded reset token
+ * @param {string} opts.to              Recipient email
+ * @param {string} opts.firstName       Recipient first name
+ * @param {string} opts.resetUrl        Full URL with embedded reset token
  * @param {number} [opts.expiresInHours=1]
  */
 export const sendPasswordResetEmail = async ({ to, firstName, resetUrl, expiresInHours = 1 }) => {
-  return client().emails.send({
-    from:    FROM,
+  return sendEmail({
     to,
     subject: 'Reset your Diraschool password',
     html:    _resetTemplate({ firstName, resetUrl, expiresInHours }),
@@ -76,7 +158,6 @@ export const sendPasswordResetEmail = async ({ to, firstName, resetUrl, expiresI
 };
 
 // ── HTML Templates ────────────────────────────────────────────────────────────
-// Plain inline-CSS HTML — works in every email client including Gmail.
 
 const _shell = (title, body) => /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -92,7 +173,6 @@ const _shell = (title, body) => /* html */ `<!DOCTYPE html>
         <table width="600" cellpadding="0" cellspacing="0"
                style="background:#ffffff;border-radius:8px;overflow:hidden;
                       box-shadow:0 2px 8px rgba(0,0,0,.08);max-width:600px;width:100%;">
-          <!-- Header -->
           <tr>
             <td style="background:#1a56db;padding:28px 40px;">
               <p style="margin:0;font-size:22px;font-weight:700;color:#ffffff;letter-spacing:.5px;">
@@ -100,13 +180,11 @@ const _shell = (title, body) => /* html */ `<!DOCTYPE html>
               </p>
             </td>
           </tr>
-          <!-- Body -->
           <tr>
             <td style="padding:40px;">
               ${body}
             </td>
           </tr>
-          <!-- Footer -->
           <tr>
             <td style="background:#f4f6f9;padding:20px 40px;border-top:1px solid #e5e7eb;">
               <p style="margin:0;font-size:12px;color:#6b7280;text-align:center;">
@@ -128,6 +206,30 @@ const _btn = (url, label) =>
             padding:14px 28px;border-radius:6px;text-decoration:none;
             font-size:15px;font-weight:600;margin:24px 0;"
   >${label}</a>`;
+
+const _verifyTemplate = ({ firstName, schoolName, verifyUrl, expiresInHours }) =>
+  _shell(
+    `Verify your email — ${schoolName}`,
+    /* html */ `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Welcome to Diraschool, ${firstName}!</h2>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        You've successfully created an account for <strong>${schoolName}</strong>.
+        One last step — please verify your email address to activate your account.
+      </p>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        This link expires in <strong>${expiresInHours} hours</strong>.
+      </p>
+      ${_btn(verifyUrl, 'Verify My Email →')}
+      <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">
+        Or copy this link into your browser:<br/>
+        <span style="color:#1a56db;word-break:break-all;">${verifyUrl}</span>
+      </p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;">
+        If you didn't create a Diraschool account, you can safely ignore this email.
+      </p>
+    `
+  );
 
 const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
   _shell(

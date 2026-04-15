@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 beforeAll(setup);
 afterAll(teardown);
@@ -31,12 +32,6 @@ const schoolB = {
   password: 'SecurePass1!',
 };
 
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
-
 async function createClass(agent, overrides = {}) {
   const res = await agent.post('/api/v1/classes').send({
     name: 'Grade 6',
@@ -59,7 +54,7 @@ async function createSubject(agent, classId, overrides = {}) {
 
 describe('POST /api/v1/exams', () => {
   it('creates an exam for class + subject', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const subject = await createSubject(agent, cls._id);
 
@@ -78,7 +73,7 @@ describe('POST /api/v1/exams', () => {
   });
 
   it('rejects subject that does not belong to class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls1 = await createClass(agent, { name: 'Grade 6' });
     const cls2 = await createClass(agent, { name: 'Grade 7', levelCategory: 'Junior Secondary' });
     const subjectFromCls2 = await createSubject(agent, cls2._id, { name: 'Biology' });
@@ -95,7 +90,7 @@ describe('POST /api/v1/exams', () => {
   });
 
   it('rejects exams for Pre-Primary class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent, {
       name: 'PP1',
       levelCategory: 'Pre-Primary',
@@ -116,7 +111,7 @@ describe('POST /api/v1/exams', () => {
 
 describe('GET /api/v1/exams', () => {
   it('lists exams and filters by classId', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls1 = await createClass(agent, { name: 'Grade 6' });
     const cls2 = await createClass(agent, { name: 'Grade 7', levelCategory: 'Junior Secondary' });
     const sub1 = await createSubject(agent, cls1._id, { name: 'Math' });
@@ -136,8 +131,8 @@ describe('GET /api/v1/exams', () => {
   });
 
   it('enforces tenant isolation on list', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const cls = await createClass(agentA);
     const subject = await createSubject(agentA, cls._id);
     await agentA.post('/api/v1/exams').send({
@@ -152,7 +147,7 @@ describe('GET /api/v1/exams', () => {
 
 describe('PATCH/DELETE /api/v1/exams/:id', () => {
   it('updates exam metadata', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const subject = await createSubject(agent, cls._id);
     const createRes = await agent.post('/api/v1/exams').send({
@@ -173,7 +168,7 @@ describe('PATCH/DELETE /api/v1/exams/:id', () => {
   });
 
   it('blocks totalMarks change when results already recorded', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const subject = await createSubject(agent, cls._id);
 
@@ -202,7 +197,7 @@ describe('PATCH/DELETE /api/v1/exams/:id', () => {
   });
 
   it('deletes exam with no results', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const subject = await createSubject(agent, cls._id);
     const createRes = await agent.post('/api/v1/exams').send({

@@ -28,3 +28,6 @@ Thumbs.db
 # ── MongoDB memory server binary cache ───────────────────────
 .mongodb-binaries/
 docs/__pycache__/
+
+# ── One-off scripts (safe to delete after use) ───────────────
+apps/api/scripts/

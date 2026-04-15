@@ -1,7 +1,9 @@
 /**
  * Auth integration tests.
  *
- * Tests register, login, logout, /me, change-password.
+ * Tests register, email verification, login, logout, /me, change-password,
+ * forgot-password, reset-password, accept-invite.
+ *
  * Uses MongoMemoryReplSet (replica set required for transactions).
  * BullMQ queues are mocked so tests run without Redis.
  */
@@ -37,42 +39,77 @@ const validRegistration = {
   password:    'password123',
 };
 
-// ── Setup/teardown ────────────────────────────────────────────────────────────
+// ── Setup / teardown ──────────────────────────────────────────────────────────
 
-beforeAll(async () => {
-  await setup();
-});
-
-afterEach(async () => {
-  await clearDatabase();
-});
-
-afterAll(async () => {
-  await teardown();
-});
+beforeAll(setup);
+afterEach(clearDatabase);
+afterAll(teardown);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** POST /register */
 const register = (overrides = {}) =>
   request(app).post(`${BASE}/register`).send({ ...validRegistration, ...overrides });
+
+/**
+ * Reads the raw verification token directly from the DB.
+ * (In production this arrives via email; in tests we read the DB.)
+ * Then replaces it with a known raw token so we can use it in the request.
+ */
+const getRawVerifyToken = async (email) => {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  await User.updateOne(
+    { email },
+    {
+      emailVerificationToken:  crypto.createHash('sha256').update(rawToken).digest('hex'),
+      emailVerificationExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    }
+  );
+  return rawToken;
+};
+
+/**
+ * Register + verify email in one step.
+ * Returns an authenticated supertest agent ready for protected routes.
+ */
+const registerAndVerify = async (overrides = {}) => {
+  await register(overrides);
+  const email = overrides.email ?? validRegistration.email;
+  const rawToken = await getRawVerifyToken(email);
+  const verifyRes = await request(app).get(`${BASE}/verify-email/${rawToken}`);
+  expect(verifyRes.status).toBe(200); // sanity-check inside helper
+  return verifyRes;
+};
+
+/**
+ * Register, verify, and return an authenticated cookie agent.
+ */
+const registerVerifyAndLogin = async (overrides = {}) => {
+  await registerAndVerify(overrides);
+  const agent = request.agent(app);
+  await agent.post(`${BASE}/login`).send({
+    email:    overrides.email    ?? validRegistration.email,
+    password: overrides.password ?? validRegistration.password,
+  });
+  return agent;
+};
 
 const login = (email, password) =>
   request(app).post(`${BASE}/login`).send({ email, password });
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── Register ──────────────────────────────────────────────────────────────────
 
 describe('POST /auth/register', () => {
-  it('creates school + admin and returns 201 with cookie', async () => {
+  it('creates school + admin, returns 201 with message (no cookie until verified)', async () => {
     const res = await register();
 
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('success');
-    expect(res.body.user.email).toBe(validRegistration.email);
-    expect(res.body.user.role).toBe('school_admin');
+    expect(res.body.message).toMatch(/verification/i);
+    expect(res.body.email).toBe(validRegistration.email);
     expect(res.body.school.name).toBe(validRegistration.schoolName);
-    expect(res.headers['set-cookie']).toBeDefined();
-    // Password must never be returned
-    expect(res.body.user.password).toBeUndefined();
+    // No cookie set — user must verify email first
+    expect(res.headers['set-cookie']).toBeUndefined();
   });
 
   it('rejects duplicate school email with 409', async () => {
@@ -94,19 +131,114 @@ describe('POST /auth/register', () => {
   });
 });
 
-describe('POST /auth/login', () => {
-  beforeEach(async () => {
+// ── Email verification ────────────────────────────────────────────────────────
+
+describe('GET /auth/verify-email/:token', () => {
+  it('verifies email, sets cookie, and returns user', async () => {
     await register();
+    const rawToken = await getRawVerifyToken(validRegistration.email);
+
+    const res = await request(app).get(`${BASE}/verify-email/${rawToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['set-cookie']).toBeDefined(); // auto-logged in
+    expect(res.body.message).toMatch(/verified/i);
+    expect(res.body.user.email).toBe(validRegistration.email);
+    expect(res.body.user.emailVerified).toBe(true);
   });
 
-  it('returns 200 and sets cookie on valid credentials', async () => {
+  it('returns 400 for an invalid token', async () => {
+    const res = await request(app).get(`${BASE}/verify-email/totallywrongtoken`);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/invalid or has expired/i);
+  });
+
+  it('returns 400 for an expired token', async () => {
+    await register();
+    // Force-expire the token
+    await User.updateOne(
+      { email: validRegistration.email },
+      { emailVerificationExpiry: new Date(Date.now() - 1000) }
+    );
+    const rawToken = await getRawVerifyToken(validRegistration.email);
+    // Now expire it again after our helper set a fresh one
+    await User.updateOne(
+      { email: validRegistration.email },
+      { emailVerificationExpiry: new Date(Date.now() - 1000) }
+    );
+
+    const res = await request(app).get(`${BASE}/verify-email/${rawToken}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('token is single-use — second call returns 400', async () => {
+    await register();
+    const rawToken = await getRawVerifyToken(validRegistration.email);
+
+    await request(app).get(`${BASE}/verify-email/${rawToken}`); // first use
+    const res = await request(app).get(`${BASE}/verify-email/${rawToken}`); // second use
+
+    expect(res.status).toBe(400);
+  });
+});
+
+// ── Resend verification ───────────────────────────────────────────────────────
+
+describe('POST /auth/resend-verification', () => {
+  it('returns 200 and queues a new email', async () => {
+    await register();
+
+    const res = await request(app)
+      .post(`${BASE}/resend-verification`)
+      .send({ email: validRegistration.email });
+
+    expect(res.status).toBe(200);
+    expect(res.body.message).toMatch(/sent/i);
+  });
+
+  it('returns 200 even when email does not exist (no enumeration)', async () => {
+    const res = await request(app)
+      .post(`${BASE}/resend-verification`)
+      .send({ email: 'nobody@nowhere.com' });
+
+    expect(res.status).toBe(200);
+  });
+
+  it('returns 200 silently for already-verified accounts (no enumeration)', async () => {
+    await registerAndVerify();
+
+    const res = await request(app)
+      .post(`${BASE}/resend-verification`)
+      .send({ email: validRegistration.email });
+
+    expect(res.status).toBe(200);
+  });
+});
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+
+describe('POST /auth/login', () => {
+  it('returns 200 and sets cookie after email is verified', async () => {
+    await registerAndVerify();
+
     const res = await login(validRegistration.email, validRegistration.password);
+
     expect(res.status).toBe(200);
     expect(res.body.user.email).toBe(validRegistration.email);
     expect(res.headers['set-cookie']).toBeDefined();
   });
 
+  it('returns 403 when email is not yet verified', async () => {
+    await register(); // no verify step
+
+    const res = await login(validRegistration.email, validRegistration.password);
+
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/verify your email/i);
+  });
+
   it('returns 401 on wrong password', async () => {
+    await registerAndVerify();
     const res = await login(validRegistration.email, 'wrongpassword');
     expect(res.status).toBe(401);
     expect(res.body.message).toMatch(/invalid/i);
@@ -118,54 +250,48 @@ describe('POST /auth/login', () => {
   });
 });
 
+// ── GET /me ───────────────────────────────────────────────────────────────────
+
 describe('GET /auth/me', () => {
   it('returns 401 when not authenticated', async () => {
     const res = await request(app).get(`${BASE}/me`);
     expect(res.status).toBe(401);
   });
 
-  it('returns logged-in user when authenticated', async () => {
-    await register();
-    const agent = request.agent(app);
-    await agent.post(`${BASE}/login`).send({
-      email: validRegistration.email,
-      password: validRegistration.password,
-    });
-
+  it('returns the logged-in user', async () => {
+    const agent = await registerVerifyAndLogin();
     const res = await agent.get(`${BASE}/me`);
+
     expect(res.status).toBe(200);
     expect(res.body.user.email).toBe(validRegistration.email);
     expect(res.body.user.password).toBeUndefined();
   });
 });
 
+// ── Logout ────────────────────────────────────────────────────────────────────
+
 describe('POST /auth/logout', () => {
-  it('clears cookie and returns 200', async () => {
-    await register();
-    const agent = request.agent(app);
-    await agent.post(`${BASE}/login`).send({
-      email: validRegistration.email,
-      password: validRegistration.password,
-    });
+  it('clears cookie and subsequent /me returns 401', async () => {
+    const agent = await registerVerifyAndLogin();
 
     const logoutRes = await agent.post(`${BASE}/logout`);
     expect(logoutRes.status).toBe(200);
 
-    // After logout, /me should return 401
     const meRes = await agent.get(`${BASE}/me`);
     expect(meRes.status).toBe(401);
   });
 });
 
+// ── Forgot password ───────────────────────────────────────────────────────────
+
 describe('POST /auth/forgot-password', () => {
-  it('returns 200 (no token in body) when email exists — token sent by email', async () => {
-    await register();
+  it('returns 200 (no token in body) — token sent by email', async () => {
+    await registerAndVerify();
     const res = await request(app)
       .post(`${BASE}/forgot-password`)
       .send({ email: validRegistration.email });
 
     expect(res.status).toBe(200);
-    // Token is no longer in the response — it's sent via email (mocked in tests)
     expect(res.body.resetToken).toBeUndefined();
     expect(res.body.message).toMatch(/reset link/i);
   });
@@ -188,28 +314,27 @@ describe('POST /auth/forgot-password', () => {
   });
 });
 
+// ── Reset password ────────────────────────────────────────────────────────────
+
 /**
- * Helper: trigger forgot-password then read the raw token straight from the DB
- * (simulates what the user gets via their email link).
+ * Helper: insert a known raw reset token into the DB so we can use it in tests.
  */
 const getRawResetToken = async (email) => {
   await request(app).post(`${BASE}/forgot-password`).send({ email });
-  const user = await User.findOne({ email }).select('+passwordResetToken');
-  if (!user?.passwordResetToken) return null;
-  // passwordResetToken in DB is the SHA-256 hash.
-  // We can't reverse it — instead we regenerate a raw token that hashes to it.
-  // For tests we patch the DB to store a known raw token hash directly.
-  // Simpler approach: store a known rawToken and hash it ourselves in setup.
   const rawToken = crypto.randomBytes(32).toString('hex');
-  user.passwordResetToken  = crypto.createHash('sha256').update(rawToken).digest('hex');
-  user.passwordResetExpiry = new Date(Date.now() + 60 * 60 * 1000);
-  await user.save({ validateBeforeSave: false });
+  await User.updateOne(
+    { email },
+    {
+      passwordResetToken:  crypto.createHash('sha256').update(rawToken).digest('hex'),
+      passwordResetExpiry: new Date(Date.now() + 60 * 60 * 1000),
+    }
+  );
   return rawToken;
 };
 
 describe('POST /auth/reset-password/:token', () => {
-  it('resets password with valid token and logs user in', async () => {
-    await register();
+  it('resets password, sets cookie, and logs user in', async () => {
+    await registerAndVerify();
     const resetToken = await getRawResetToken(validRegistration.email);
 
     const res = await request(app)
@@ -217,14 +342,14 @@ describe('POST /auth/reset-password/:token', () => {
       .send({ password: 'NewPassword99!' });
 
     expect(res.status).toBe(200);
-    expect(res.headers['set-cookie']).toBeDefined(); // auto-login cookie set
+    expect(res.headers['set-cookie']).toBeDefined();
     expect(res.body.message).toMatch(/reset successfully/i);
 
-    // Old password should be rejected
+    // Old password rejected
     const oldLogin = await login(validRegistration.email, validRegistration.password);
     expect(oldLogin.status).toBe(401);
 
-    // New password should work
+    // New password works
     const newLogin = await login(validRegistration.email, 'NewPassword99!');
     expect(newLogin.status).toBe(200);
   });
@@ -238,8 +363,8 @@ describe('POST /auth/reset-password/:token', () => {
     expect(res.body.message).toMatch(/invalid or has expired/i);
   });
 
-  it('returns 400 when password is too short', async () => {
-    await register();
+  it('returns 400 when new password is too short', async () => {
+    await registerAndVerify();
     const resetToken = await getRawResetToken(validRegistration.email);
 
     const res = await request(app)
@@ -250,44 +375,37 @@ describe('POST /auth/reset-password/:token', () => {
   });
 });
 
+// ── Change password ───────────────────────────────────────────────────────────
+
 describe('POST /auth/change-password', () => {
-  it('changes password and clears mustChangePassword', async () => {
-    await register();
-    const agent = request.agent(app);
-    await agent.post(`${BASE}/login`).send({
-      email: validRegistration.email,
-      password: validRegistration.password,
-    });
+  it('changes password successfully', async () => {
+    const agent = await registerVerifyAndLogin();
 
     const res = await agent.post(`${BASE}/change-password`).send({
       currentPassword: validRegistration.password,
-      newPassword: 'newpassword456',
+      newPassword:     'newpassword456',
     });
 
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/changed/i);
 
-    // Old password should now be rejected
+    // Old password rejected
     const loginOld = await login(validRegistration.email, validRegistration.password);
     expect(loginOld.status).toBe(401);
 
-    // New password should work
+    // New password works
     const loginNew = await login(validRegistration.email, 'newpassword456');
     expect(loginNew.status).toBe(200);
   });
 
   it('returns 401 when current password is wrong', async () => {
-    await register();
-    const agent = request.agent(app);
-    await agent.post(`${BASE}/login`).send({
-      email: validRegistration.email,
-      password: validRegistration.password,
-    });
+    const agent = await registerVerifyAndLogin();
 
     const res = await agent.post(`${BASE}/change-password`).send({
       currentPassword: 'wrongcurrent',
-      newPassword: 'newpassword456',
+      newPassword:     'newpassword456',
     });
+
     expect(res.status).toBe(401);
   });
 });

@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import User from './User.model.js';
 import School from '../schools/School.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
@@ -7,45 +6,43 @@ import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
 import { emailQueue } from '../../jobs/queues.js';
 import { JOB_NAMES } from '../../constants/index.js';
-import { env } from '../../config/env.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Generate a secure invite token, store its hash on the user document,
- * and enqueue the invitation email.
+ * Generate a human-readable temporary password.
+ * Format: XXXX-XXXX-XXXX (uppercase alphanum, no ambiguous chars like 0/O/1/I).
+ */
+const generateTempPassword = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const part  = (n) => Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `${part(4)}-${part(4)}-${part(4)}`;
+};
+
+/**
+ * Issue a temporary password, save it on the user document, and
+ * enqueue the email that delivers it to the new staff member.
  *
  * @param {object} user       Mongoose User document (will be mutated + saved)
  * @param {string} schoolName Display name for the email subject
- * @param {number} [expiresInDays=7]
  */
-const issueInviteToken = async (user, schoolName, expiresInDays = 7) => {
-  const rawToken  = crypto.randomBytes(32).toString('hex');
-  const hash      = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+const issueTempPassword = async (user, schoolName) => {
+  const tempPassword = generateTempPassword();
 
-  user.inviteToken       = hash;
-  user.inviteTokenExpiry = expiresAt;
-  user.invitePending     = true;
-  await user.save({ validateBeforeSave: false });
+  user.password           = tempPassword; // pre-save hook hashes it
+  user.mustChangePassword = true;
+  user.invitePending      = false;
+  await user.save();
 
-  // Build the deep-link the user clicks to set their password.
-  // The frontend /accept-invite page reads the ?token= query param
-  // and calls POST /api/v1/auth/accept-invite/:token.
-  const inviteUrl = `${env.CLIENT_URL}/accept-invite?token=${rawToken}`;
-
-  await emailQueue.add(JOB_NAMES.SEND_INVITE_EMAIL, {
-    type: JOB_NAMES.SEND_INVITE_EMAIL,
+  await emailQueue.add(JOB_NAMES.SEND_TEMP_PASSWORD_EMAIL, {
+    type: JOB_NAMES.SEND_TEMP_PASSWORD_EMAIL,
     payload: {
-      to:            user.email,
-      firstName:     user.firstName,
+      to:           user.email,
+      firstName:    user.firstName,
       schoolName,
-      inviteUrl,
-      expiresInDays,
+      tempPassword, // plaintext — shown once in the email, never stored
     },
   });
-
-  return rawToken; // returned only so tests can consume it; never expose in API response
 };
 
 // ── Controllers ───────────────────────────────────────────────────────────────
@@ -54,42 +51,38 @@ const issueInviteToken = async (user, schoolName, expiresInDays = 7) => {
  * POST /api/v1/users
  * Creates a staff user scoped to the logged-in admin's school.
  *
- * No password is supplied by the admin — a secure invite email is sent to the
- * new user who sets their own password via the /accept-invite flow.
- * The account is locked (invitePending=true) until the invite is accepted.
+ * A temporary password is generated and emailed to the new user.
+ * They must change it on first login (mustChangePassword = true).
  */
 export const createUser = asyncHandler(async (req, res) => {
   const { firstName, lastName, email, phone, role, staffId, tscNumber } = req.body;
 
-  // Temporarily set a random unusable password so the schema required constraint
-  // is satisfied. It is replaced when the user accepts their invite.
-  const unusablePassword = crypto.randomBytes(32).toString('hex');
+  const school = await School.findById(req.user.schoolId).select('name').lean();
+  const schoolName = school?.name ?? 'your school';
 
+  // Create with a placeholder — issueTempPassword overwrites it before the email goes out
   const user = await User.create({
     firstName: firstName.trim(),
     lastName:  lastName.trim(),
     email:     email.toLowerCase().trim(),
     phone:     phone ? normalisePhone(phone) : undefined,
-    password:  unusablePassword,
+    password:  'placeholder', // replaced immediately below
     role,
     staffId:   staffId ?? undefined,
     tscNumber: tscNumber ?? undefined,
     schoolId:  req.user.schoolId,
-    mustChangePassword: false, // invite flow handles first-login, not this flag
-    invitePending: true,
+    mustChangePassword: true,
+    invitePending:      false,
+    emailVerified:      true, // admin-created accounts are within a verified school
   });
 
-  // Fetch school name for the invite email
-  const school = await School.findById(req.user.schoolId).select('name').lean();
-  const schoolName = school?.name ?? 'your school';
-
-  await issueInviteToken(user, schoolName);
+  await issueTempPassword(user, schoolName);
 
   return sendSuccess(
     res,
     {
       user: user.toSafeObject(),
-      message: `Invitation email sent to ${user.email}. They must accept it before they can log in.`,
+      message: `Account created. A temporary password has been sent to ${user.email}.`,
     },
     201
   );
@@ -149,8 +142,8 @@ export const updateUser = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/users/:id/resend-invite
- * Admin re-sends the invitation email (or sends a new one if the original expired).
- * Works for both pending invites and active users who need a password reset link.
+ * Issues a fresh temporary password and re-sends the credentials email.
+ * Use when a staff member hasn't logged in yet or has been locked out.
  */
 export const resendInvite = asyncHandler(async (req, res) => {
   const user = await User.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
@@ -163,9 +156,9 @@ export const resendInvite = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId).select('name').lean();
   const schoolName = school?.name ?? 'your school';
 
-  await issueInviteToken(user, schoolName);
+  await issueTempPassword(user, schoolName);
 
   return sendSuccess(res, {
-    message: `Invitation email re-sent to ${user.email}.`,
+    message: `A new temporary password has been sent to ${user.email}.`,
   });
 });

@@ -1,0 +1,208 @@
+import axios from 'axios';
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  'https://diraschool-api-production.up.railway.app';
+
+export const api = axios.create({
+  baseURL: `${API_URL}/api/v1`,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+// Redirect to login on 401
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  },
+);
+
+export function getErrorMessage(error) {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message ?? error.message ?? 'Something went wrong';
+  }
+  if (error instanceof Error) return error.message;
+  return 'Something went wrong';
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+export const authApi = {
+  register: (data) => api.post('/auth/register', data),
+  login: (data) => api.post('/auth/login', data),
+  logout: () => api.post('/auth/logout'),
+  me: () => api.get('/auth/me'),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, password) =>
+    api.post(`/auth/reset-password/${token}`, { password }),
+  verifyEmail: (token) => api.get(`/auth/verify-email/${token}`),
+  resendVerification: (email) => api.post('/auth/resend-verification', { email }),
+  acceptInvite: (token, data) => api.post(`/auth/accept-invite/${token}`, data),
+  changePassword: (data) => api.post('/auth/change-password', data),
+};
+
+// ─── Users / Staff ────────────────────────────────────────────────────────────
+export const usersApi = {
+  list: (params) => api.get('/users', { params }),
+  create: (data) => api.post('/users', data),
+  get: (id) => api.get(`/users/${id}`),
+  update: (id, data) => api.patch(`/users/${id}`, data),
+  resendInvite: (id) => api.post(`/users/${id}/resend-invite`),
+};
+
+// ─── Schools ──────────────────────────────────────────────────────────────────
+export const schoolsApi = {
+  me: () => api.get('/schools/me'),
+  updateMe: (data) => api.patch('/schools/me', data),
+  list: (params) => api.get('/schools', { params }),
+  create: (data) => api.post('/schools', data),
+  get: (id) => api.get(`/schools/${id}`),
+  update: (id, data) => api.patch(`/schools/${id}`, data),
+  updateSubscription: (id, data) => api.patch(`/schools/${id}/subscription`, data),
+};
+
+// ─── Classes ──────────────────────────────────────────────────────────────────
+export const classesApi = {
+  list: (params) => api.get('/classes', { params }),
+  create: (data) => api.post('/classes', data),
+  get: (id) => api.get(`/classes/${id}`),
+  update: (id, data) => api.patch(`/classes/${id}`, data),
+  delete: (id) => api.delete(`/classes/${id}`),
+  promote: (id) => api.post(`/classes/${id}/promote`),
+};
+
+// ─── Students ─────────────────────────────────────────────────────────────────
+export const studentsApi = {
+  list: (params) => api.get('/students', { params }),
+  create: (data) => api.post('/students', data),
+  get: (id) => api.get(`/students/${id}`),
+  update: (id, data) => api.patch(`/students/${id}`, data),
+  transfer: (id, data) => api.post(`/students/${id}/transfer`, data),
+  withdraw: (id, data) => api.post(`/students/${id}/withdraw`, data),
+  importCsv: (formData) =>
+    api.post('/students/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  importStatus: (jobId) => api.get(`/students/import/${jobId}/status`),
+};
+
+// ─── Attendance ───────────────────────────────────────────────────────────────
+export const attendanceApi = {
+  listRegisters: (params) => api.get('/attendance/registers', { params }),
+  createRegister: (data) => api.post('/attendance/registers', data),
+  getRegister: (id) => api.get(`/attendance/registers/${id}`),
+  updateRegister: (id, data) => api.patch(`/attendance/registers/${id}`, data),
+  submitRegister: (id) => api.post(`/attendance/registers/${id}/submit`),
+};
+
+// ─── Subjects ─────────────────────────────────────────────────────────────────
+export const subjectsApi = {
+  list: (params) => api.get('/subjects', { params }),
+  create: (data) => api.post('/subjects', data),
+  get: (id) => api.get(`/subjects/${id}`),
+  update: (id, data) => api.patch(`/subjects/${id}`, data),
+  delete: (id) => api.delete(`/subjects/${id}`),
+  assignTeacher: (id, data) => api.patch(`/subjects/${id}/teacher`, data),
+};
+
+// ─── Exams ────────────────────────────────────────────────────────────────────
+export const examsApi = {
+  list: (params) => api.get('/exams', { params }),
+  create: (data) => api.post('/exams', data),
+  get: (id) => api.get(`/exams/${id}`),
+  update: (id, data) => api.patch(`/exams/${id}`, data),
+  delete: (id) => api.delete(`/exams/${id}`),
+};
+
+// ─── Results ──────────────────────────────────────────────────────────────────
+export const resultsApi = {
+  bulkUpsert: (data) => api.post('/results/bulk', data),
+  list: (params) => api.get('/results', { params }),
+  get: (id) => api.get(`/results/${id}`),
+  update: (id, data) => api.patch(`/results/${id}`, data),
+};
+
+// ─── Fees ─────────────────────────────────────────────────────────────────────
+export const feesApi = {
+  listStructures: (params) => api.get('/fees/structures', { params }),
+  createStructure: (data) => api.post('/fees/structures', data),
+  getStructure: (id) => api.get(`/fees/structures/${id}`),
+  updateStructure: (id, data) => api.patch(`/fees/structures/${id}`, data),
+  deleteStructure: (id) => api.delete(`/fees/structures/${id}`),
+  listPayments: (params) => api.get('/fees/payments', { params }),
+  createPayment: (data) => api.post('/fees/payments', data),
+  getPayment: (id) => api.get(`/fees/payments/${id}`),
+  reversePayment: (id, data) => api.post(`/fees/payments/${id}/reverse`, data),
+  getBalance: (params) => api.get('/fees/balance', { params }),
+};
+
+// ─── Report Cards ─────────────────────────────────────────────────────────────
+export const reportCardsApi = {
+  generate: (data) => api.post('/report-cards/generate', data),
+  generateClass: (data) => api.post('/report-cards/generate-class', data),
+  annualSummary: (params) => api.get('/report-cards/annual-summary', { params }),
+  list: (params) => api.get('/report-cards', { params }),
+  get: (id) => api.get(`/report-cards/${id}`),
+  updateRemarks: (id, data) => api.patch(`/report-cards/${id}/remarks`, data),
+  updateSubjectRemark: (id, subjectId, data) =>
+    api.patch(`/report-cards/${id}/subjects/${subjectId}/remark`, data),
+  publish: (id) => api.post(`/report-cards/${id}/publish`),
+};
+
+// ─── Parent Portal ────────────────────────────────────────────────────────────
+export const parentApi = {
+  children: () => api.get('/parent/children'),
+  fees: (studentId) => api.get(`/parent/children/${studentId}/fees`),
+  attendance: (studentId) => api.get(`/parent/children/${studentId}/attendance`),
+  results: (studentId) => api.get(`/parent/children/${studentId}/results`),
+  reportCards: (studentId) => api.get(`/parent/children/${studentId}/report-cards`),
+};
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+export const settingsApi = {
+  get: () => api.get('/settings'),
+  update: (data) => api.put('/settings', data),
+  addHoliday: (data) => api.post('/settings/holidays', data),
+  deleteHoliday: (id) => api.delete(`/settings/holidays/${id}`),
+};
+
+// ─── Audit ────────────────────────────────────────────────────────────────────
+export const auditApi = {
+  list: (params) => api.get('/audit-logs', { params }),
+};
+
+// ─── Timetable ────────────────────────────────────────────────────────────────
+export const timetableApi = {
+  list: (params) => api.get('/timetables', { params }),
+  get: (id) => api.get(`/timetables/${id}`),
+  create: (data) => api.post('/timetables', data),
+  updateSlots: (id, data) => api.put(`/timetables/${id}/slots`, data),
+  delete: (id) => api.delete(`/timetables/${id}`),
+};
+
+// ─── Library ──────────────────────────────────────────────────────────────────
+export const libraryApi = {
+  listBooks: (params) => api.get('/library/books', { params }),
+  getBook: (id) => api.get(`/library/books/${id}`),
+  createBook: (data) => api.post('/library/books', data),
+  updateBook: (id, data) => api.patch(`/library/books/${id}`, data),
+  issueLoan: (data) => api.post('/library/loans', data),
+  listLoans: (params) => api.get('/library/loans', { params }),
+  getLoan: (id) => api.get(`/library/loans/${id}`),
+  returnBook: (id) => api.post(`/library/loans/${id}/return`),
+  markOverdue: (id) => api.patch(`/library/loans/${id}/overdue`),
+};
+
+// ─── Transport ────────────────────────────────────────────────────────────────
+export const transportApi = {
+  listRoutes: (params) => api.get('/transport/routes', { params }),
+  getRoute: (id) => api.get(`/transport/routes/${id}`),
+  createRoute: (data) => api.post('/transport/routes', data),
+  updateRoute: (id, data) => api.patch(`/transport/routes/${id}`, data),
+  deleteRoute: (id) => api.delete(`/transport/routes/${id}`),
+  assignStudents: (id, data) => api.post(`/transport/routes/${id}/assign`, data),
+  unassignStudents: (id, data) => api.post(`/transport/routes/${id}/unassign`, data),
+};

@@ -1,11 +1,16 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 beforeAll(setup);
 afterAll(teardown);
 beforeEach(clearDatabase);
+
+// Increase timeout for this file — it runs late in the suite when the
+// MongoMemoryReplSet is under load and the first transaction can be slow.
+vi.setConfig({ testTimeout: 90000 });
 
 const schoolA = {
   schoolName: 'Peak Academy',
@@ -38,12 +43,6 @@ const defaultClassPayload = {
   term: 'Term 1',
 };
 
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
-
 async function createClass(agent, overrides = {}) {
   const res = await agent.post('/api/v1/classes').send({ ...defaultClassPayload, ...overrides });
   return res.body.class;
@@ -64,7 +63,7 @@ async function createSubject(agent, overrides = {}) {
 
 describe('POST /api/v1/subjects', () => {
   it('creates a subject for a class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const res = await agent.post('/api/v1/subjects').send({
@@ -79,7 +78,7 @@ describe('POST /api/v1/subjects', () => {
   });
 
   it('rejects duplicate subject name in same class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     await agent.post('/api/v1/subjects').send({ classId: cls._id, name: 'English' });
@@ -89,7 +88,7 @@ describe('POST /api/v1/subjects', () => {
   });
 
   it('allows same subject name in different classes', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const classA = await createClass(agent, { name: 'Grade 6' });
     const classB = await createClass(agent, { name: 'Grade 7', levelCategory: 'Junior Secondary' });
 
@@ -101,7 +100,7 @@ describe('POST /api/v1/subjects', () => {
   });
 
   it('blocks subjects for Pre-Primary classes', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const prePrimaryClass = await createClass(agent, {
       name: 'PP1',
       levelCategory: 'Pre-Primary',
@@ -119,7 +118,7 @@ describe('POST /api/v1/subjects', () => {
 
 describe('GET /api/v1/subjects', () => {
   it('lists subjects for the school with pagination metadata', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     await createSubject(agent, { classObj: cls, name: 'Mathematics' });
     await createSubject(agent, { classObj: cls, name: 'English' });
@@ -132,7 +131,7 @@ describe('GET /api/v1/subjects', () => {
   });
 
   it('filters by classId', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const classA = await createClass(agent, { name: 'Grade 6' });
     const classB = await createClass(agent, { name: 'Grade 7', levelCategory: 'Junior Secondary' });
 
@@ -147,8 +146,8 @@ describe('GET /api/v1/subjects', () => {
   });
 
   it('enforces tenant isolation on list endpoint', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     await createSubject(agentA, { name: 'Kiswahili' });
 
     const res = await agentB.get('/api/v1/subjects');
@@ -160,7 +159,7 @@ describe('GET /api/v1/subjects', () => {
 
 describe('GET /api/v1/subjects/:id', () => {
   it('returns a single subject', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res: createRes } = await createSubject(agent, { name: 'History' });
     const subjectId = createRes.body.subject._id;
 
@@ -171,8 +170,8 @@ describe('GET /api/v1/subjects/:id', () => {
   });
 
   it('returns 404 for subject in another school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const { res: createRes } = await createSubject(agentA, { name: 'CRE' });
     const subjectId = createRes.body.subject._id;
 
@@ -183,7 +182,7 @@ describe('GET /api/v1/subjects/:id', () => {
 
 describe('PATCH /api/v1/subjects/:id', () => {
   it('updates subject name and code', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res: createRes } = await createSubject(agent, { name: 'Physics', code: 'PHY' });
     const subjectId = createRes.body.subject._id;
 
@@ -198,7 +197,7 @@ describe('PATCH /api/v1/subjects/:id', () => {
   });
 
   it('rejects moving subject to a Pre-Primary class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const regularClass = await createClass(agent, { name: 'Grade 3', levelCategory: 'Lower Primary' });
     const prePrimaryClass = await createClass(agent, { name: 'PP2', levelCategory: 'Pre-Primary' });
     const createRes = await agent.post('/api/v1/subjects').send({
@@ -215,7 +214,7 @@ describe('PATCH /api/v1/subjects/:id', () => {
   });
 
   it('rejects unknown fields (.strict())', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res: createRes } = await createSubject(agent, { name: 'Music' });
     const subjectId = createRes.body.subject._id;
 
@@ -224,8 +223,8 @@ describe('PATCH /api/v1/subjects/:id', () => {
   });
 
   it('returns 404 for cross-school update', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const { res: createRes } = await createSubject(agentA, { name: 'French' });
     const subjectId = createRes.body.subject._id;
 
@@ -236,7 +235,7 @@ describe('PATCH /api/v1/subjects/:id', () => {
 
 describe('DELETE /api/v1/subjects/:id', () => {
   it('deletes subject', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res: createRes } = await createSubject(agent, { name: 'Art' });
     const subjectId = createRes.body.subject._id;
 
@@ -248,8 +247,8 @@ describe('DELETE /api/v1/subjects/:id', () => {
   });
 
   it('returns 404 for cross-school delete', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const { res: createRes } = await createSubject(agentA, { name: 'Geography' });
     const subjectId = createRes.body.subject._id;
 

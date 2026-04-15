@@ -6,7 +6,7 @@ import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { env } from '../../config/env.js';
-import { ROLES, SUBSCRIPTION_STATUSES, JOB_NAMES } from '../../constants/index.js';
+import { ROLES, SUBSCRIPTION_STATUSES, JOB_NAMES, PLAN_TIERS } from '../../constants/index.js';
 import { normalisePhone } from '../../utils/phone.js';
 import { emailQueue } from '../../jobs/queues.js';
 
@@ -18,8 +18,8 @@ const signToken = (userId) =>
 const attachCookie = (res, token) => {
   const oneDay = 24 * 60 * 60 * 1000;
   res.cookie('token', token, {
-    httpOnly: true,                           // cannot be read by JS
-    secure: env.isProduction,                 // HTTPS only in production
+    httpOnly: true, // cannot be read by JS
+    secure: env.isProduction, // HTTPS only in production
     sameSite: env.isProduction ? 'strict' : 'lax',
     maxAge: oneDay,
   });
@@ -29,50 +29,57 @@ const attachCookie = (res, token) => {
 
 /**
  * POST /api/v1/auth/register
- * Creates a new school + school_admin user atomically.
+ * Creates a new school + school_admin user atomically, then sends a
+ * verification email. The admin cannot log in until they verify.
  * Public route — no auth required.
  */
 export const registerSchool = asyncHandler(async (req, res) => {
-  const { schoolName, schoolEmail, schoolPhone, county, firstName, lastName, email, phone, password } =
-    req.body;
+  const { schoolName, schoolPhone, county, firstName, lastName, email, phone, password } = req.body;
 
   // Reject duplicate school email upfront with a clear message
-  const existingSchool = await School.findOne({ email: schoolEmail.toLowerCase().trim() });
+  const existingSchool = await School.findOne({ email: email.toLowerCase().trim() });
   if (existingSchool) {
     return sendError(res, 'A school with this email is already registered.', 409);
   }
+
+  // Generate email verification token before the transaction
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
   // Use a session for atomicity — both School and User must be created or neither
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Create School
     const [school] = await School.create(
       [
         {
           name: schoolName,
-          email: schoolEmail.toLowerCase().trim(),
+          email: email.toLowerCase().trim(),
           phone: normalisePhone(schoolPhone),
           county,
           subscriptionStatus: SUBSCRIPTION_STATUSES.TRIAL,
+          planTier: PLAN_TIERS.TRIAL,
         },
       ],
       { session }
     );
 
-    // Create the school_admin user
     const [user] = await User.create(
       [
         {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.toLowerCase().trim(),
-          phone: normalisePhone(phone),
+          phone: phone ? normalisePhone(phone) : undefined,
           password,
           role: ROLES.SCHOOL_ADMIN,
           schoolId: school._id,
-          mustChangePassword: false, // They set their own password on registration
+          mustChangePassword: false,
+          emailVerified: false,
+          emailVerificationToken: tokenHash,
+          emailVerificationExpiry: expiry,
         },
       ],
       { session }
@@ -80,22 +87,31 @@ export const registerSchool = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    const token = signToken(user._id);
-    attachCookie(res, token);
+    // Enqueue verification email — outside the transaction (non-critical)
+    const verifyUrl = `${env.CLIENT_URL}/api/v1/auth/verify-email/${rawToken}`;
+    await emailQueue.add(JOB_NAMES.SEND_VERIFICATION_EMAIL, {
+      type: JOB_NAMES.SEND_VERIFICATION_EMAIL,
+      payload: {
+        to: user.email,
+        firstName: user.firstName,
+        schoolName: school.name,
+        verifyUrl,
+        expiresInHours: 24,
+      },
+    });
 
+    // Do NOT set a cookie — user must verify email before logging in
     return sendSuccess(
       res,
       {
-        user: user.toSafeObject(),
-        school: { _id: school._id, name: school.name, subscriptionStatus: school.subscriptionStatus },
+        message: `Account created! Please check ${user.email} for a verification link to activate your account.`,
+        email: user.email, // surface so the frontend can show "check your inbox at ..."
+        school: { _id: school._id, name: school.name },
       },
       201
     );
   } catch (err) {
-    // Only abort if the transaction hasn't already been committed
-    if (session.inTransaction()) {
-      await session.abortTransaction();
-    }
+    if (session.inTransaction()) await session.abortTransaction();
     throw err;
   } finally {
     await session.endSession();
@@ -118,6 +134,15 @@ export const login = asyncHandler(async (req, res) => {
 
   if (!user || !(await user.comparePassword(password))) {
     return sendError(res, 'Invalid email or password.', 401);
+  }
+
+  // Block login until email is verified (applies to self-registered school admins)
+  if (!user.emailVerified) {
+    return sendError(
+      res,
+      'Please verify your email address before logging in. Check your inbox for the verification link.',
+      403
+    );
   }
 
   // Block login until the user accepts their invite and sets a real password
@@ -192,18 +217,18 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   const rawToken = crypto.randomBytes(32).toString('hex');
 
   // Store only the hash — raw token is sent to the user
-  user.passwordResetToken  = crypto.createHash('sha256').update(rawToken).digest('hex');
+  user.passwordResetToken = crypto.createHash('sha256').update(rawToken).digest('hex');
   user.passwordResetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
   await user.save({ validateBeforeSave: false });
 
   // Build the reset link and enqueue the email job (non-blocking)
-  const resetUrl = `${env.CLIENT_URL}/reset-password?token=${rawToken}`;
+  const resetUrl = `${env.CLIENT_URL}/api/v1/auth/reset-password/${rawToken}`;
 
   await emailQueue.add(JOB_NAMES.SEND_RESET_EMAIL, {
     type: JOB_NAMES.SEND_RESET_EMAIL,
     payload: {
-      to:             user.email,
-      firstName:      user.firstName,
+      to: user.email,
+      firstName: user.firstName,
       resetUrl,
       expiresInHours: 1,
     },
@@ -227,7 +252,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
   const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
   const user = await User.findOne({
-    passwordResetToken:  hashedToken,
+    passwordResetToken: hashedToken,
     passwordResetExpiry: { $gt: new Date() }, // not expired
     isActive: true,
   }).select('+passwordResetToken +passwordResetExpiry');
@@ -237,10 +262,10 @@ export const resetPassword = asyncHandler(async (req, res) => {
   }
 
   // Set new password and clear reset fields
-  user.password            = password;
-  user.passwordResetToken  = undefined;
+  user.password = password;
+  user.passwordResetToken = undefined;
   user.passwordResetExpiry = undefined;
-  user.mustChangePassword  = false;
+  user.mustChangePassword = false;
   await user.save();
 
   // Sign them in immediately after reset
@@ -272,9 +297,9 @@ export const acceptInvite = asyncHandler(async (req, res) => {
   const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
   const user = await User.findOne({
-    inviteToken:       hashedToken,
+    inviteToken: hashedToken,
     inviteTokenExpiry: { $gt: new Date() },
-    isActive:          true,
+    isActive: true,
   }).select('+inviteToken +inviteTokenExpiry');
 
   if (!user) {
@@ -285,12 +310,13 @@ export const acceptInvite = asyncHandler(async (req, res) => {
     );
   }
 
-  // Set the user's chosen password and mark the account as active
-  user.password           = password;
-  user.inviteToken        = undefined;
-  user.inviteTokenExpiry  = undefined;
-  user.invitePending      = false;
+  // Set the user's chosen password and fully activate the account
+  user.password = password;
+  user.inviteToken = undefined;
+  user.inviteTokenExpiry = undefined;
+  user.invitePending = false;
   user.mustChangePassword = false;
+  user.emailVerified = true; // admin-created accounts are trusted — no separate email check
   await user.save();
 
   // Auto-sign the user in immediately
@@ -300,6 +326,98 @@ export const acceptInvite = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     message: 'Your account is set up. Welcome!',
     user: user.toSafeObject(),
+  });
+});
+
+/**
+ * GET /api/v1/auth/verify-email/:token
+ * Activates a school admin account after they click the verification link.
+ * Public route — no auth required (user isn't logged in yet).
+ *
+ * On success: marks emailVerified=true, auto-logs the user in via cookie.
+ */
+export const verifyEmail = asyncHandler(async (req, res) => {
+  const { token } = req.params;
+
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const user = await User.findOne({
+    emailVerificationToken: hashedToken,
+    emailVerificationExpiry: { $gt: new Date() },
+  }).select('+emailVerificationToken +emailVerificationExpiry');
+
+  if (!user) {
+    return sendError(
+      res,
+      'This verification link is invalid or has expired. Request a new one below.',
+      400
+    );
+  }
+
+  // Activate the account
+  user.emailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpiry = undefined;
+  await user.save({ validateBeforeSave: false });
+
+  // Auto-log the user in — clicking the link is proof of email ownership
+  const jwtToken = signToken(user._id);
+  attachCookie(res, jwtToken);
+
+  return sendSuccess(res, {
+    message: 'Email verified! Welcome to Diraschool.',
+    user: user.toSafeObject(),
+  });
+});
+
+/**
+ * POST /api/v1/auth/resend-verification
+ * Re-sends the verification email with a fresh 24-hour token.
+ * Public route — call this when the original link has expired.
+ *
+ * Always returns 200 — no user enumeration.
+ */
+export const resendVerification = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({
+    email: email.toLowerCase().trim(),
+    isActive: true,
+    emailVerified: false, // already-verified accounts are silently skipped
+  }).select('+emailVerificationToken +emailVerificationExpiry');
+
+  // Respond immediately — do not reveal whether the email exists
+  if (!user) {
+    return sendSuccess(res, {
+      message:
+        'If an unverified account with that email exists, a new verification link has been sent.',
+    });
+  }
+
+  // Issue a fresh token
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  user.emailVerificationToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+  user.emailVerificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await user.save({ validateBeforeSave: false });
+
+  // Get school name for the email subject
+  const school = await School.findById(user.schoolId).select('name').lean();
+
+  const verifyUrl = `${env.CLIENT_URL}/api/v1/auth/verify-email/${rawToken}`;
+  await emailQueue.add(JOB_NAMES.SEND_VERIFICATION_EMAIL, {
+    type: JOB_NAMES.SEND_VERIFICATION_EMAIL,
+    payload: {
+      to: user.email,
+      firstName: user.firstName,
+      schoolName: school?.name ?? 'your school',
+      verifyUrl,
+      expiresInHours: 24,
+    },
+  });
+
+  return sendSuccess(res, {
+    message:
+      'If an unverified account with that email exists, a new verification link has been sent.',
   });
 });
 

@@ -1,0 +1,132 @@
+import {
+  LayoutDashboard,
+  Users,
+  GraduationCap,
+  BookOpen,
+  ClipboardList,
+  BarChart2,
+  FileText,
+  CreditCard,
+  Calendar,
+  Library,
+  Bus,
+  Settings,
+  ShieldAlert,
+  Building2,
+  UserCog,
+  Home,
+} from 'lucide-react';
+
+// Role groups
+const ADMIN = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
+const FINANCE = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'accountant', 'secretary'];
+const ACADEMIC = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'secretary'];
+const ALL_STAFF = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'secretary', 'accountant'];
+
+export const schoolNavItems = [
+  {
+    label: 'Dashboard',
+    href: '/dashboard',
+    icon: LayoutDashboard,
+    roles: ALL_STAFF,
+  },
+  {
+    label: 'Students',
+    href: '/students',
+    icon: GraduationCap,
+    roles: ALL_STAFF,
+  },
+  {
+    label: 'Classes',
+    href: '/classes',
+    icon: BookOpen,
+    roles: ALL_STAFF,
+  },
+  {
+    label: 'Attendance',
+    href: '/attendance',
+    icon: ClipboardList,
+    roles: ACADEMIC,
+  },
+  {
+    label: 'Subjects',
+    href: '/subjects',
+    icon: BookOpen,
+    roles: ACADEMIC,
+  },
+  {
+    label: 'Exams',
+    href: '/exams',
+    icon: FileText,
+    roles: ACADEMIC,
+  },
+  {
+    label: 'Results',
+    href: '/results',
+    icon: BarChart2,
+    roles: ACADEMIC,
+  },
+  {
+    label: 'Report Cards',
+    href: '/report-cards',
+    icon: FileText,
+    roles: ADMIN,
+  },
+  {
+    label: 'Fees',
+    href: '/fees',
+    icon: CreditCard,
+    roles: FINANCE,
+    children: [
+      { label: 'Overview', href: '/fees' },
+      { label: 'Fee Structures', href: '/fees/structures' },
+      { label: 'Payments', href: '/fees/payments' },
+    ],
+  },
+  {
+    label: 'Staff',
+    href: '/staff',
+    icon: Users,
+    roles: ADMIN,
+  },
+  {
+    label: 'Timetable',
+    href: '/timetable',
+    icon: Calendar,
+    roles: ALL_STAFF,
+  },
+  {
+    label: 'Library',
+    href: '/library',
+    icon: Library,
+    roles: ALL_STAFF,
+  },
+  {
+    label: 'Transport',
+    href: '/transport',
+    icon: Bus,
+    roles: ADMIN,
+  },
+  {
+    label: 'Audit Logs',
+    href: '/audit-logs',
+    icon: ShieldAlert,
+    roles: ADMIN,
+  },
+  {
+    label: 'Settings',
+    href: '/settings',
+    icon: Settings,
+    roles: ADMIN,
+  },
+];
+
+export const superadminNavItems = [
+  { label: 'Overview', href: '/superadmin', icon: LayoutDashboard },
+  { label: 'Schools', href: '/superadmin/schools', icon: Building2 },
+  { label: 'Users', href: '/superadmin/users', icon: UserCog },
+];
+
+export const parentNavItems = [
+  { label: 'Home', href: '/portal', icon: Home },
+];

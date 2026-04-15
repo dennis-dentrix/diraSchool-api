@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 beforeAll(setup);
 afterAll(teardown);
@@ -33,11 +34,7 @@ const schoolB = {
   password: 'SecurePass1!',
 };
 
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
+// registerAndLogin imported from ./helpers.js
 
 const validClass = {
   name: 'Grade 4',
@@ -50,7 +47,7 @@ const validClass = {
 
 describe('POST /api/v1/classes', () => {
   it('creates a class scoped to the school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const res = await agent.post('/api/v1/classes').send(validClass);
 
     expect(res.status).toBe(201);
@@ -61,7 +58,7 @@ describe('POST /api/v1/classes', () => {
   });
 
   it('creates class with stream', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const res = await agent.post('/api/v1/classes').send({ ...validClass, stream: 'North' });
 
     expect(res.status).toBe(201);
@@ -69,7 +66,7 @@ describe('POST /api/v1/classes', () => {
   });
 
   it('rejects duplicate class (same name + stream + year + term)', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     await agent.post('/api/v1/classes').send(validClass);
     const res = await agent.post('/api/v1/classes').send(validClass);
 
@@ -77,8 +74,8 @@ describe('POST /api/v1/classes', () => {
   });
 
   it('allows same class name in different schools', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     const r1 = await agentA.post('/api/v1/classes').send(validClass);
     const r2 = await agentB.post('/api/v1/classes').send(validClass);
@@ -88,21 +85,21 @@ describe('POST /api/v1/classes', () => {
   });
 
   it('rejects invalid level category', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const res = await agent.post('/api/v1/classes').send({ ...validClass, levelCategory: 'Made Up' });
 
     expect(res.status).toBe(400);
   });
 
   it('rejects invalid term', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const res = await agent.post('/api/v1/classes').send({ ...validClass, term: 'Term 4' });
 
     expect(res.status).toBe(400);
   });
 
   it('rejects non-4-digit academic year', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const res = await agent.post('/api/v1/classes').send({ ...validClass, academicYear: '25' });
 
     expect(res.status).toBe(400);
@@ -118,7 +115,7 @@ describe('POST /api/v1/classes', () => {
 
 describe('GET /api/v1/classes', () => {
   it('returns classes for the school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     await agent.post('/api/v1/classes').send(validClass);
     await agent.post('/api/v1/classes').send({ ...validClass, name: 'Grade 5' });
 
@@ -130,7 +127,7 @@ describe('GET /api/v1/classes', () => {
   });
 
   it('filters by academicYear', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     await agent.post('/api/v1/classes').send(validClass);
     await agent.post('/api/v1/classes').send({ ...validClass, name: 'Grade 5', academicYear: '2024' });
 
@@ -141,7 +138,7 @@ describe('GET /api/v1/classes', () => {
   });
 
   it('filters by term', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     await agent.post('/api/v1/classes').send(validClass);
     await agent.post('/api/v1/classes').send({ ...validClass, name: 'Grade 5', term: 'Term 2' });
 
@@ -152,8 +149,8 @@ describe('GET /api/v1/classes', () => {
   });
 
   it('does not return classes from another school (tenant isolation)', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     await agentA.post('/api/v1/classes').send(validClass);
 
@@ -168,7 +165,7 @@ describe('GET /api/v1/classes', () => {
 
 describe('GET /api/v1/classes/:id', () => {
   it('returns class by id', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const createRes = await agent.post('/api/v1/classes').send(validClass);
     const classId = createRes.body.class._id;
 
@@ -179,8 +176,8 @@ describe('GET /api/v1/classes/:id', () => {
   });
 
   it('returns 404 for class in different school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     const createRes = await agentA.post('/api/v1/classes').send(validClass);
     const classId = createRes.body.class._id;
@@ -194,7 +191,7 @@ describe('GET /api/v1/classes/:id', () => {
 
 describe('PATCH /api/v1/classes/:id', () => {
   it('updates class name', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const createRes = await agent.post('/api/v1/classes').send(validClass);
     const classId = createRes.body.class._id;
 
@@ -205,7 +202,7 @@ describe('PATCH /api/v1/classes/:id', () => {
   });
 
   it('rejects unknown fields (.strict())', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const createRes = await agent.post('/api/v1/classes').send(validClass);
     const classId = createRes.body.class._id;
 
@@ -214,8 +211,8 @@ describe('PATCH /api/v1/classes/:id', () => {
   });
 
   it('returns 404 for class in different school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     const createRes = await agentA.post('/api/v1/classes').send(validClass);
     const classId = createRes.body.class._id;
@@ -229,7 +226,7 @@ describe('PATCH /api/v1/classes/:id', () => {
 
 describe('DELETE /api/v1/classes/:id', () => {
   it('deletes an empty class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const createRes = await agent.post('/api/v1/classes').send(validClass);
     const classId = createRes.body.class._id;
 
@@ -241,8 +238,8 @@ describe('DELETE /api/v1/classes/:id', () => {
   });
 
   it('returns 404 for class in different school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     const createRes = await agentA.post('/api/v1/classes').send(validClass);
     const classId = createRes.body.class._id;

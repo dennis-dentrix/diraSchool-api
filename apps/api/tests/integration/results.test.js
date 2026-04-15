@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 beforeAll(setup);
 afterAll(teardown);
@@ -30,12 +31,6 @@ const schoolB = {
   phone: '0715000002',
   password: 'SecurePass1!',
 };
-
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
 
 async function createClass(agent, overrides = {}) {
   const res = await agent.post('/api/v1/classes').send({
@@ -84,7 +79,7 @@ async function createExam(agent, classId, subjectId, overrides = {}) {
 
 describe('POST /api/v1/results/bulk', () => {
   it('computes 4-level CBC grades for Upper Primary', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent, { levelCategory: 'Upper Primary' });
     const subject = await createSubject(agent, cls._id);
     const exam = await createExam(agent, cls._id, subject._id);
@@ -112,7 +107,7 @@ describe('POST /api/v1/results/bulk', () => {
   });
 
   it('computes 8-level CBC grades for Junior Secondary', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent, {
       name: 'Grade 8',
       levelCategory: 'Junior Secondary',
@@ -140,7 +135,7 @@ describe('POST /api/v1/results/bulk', () => {
   });
 
   it('rejects marks above exam total', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const subject = await createSubject(agent, cls._id);
     const exam = await createExam(agent, cls._id, subject._id, { totalMarks: 50 });
@@ -157,8 +152,8 @@ describe('POST /api/v1/results/bulk', () => {
 
 describe('GET/PATCH /api/v1/results', () => {
   it('lists results and enforces tenant isolation', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const cls = await createClass(agentA);
     const subject = await createSubject(agentA, cls._id);
     const exam = await createExam(agentA, cls._id, subject._id);
@@ -179,7 +174,7 @@ describe('GET/PATCH /api/v1/results', () => {
   });
 
   it('updates marks and recomputes grade', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const subject = await createSubject(agent, cls._id);
     const exam = await createExam(agent, cls._id, subject._id);

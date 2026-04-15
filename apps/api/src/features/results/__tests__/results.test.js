@@ -3,10 +3,11 @@
  * Tests bulk upsert, list, get, and update.
  * BullMQ queues mocked to prevent Redis connections during tests.
  */
-import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import app from '../../../server.js';
 import { setup, clearDatabase, teardown } from '../../../config/vitest.setup.js';
+import User from '../../users/User.model.js';
 import Class from '../../classes/Class.model.js';
 import Subject from '../../subjects/Subject.model.js';
 import Student from '../../students/Student.model.js';
@@ -18,12 +19,14 @@ vi.mock('../../../jobs/queues.js', () => ({
   reportQueue:  { add: vi.fn().mockResolvedValue({ id: 'mock' }) },
   receiptQueue: { add: vi.fn().mockResolvedValue({ id: 'mock' }) },
   importQueue:  { add: vi.fn().mockResolvedValue({ id: 'mock' }) },
+  emailQueue:   { add: vi.fn().mockResolvedValue({ id: 'mock' }) },
 }));
 
 const BASE      = '/api/v1/results';
 const AUTH_BASE = '/api/v1/auth';
 
 beforeAll(async () => { await setup(); });
+beforeEach(async () => { await clearDatabase(); });  // ensure clean slate at the start of every test
 afterEach(async () => { await clearDatabase(); });
 afterAll(async () => { await teardown(); });
 
@@ -42,6 +45,12 @@ const buildFixtures = async () => {
   });
 
   const { school } = regRes.body;
+
+  // Bypass email verification for tests
+  await User.updateOne(
+    { email: 'admin@resultstest.co.ke' },
+    { $set: { emailVerified: true }, $unset: { emailVerificationToken: 1, emailVerificationExpiry: 1 } }
+  );
 
   const agent = request.agent(app);
   await agent.post(`${AUTH_BASE}/login`).send({

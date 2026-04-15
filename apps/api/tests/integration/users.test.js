@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 // Mock BullMQ queues — prevents Redis connection attempts in tests
 vi.mock('../../src/jobs/queues.js', () => ({
@@ -42,13 +43,6 @@ const schoolB = {
   password: 'SecurePass1!',
 };
 
-/** Register a school and return an authenticated supertest agent */
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
-
 /** Create a staff user via the API and return the created user object */
 async function createStaff(agent, overrides = {}) {
   const payload = {
@@ -68,19 +62,19 @@ async function createStaff(agent, overrides = {}) {
 
 describe('POST /api/v1/users', () => {
   it('creates a staff user scoped to the admin school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res } = await createStaff(agent, { role: 'teacher' });
 
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('success');
     expect(res.body.user.role).toBe('teacher');
-    expect(res.body.user.invitePending).toBe(true);   // invite flow — not mustChangePassword
-    expect(res.body.user.mustChangePassword).toBe(false);
+    expect(res.body.user.invitePending).toBe(false);
+    expect(res.body.user.mustChangePassword).toBe(true);  // temp password — must change on first login
     expect(res.body.user.password).toBeUndefined();
   });
 
   it('normalises Kenyan phone number', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res } = await createStaff(agent, { phone: '0712345678' });
 
     expect(res.status).toBe(201);
@@ -88,14 +82,14 @@ describe('POST /api/v1/users', () => {
   });
 
   it('rejects invalid role (school_admin not assignable)', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res } = await createStaff(agent, { role: 'school_admin' });
 
     expect(res.status).toBe(400);
   });
 
   it('rejects duplicate email within same school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const email = 'duplicate@riverside.sc.ke';
 
     await createStaff(agent, { email });
@@ -105,8 +99,8 @@ describe('POST /api/v1/users', () => {
   });
 
   it('allows same email in different schools', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const email = 'shared@staff.ke';
 
     const r1 = await agentA.post('/api/v1/users').send({
@@ -132,7 +126,7 @@ describe('POST /api/v1/users', () => {
 
 describe('GET /api/v1/users', () => {
   it('returns paginated list of users in the school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     await createStaff(agent, { role: 'teacher' });
     await createStaff(agent, { role: 'accountant' });
 
@@ -147,7 +141,7 @@ describe('GET /api/v1/users', () => {
   });
 
   it('filters by role', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     await createStaff(agent, { role: 'teacher' });
     await createStaff(agent, { role: 'accountant' });
 
@@ -158,8 +152,8 @@ describe('GET /api/v1/users', () => {
   });
 
   it('does not return users from another school (tenant isolation)', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     await createStaff(agentA, { role: 'teacher' });
 
@@ -171,7 +165,7 @@ describe('GET /api/v1/users', () => {
   });
 
   it('paginates correctly', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     // Create 5 staff
     for (let i = 0; i < 5; i++) {
       await createStaff(agent, { role: 'teacher' });
@@ -190,7 +184,7 @@ describe('GET /api/v1/users', () => {
 
 describe('GET /api/v1/users/:id', () => {
   it('returns a single user in the same school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res: createRes } = await createStaff(agent);
     const userId = createRes.body.user._id;
 
@@ -201,8 +195,8 @@ describe('GET /api/v1/users/:id', () => {
   });
 
   it('returns 404 for user in a different school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     const { res: createRes } = await createStaff(agentA);
     const userId = createRes.body.user._id;
@@ -213,7 +207,7 @@ describe('GET /api/v1/users/:id', () => {
   });
 
   it('returns 404 for non-existent id', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const res = await agent.get('/api/v1/users/000000000000000000000001');
     expect(res.status).toBe(404);
   });
@@ -223,7 +217,7 @@ describe('GET /api/v1/users/:id', () => {
 
 describe('PATCH /api/v1/users/:id', () => {
   it('updates name and role', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res: createRes } = await createStaff(agent, { role: 'teacher' });
     const userId = createRes.body.user._id;
 
@@ -238,7 +232,7 @@ describe('PATCH /api/v1/users/:id', () => {
   });
 
   it('deactivates a user', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res: createRes } = await createStaff(agent);
     const userId = createRes.body.user._id;
 
@@ -249,7 +243,7 @@ describe('PATCH /api/v1/users/:id', () => {
   });
 
   it('rejects editing own account via this endpoint', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     // Get own user id from /me
     const me = await agent.get('/api/v1/auth/me');
     const myId = me.body.user._id;
@@ -261,8 +255,8 @@ describe('PATCH /api/v1/users/:id', () => {
   });
 
   it('rejects cross-school update (tenant isolation)', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     const { res: createRes } = await createStaff(agentA);
     const userId = createRes.body.user._id;
@@ -276,18 +270,18 @@ describe('PATCH /api/v1/users/:id', () => {
 
 describe('POST /api/v1/users/:id/resend-invite', () => {
   it('re-issues invite token and enqueues email', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const { res: createRes } = await createStaff(agent);
     const userId = createRes.body.user._id;
 
     const res = await agent.post(`/api/v1/users/${userId}/resend-invite`);
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toMatch(/re-sent/i);
+    expect(res.body.message).toMatch(/temporary password/i);
   });
 
   it('returns 400 when trying to resend invite to yourself', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const me = await agent.get('/api/v1/auth/me');
     const myId = me.body.user._id;
 
@@ -296,8 +290,8 @@ describe('POST /api/v1/users/:id/resend-invite', () => {
   });
 
   it('returns 404 for user in different school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
 
     const { res: createRes } = await createStaff(agentA);
     const userId = createRes.body.user._id;

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 beforeAll(setup);
 afterAll(teardown);
@@ -40,12 +41,6 @@ const classPayload = {
   term: 'Term 1',
 };
 
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
-
 async function createClass(agent, overrides = {}) {
   const res = await agent.post('/api/v1/classes').send({ ...classPayload, ...overrides });
   return res.body.class;
@@ -73,7 +68,7 @@ async function enrollStudent(agent, classId, overrides = {}) {
 
 describe('POST /api/v1/students', () => {
   it('enrolls a student in a class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const { res } = await enrollStudent(agent, cls._id);
@@ -85,7 +80,7 @@ describe('POST /api/v1/students', () => {
   });
 
   it('upper-cases admission number', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const res = await agent.post('/api/v1/students').send({
@@ -101,7 +96,7 @@ describe('POST /api/v1/students', () => {
   });
 
   it('increments class studentCount on enroll', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     await enrollStudent(agent, cls._id);
@@ -112,7 +107,7 @@ describe('POST /api/v1/students', () => {
   });
 
   it('auto-creates a parent user when parent data is supplied', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const res = await agent.post('/api/v1/students').send({
@@ -138,7 +133,7 @@ describe('POST /api/v1/students', () => {
   });
 
   it('links parent to student in parent.children array', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const res = await agent.post('/api/v1/students').send({
@@ -160,7 +155,7 @@ describe('POST /api/v1/students', () => {
   });
 
   it('rejects duplicate admission number in same school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const admissionNumber = 'ADM9999';
 
@@ -171,8 +166,8 @@ describe('POST /api/v1/students', () => {
   });
 
   it('allows same admission number in different schools', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
     const clsB = await createClass(agentB);
     const admissionNumber = 'SHARED001';
@@ -189,8 +184,8 @@ describe('POST /api/v1/students', () => {
   });
 
   it('returns 404 when classId belongs to another school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
 
     const { res } = await enrollStudent(agentB, clsA._id);
@@ -209,7 +204,7 @@ describe('POST /api/v1/students', () => {
 
 describe('GET /api/v1/students', () => {
   it('returns paginated students for the school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     await enrollStudent(agent, cls._id);
@@ -223,7 +218,7 @@ describe('GET /api/v1/students', () => {
   });
 
   it('filters by classId', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls1 = await createClass(agent);
     const cls2 = await createClass(agent, { name: 'Grade 4' });
 
@@ -238,7 +233,7 @@ describe('GET /api/v1/students', () => {
   });
 
   it('searches by name', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     await enrollStudent(agent, cls._id, { firstName: 'Zebra', lastName: 'Zulu' });
@@ -252,8 +247,8 @@ describe('GET /api/v1/students', () => {
   });
 
   it('does not return students from another school (tenant isolation)', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
 
     await enrollStudent(agentA, clsA._id);
@@ -269,7 +264,7 @@ describe('GET /api/v1/students', () => {
 
 describe('GET /api/v1/students/:id', () => {
   it('returns a single student', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const { res: enrollRes } = await enrollStudent(agent, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -282,8 +277,8 @@ describe('GET /api/v1/students/:id', () => {
   });
 
   it('returns 404 for student in different school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const cls = await createClass(agentA);
     const { res: enrollRes } = await enrollStudent(agentA, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -297,7 +292,7 @@ describe('GET /api/v1/students/:id', () => {
 
 describe('PATCH /api/v1/students/:id', () => {
   it('updates student details', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const { res: enrollRes } = await enrollStudent(agent, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -313,7 +308,7 @@ describe('PATCH /api/v1/students/:id', () => {
   });
 
   it('does NOT increment studentCount on update', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const { res: enrollRes } = await enrollStudent(agent, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -325,7 +320,7 @@ describe('PATCH /api/v1/students/:id', () => {
   });
 
   it('rejects unknown fields (.strict())', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const { res: enrollRes } = await enrollStudent(agent, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -339,7 +334,7 @@ describe('PATCH /api/v1/students/:id', () => {
 
 describe('POST /api/v1/students/:id/transfer', () => {
   it('moves student to a new class and adjusts counts', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls1 = await createClass(agent);
     const cls2 = await createClass(agent, { name: 'Grade 4' });
 
@@ -360,7 +355,7 @@ describe('POST /api/v1/students/:id/transfer', () => {
   });
 
   it('returns 400 when student is already in target class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const { res: enrollRes } = await enrollStudent(agent, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -372,8 +367,8 @@ describe('POST /api/v1/students/:id/transfer', () => {
   });
 
   it('returns 404 for target class in different school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
     const clsB = await createClass(agentB);
 
@@ -391,7 +386,7 @@ describe('POST /api/v1/students/:id/transfer', () => {
 
 describe('POST /api/v1/students/:id/withdraw', () => {
   it('marks student as withdrawn', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const { res: enrollRes } = await enrollStudent(agent, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -403,7 +398,7 @@ describe('POST /api/v1/students/:id/withdraw', () => {
   });
 
   it('decrements class studentCount on withdraw', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const { res: enrollRes } = await enrollStudent(agent, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -415,7 +410,7 @@ describe('POST /api/v1/students/:id/withdraw', () => {
   });
 
   it('cannot withdraw an already-withdrawn student', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const { res: enrollRes } = await enrollStudent(agent, cls._id);
     const studentId = enrollRes.body.student._id;
@@ -428,7 +423,7 @@ describe('POST /api/v1/students/:id/withdraw', () => {
   });
 
   it('blocks deleting a class with students', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     await enrollStudent(agent, cls._id);
 

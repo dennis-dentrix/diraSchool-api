@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 beforeAll(setup);
 afterAll(teardown);
@@ -32,12 +33,6 @@ const schoolB = {
   phone: '0731000002',
   password: 'SecurePass1!',
 };
-
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
 
 async function createClass(agent, overrides = {}) {
   const res = await agent.post('/api/v1/classes').send({
@@ -100,7 +95,7 @@ async function recordPayment(agent, studentId, overrides = {}) {
 
 describe('POST /api/v1/fees/structures', () => {
   it('creates a fee structure for a class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const res = await agent.post('/api/v1/fees/structures').send({
@@ -121,7 +116,7 @@ describe('POST /api/v1/fees/structures', () => {
   });
 
   it('rejects duplicate structure for same class/term/year', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     await createFeeStructure(agent, cls._id);
@@ -136,8 +131,8 @@ describe('POST /api/v1/fees/structures', () => {
   });
 
   it('returns 404 when classId belongs to another school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
 
     const res = await agentB.post('/api/v1/fees/structures').send({
@@ -151,7 +146,7 @@ describe('POST /api/v1/fees/structures', () => {
   });
 
   it('rejects request with no items', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const res = await agent.post('/api/v1/fees/structures').send({
@@ -179,7 +174,7 @@ describe('POST /api/v1/fees/structures', () => {
 
 describe('GET /api/v1/fees/structures', () => {
   it('lists fee structures for a school with filters', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls1 = await createClass(agent);
     const cls2 = await createClass(agent, { name: 'Grade 6' });
 
@@ -197,8 +192,8 @@ describe('GET /api/v1/fees/structures', () => {
   });
 
   it('enforces tenant isolation', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
 
     await createFeeStructure(agentA, clsA._id);
@@ -213,7 +208,7 @@ describe('GET /api/v1/fees/structures', () => {
 
 describe('PATCH /api/v1/fees/structures/:id', () => {
   it('updates items and recalculates totalAmount', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const structure = await createFeeStructure(agent, cls._id); // 17000
 
@@ -229,7 +224,7 @@ describe('PATCH /api/v1/fees/structures/:id', () => {
   });
 
   it('rejects unknown fields (.strict())', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const structure = await createFeeStructure(agent, cls._id);
 
@@ -245,7 +240,7 @@ describe('PATCH /api/v1/fees/structures/:id', () => {
 
 describe('DELETE /api/v1/fees/structures/:id', () => {
   it('deletes a structure when no completed payments exist', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const structure = await createFeeStructure(agent, cls._id);
 
@@ -257,7 +252,7 @@ describe('DELETE /api/v1/fees/structures/:id', () => {
   });
 
   it('blocks deletion when payments exist for that term', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const structure = await createFeeStructure(agent, cls._id);
     const student = await enrollStudent(agent, cls._id);
@@ -274,7 +269,7 @@ describe('DELETE /api/v1/fees/structures/:id', () => {
 
 describe('POST /api/v1/fees/payments', () => {
   it('records a payment for an active student', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
 
@@ -294,7 +289,7 @@ describe('POST /api/v1/fees/payments', () => {
   });
 
   it('auto-sets classId from the student', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
 
@@ -312,8 +307,8 @@ describe('POST /api/v1/fees/payments', () => {
   });
 
   it('rejects payment for student in another school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
     const studentA = await enrollStudent(agentA, clsA._id);
 
@@ -329,7 +324,7 @@ describe('POST /api/v1/fees/payments', () => {
   });
 
   it('rejects negative or zero amount', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
 
@@ -349,7 +344,7 @@ describe('POST /api/v1/fees/payments', () => {
 
 describe('GET /api/v1/fees/payments', () => {
   it('lists payments for a school', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const s1 = await enrollStudent(agent, cls._id, { firstName: 'Alpha' });
     const s2 = await enrollStudent(agent, cls._id, { firstName: 'Beta' });
@@ -364,7 +359,7 @@ describe('GET /api/v1/fees/payments', () => {
   });
 
   it('filters payments by studentId', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const s1 = await enrollStudent(agent, cls._id, { firstName: 'Alpha' });
     const s2 = await enrollStudent(agent, cls._id, { firstName: 'Beta' });
@@ -379,8 +374,8 @@ describe('GET /api/v1/fees/payments', () => {
   });
 
   it('enforces tenant isolation', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
     const studentA = await enrollStudent(agentA, clsA._id);
 
@@ -396,7 +391,7 @@ describe('GET /api/v1/fees/payments', () => {
 
 describe('POST /api/v1/fees/payments/:id/reverse', () => {
   it('reverses a completed payment', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const payment = await recordPayment(agent, student._id);
@@ -412,7 +407,7 @@ describe('POST /api/v1/fees/payments/:id/reverse', () => {
   });
 
   it('cannot reverse an already-reversed payment', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const payment = await recordPayment(agent, student._id);
@@ -430,7 +425,7 @@ describe('POST /api/v1/fees/payments/:id/reverse', () => {
   });
 
   it('requires a reversal reason', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const payment = await recordPayment(agent, student._id);
@@ -444,7 +439,7 @@ describe('POST /api/v1/fees/payments/:id/reverse', () => {
 
 describe('GET /api/v1/fees/balance', () => {
   it('returns balance with outstanding amount', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     // Fee structure: 17000
@@ -467,7 +462,7 @@ describe('GET /api/v1/fees/balance', () => {
   });
 
   it('shows isPaidUp when fully paid', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     await createFeeStructure(agent, cls._id); // 17000
     const student = await enrollStudent(agent, cls._id);
@@ -484,7 +479,7 @@ describe('GET /api/v1/fees/balance', () => {
   });
 
   it('excludes reversed payments from totalPaid', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     await createFeeStructure(agent, cls._id); // 17000
     const student = await enrollStudent(agent, cls._id);
@@ -506,7 +501,7 @@ describe('GET /api/v1/fees/balance', () => {
   });
 
   it('returns null feeStructure and 0 outstanding when no structure defined', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
 
@@ -521,8 +516,8 @@ describe('GET /api/v1/fees/balance', () => {
   });
 
   it('returns 404 for student in different school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
     const studentA = await enrollStudent(agentA, clsA._id);
 
