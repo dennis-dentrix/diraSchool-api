@@ -72,6 +72,22 @@ const userSchema = new mongoose.Schema(
     lastLoginAt: {
       type: Date,
     },
+    // ── Email verification ────────────────────────────────────────────────────
+    // Required for school admins on self-registration.
+    // Staff accounts created by admins skip this (invite flow handles activation).
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerificationToken: {
+      type: String,
+      select: false,
+    },
+    emailVerificationExpiry: {
+      type: Date,
+      select: false,
+    },
+
     // ── Password reset ────────────────────────────────────────────────────────
     // Raw token is sent to the user via email. Only the SHA-256 hash is stored
     // so a DB leak cannot be used to reset passwords.

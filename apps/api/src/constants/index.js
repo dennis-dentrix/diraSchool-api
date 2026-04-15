@@ -129,8 +129,9 @@ export const JOB_NAMES = {
   GENERATE_PDF: 'generate-pdf',
   IMPORT_STUDENTS_CSV: 'import-students-csv',
   IN_APP_NOTIFICATION: 'in-app-notification',
-  SEND_INVITE_EMAIL: 'send-invite-email',
-  SEND_RESET_EMAIL: 'send-reset-email',
+  SEND_INVITE_EMAIL:        'send-invite-email',
+  SEND_RESET_EMAIL:         'send-reset-email',
+  SEND_VERIFICATION_EMAIL:  'send-verification-email',
 };
 
 export const AUDIT_ACTIONS = {

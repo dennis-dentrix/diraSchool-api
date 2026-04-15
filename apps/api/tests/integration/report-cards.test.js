@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 beforeAll(setup);
 afterAll(teardown);
@@ -32,12 +33,6 @@ const schoolB = {
   phone: '0740000002',
   password: 'SecurePass1!',
 };
-
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
 
 async function createClass(agent, overrides = {}) {
   const res = await agent.post('/api/v1/classes').send({
@@ -107,7 +102,7 @@ async function submitRegister(agent, registerId) {
 
 describe('POST /api/v1/report-cards/generate', () => {
   it('generates a report card aggregating results across subjects', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
 
@@ -150,7 +145,7 @@ describe('POST /api/v1/report-cards/generate', () => {
   });
 
   it('correctly uses weighted average when a subject has multiple exams', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id, 'Science');
@@ -182,7 +177,7 @@ describe('POST /api/v1/report-cards/generate', () => {
   });
 
   it('uses the 8-level CBC rubric for Junior Secondary', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent, {
       name: 'Grade 8',
       levelCategory: 'Junior Secondary',
@@ -206,7 +201,7 @@ describe('POST /api/v1/report-cards/generate', () => {
   });
 
   it('includes attendance summary from submitted registers', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id);
@@ -247,7 +242,7 @@ describe('POST /api/v1/report-cards/generate', () => {
   });
 
   it('regenerating a draft updates the data and preserves existing remarks', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id);
@@ -282,7 +277,7 @@ describe('POST /api/v1/report-cards/generate', () => {
   });
 
   it('blocks regeneration of a published card', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id);
@@ -302,8 +297,8 @@ describe('POST /api/v1/report-cards/generate', () => {
   });
 
   it('returns 404 for student in another school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
     const studentA = await enrollStudent(agentA, clsA._id);
 
@@ -325,7 +320,7 @@ describe('POST /api/v1/report-cards/generate', () => {
 
 describe('POST /api/v1/report-cards/generate-class', () => {
   it('generates report cards for all active students in a class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const s1 = await enrollStudent(agent, cls._id, { firstName: 'Alpha' });
     const s2 = await enrollStudent(agent, cls._id, { firstName: 'Beta' });
@@ -354,7 +349,7 @@ describe('POST /api/v1/report-cards/generate-class', () => {
   });
 
   it('skips published cards in a class bulk generate', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const s1 = await enrollStudent(agent, cls._id, { firstName: 'Alpha' });
     const s2 = await enrollStudent(agent, cls._id, { firstName: 'Beta' });
@@ -383,8 +378,8 @@ describe('POST /api/v1/report-cards/generate-class', () => {
   });
 
   it('returns 404 for class in another school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
 
     const res = await agentB.post('/api/v1/report-cards/generate-class').send({
@@ -398,7 +393,7 @@ describe('POST /api/v1/report-cards/generate-class', () => {
 
 describe('GET /api/v1/report-cards', () => {
   it('lists report cards and filters by status', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const s1 = await enrollStudent(agent, cls._id, { firstName: 'Alpha' });
     const s2 = await enrollStudent(agent, cls._id, { firstName: 'Beta' });
@@ -429,8 +424,8 @@ describe('GET /api/v1/report-cards', () => {
   });
 
   it('enforces tenant isolation', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
     const studentA = await enrollStudent(agentA, clsA._id);
     const subject = await createSubject(agentA, clsA._id);
@@ -450,7 +445,7 @@ describe('GET /api/v1/report-cards', () => {
 
 describe('PATCH /api/v1/report-cards/:id/remarks', () => {
   it('adds teacher and principal remarks on a draft', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id);
@@ -473,7 +468,7 @@ describe('PATCH /api/v1/report-cards/:id/remarks', () => {
   });
 
   it('rejects remarks update on a published card', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id);
@@ -493,7 +488,7 @@ describe('PATCH /api/v1/report-cards/:id/remarks', () => {
   });
 
   it('rejects body with no recognised remark fields', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id);
@@ -514,7 +509,7 @@ describe('PATCH /api/v1/report-cards/:id/remarks', () => {
 
 describe('POST /api/v1/report-cards/:id/publish', () => {
   it('publishes a draft report card', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id);
@@ -534,7 +529,7 @@ describe('POST /api/v1/report-cards/:id/publish', () => {
   });
 
   it('returns 400 when already published', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
     const subject = await createSubject(agent, cls._id);
@@ -552,8 +547,8 @@ describe('POST /api/v1/report-cards/:id/publish', () => {
   });
 
   it('returns 404 for card in another school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
     const studentA = await enrollStudent(agentA, clsA._id);
     const subject = await createSubject(agentA, clsA._id);

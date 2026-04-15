@@ -76,7 +76,8 @@ export const createUser = asyncHandler(async (req, res) => {
     tscNumber: tscNumber ?? undefined,
     schoolId:  req.user.schoolId,
     mustChangePassword: false, // invite flow handles first-login, not this flag
-    invitePending: true,
+    invitePending:  true,
+    emailVerified:  true, // admin-created accounts are within a verified school — no extra check
   });
 
   // Fetch school name for the invite email

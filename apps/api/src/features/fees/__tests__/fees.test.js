@@ -19,6 +19,7 @@ vi.mock('../../../jobs/queues.js', () => ({
   reportQueue:  { add: vi.fn().mockResolvedValue({ id: 'mock' }) },
   receiptQueue: { add: vi.fn().mockResolvedValue({ id: 'mock' }) },
   importQueue:  { add: vi.fn().mockResolvedValue({ id: 'mock' }) },
+  emailQueue:   { add: vi.fn().mockResolvedValue({ id: 'mock' }) },
 }));
 
 const BASE = '/api/v1/fees';
@@ -44,6 +45,12 @@ const buildFixtures = async () => {
   });
 
   const { school } = regRes.body;
+
+  // Bypass email verification for tests
+  await User.updateOne(
+    { email: 'admin@feetest.co.ke' },
+    { $set: { emailVerified: true }, $unset: { emailVerificationToken: 1, emailVerificationExpiry: 1 } }
+  );
 
   // Login and get authenticated agent
   const agent = request.agent(app);

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
+import { registerAndLogin } from './helpers.js';
 
 beforeAll(setup);
 afterAll(teardown);
@@ -37,12 +38,6 @@ const classPayload = {
   academicYear: '2025',
   term: 'Term 1',
 };
-
-async function registerAndLogin(schoolData) {
-  const agent = request.agent(app);
-  await agent.post('/api/v1/auth/register').send(schoolData);
-  return agent;
-}
 
 async function createClass(agent, overrides = {}) {
   const res = await agent.post('/api/v1/classes').send({ ...classPayload, ...overrides });
@@ -80,7 +75,7 @@ async function createTeacher(agent, emailPrefix = 'teacher') {
 
 describe('POST /api/v1/attendance/registers', () => {
   it('creates a draft attendance register for a class and date', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const res = await agent.post('/api/v1/attendance/registers').send({
@@ -97,7 +92,7 @@ describe('POST /api/v1/attendance/registers', () => {
   });
 
   it('rejects duplicate register for same class/date', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     await agent.post('/api/v1/attendance/registers').send({
@@ -114,7 +109,7 @@ describe('POST /api/v1/attendance/registers', () => {
   });
 
   it('accepts substitute teacher metadata', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const substitute = await createTeacher(agent);
 
@@ -132,8 +127,8 @@ describe('POST /api/v1/attendance/registers', () => {
   });
 
   it('returns 404 when class belongs to another school', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
 
     const res = await agentB.post('/api/v1/attendance/registers').send({
@@ -147,7 +142,7 @@ describe('POST /api/v1/attendance/registers', () => {
 
 describe('PATCH /api/v1/attendance/registers/:id and submit', () => {
   it('updates entries while register is draft', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const studentA = await enrollStudent(agent, cls._id, { firstName: 'Anna' });
     const studentB = await enrollStudent(agent, cls._id, { firstName: 'Brian' });
@@ -171,7 +166,7 @@ describe('PATCH /api/v1/attendance/registers/:id and submit', () => {
   });
 
   it('rejects entries for students outside the target class', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls1 = await createClass(agent, { name: 'Grade 4' });
     const cls2 = await createClass(agent, { name: 'Grade 5' });
     const wrongStudent = await enrollStudent(agent, cls2._id);
@@ -191,7 +186,7 @@ describe('PATCH /api/v1/attendance/registers/:id and submit', () => {
   });
 
   it('submits a draft and blocks further edits', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
 
@@ -214,7 +209,7 @@ describe('PATCH /api/v1/attendance/registers/:id and submit', () => {
   });
 
   it('rejects submit when register has no entries', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
 
     const createRes = await agent.post('/api/v1/attendance/registers').send({
@@ -232,7 +227,7 @@ describe('PATCH /api/v1/attendance/registers/:id and submit', () => {
 
 describe('GET /api/v1/attendance/registers and /:id', () => {
   it('lists registers with status filter', async () => {
-    const agent = await registerAndLogin(schoolA);
+    const agent = await registerAndLogin(app, schoolA);
     const cls = await createClass(agent);
     const student = await enrollStudent(agent, cls._id);
 
@@ -260,8 +255,8 @@ describe('GET /api/v1/attendance/registers and /:id', () => {
   });
 
   it('enforces tenant isolation on list and get-by-id', async () => {
-    const agentA = await registerAndLogin(schoolA);
-    const agentB = await registerAndLogin(schoolB);
+    const agentA = await registerAndLogin(app, schoolA);
+    const agentB = await registerAndLogin(app, schoolB);
     const clsA = await createClass(agentA);
 
     const createRes = await agentA.post('/api/v1/attendance/registers').send({

@@ -11,7 +11,7 @@
 import { Worker } from 'bullmq';
 import { QUEUE_NAMES, JOB_NAMES } from '../../constants/index.js';
 import { createBullMQConnection } from '../../config/redis.js';
-import { sendInviteEmail, sendPasswordResetEmail } from '../../services/email.service.js';
+import { sendInviteEmail, sendPasswordResetEmail, sendVerificationEmail } from '../../services/email.service.js';
 
 export const startEmailWorker = () => {
   const worker = new Worker(
@@ -26,6 +26,10 @@ export const startEmailWorker = () => {
 
         case JOB_NAMES.SEND_RESET_EMAIL:
           await sendPasswordResetEmail(payload);
+          break;
+
+        case JOB_NAMES.SEND_VERIFICATION_EMAIL:
+          await sendVerificationEmail(payload);
           break;
 
         default:

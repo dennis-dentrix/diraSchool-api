@@ -54,6 +54,11 @@ export const setup = async () => {
   await Book.createCollection();
   await BookLoan.createCollection();
   await TransportRoute.createCollection();
+
+  // Give the replica set a moment to fully register all the collection-creation
+  // ops so that the very first transaction in this file doesn't race against
+  // lingering catalog-change events from the createCollection() calls above.
+  await new Promise((r) => setTimeout(r, 100));
 };
 
 // Drop all collections between tests — clean slate per test file

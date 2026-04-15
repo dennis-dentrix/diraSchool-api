@@ -1,6 +1,10 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
-import { registerSchool, login, logout, getMe, changePassword, forgotPassword, resetPassword, acceptInvite } from './auth.controller.js';
+import {
+  registerSchool, login, logout, getMe, changePassword,
+  forgotPassword, resetPassword, acceptInvite,
+  verifyEmail, resendVerification,
+} from './auth.controller.js';
 import {
   validateRegisterSchool,
   validateLogin,
@@ -8,6 +12,7 @@ import {
   validateForgotPassword,
   validateResetPassword,
   validateAcceptInvite,
+  validateResendVerification,
 } from './auth.validator.js';
 import { protect, blockIfMustChangePassword } from '../../middleware/auth.js';
 
@@ -29,9 +34,11 @@ const authLimiter =
 // ── Public routes ─────────────────────────────────────────────────────────────
 router.post('/register',       authLimiter, validateRegisterSchool, registerSchool);
 router.post('/login',          authLimiter, validateLogin,          login);
-router.post('/forgot-password',    authLimiter, validateForgotPassword, forgotPassword);
-router.post('/reset-password/:token',        validateResetPassword,  resetPassword);
-router.post('/accept-invite/:token',         validateAcceptInvite,   acceptInvite);
+router.post('/forgot-password',       authLimiter, validateForgotPassword,      forgotPassword);
+router.post('/reset-password/:token',             validateResetPassword,       resetPassword);
+router.post('/accept-invite/:token',              validateAcceptInvite,        acceptInvite);
+router.get( '/verify-email/:token',                                            verifyEmail);
+router.post('/resend-verification',   authLimiter, validateResendVerification, resendVerification);
 
 // ── Protected routes ──────────────────────────────────────────────────────────
 router.post('/logout', protect, logout);

@@ -58,6 +58,25 @@ export const sendInviteEmail = async ({ to, firstName, schoolName, inviteUrl, ex
 };
 
 /**
+ * Send an email verification email to a newly registered school admin.
+ *
+ * @param {object} opts
+ * @param {string} opts.to            Recipient email
+ * @param {string} opts.firstName     Recipient first name
+ * @param {string} opts.schoolName    School name
+ * @param {string} opts.verifyUrl     Full URL with token
+ * @param {number} [opts.expiresInHours=24]
+ */
+export const sendVerificationEmail = async ({ to, firstName, schoolName, verifyUrl, expiresInHours = 24 }) => {
+  return client().emails.send({
+    from:    FROM,
+    to,
+    subject: `Verify your email to activate ${schoolName} on Diraschool`,
+    html:    _verifyTemplate({ firstName, schoolName, verifyUrl, expiresInHours }),
+  });
+};
+
+/**
  * Send a password-reset email.
  *
  * @param {object} opts
@@ -128,6 +147,30 @@ const _btn = (url, label) =>
             padding:14px 28px;border-radius:6px;text-decoration:none;
             font-size:15px;font-weight:600;margin:24px 0;"
   >${label}</a>`;
+
+const _verifyTemplate = ({ firstName, schoolName, verifyUrl, expiresInHours }) =>
+  _shell(
+    `Verify your email — ${schoolName}`,
+    /* html */ `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Welcome to Diraschool, ${firstName}!</h2>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        You've successfully created an account for <strong>${schoolName}</strong>.
+        One last step — please verify your email address to activate your account.
+      </p>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        This link expires in <strong>${expiresInHours} hours</strong>.
+      </p>
+      ${_btn(verifyUrl, 'Verify My Email →')}
+      <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">
+        Or copy this link into your browser:<br/>
+        <span style="color:#1a56db;word-break:break-all;">${verifyUrl}</span>
+      </p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;">
+        If you didn't create a Diraschool account, you can safely ignore this email.
+      </p>
+    `
+  );
 
 const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
   _shell(

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
 import express from 'express';
@@ -37,9 +38,15 @@ console.log('='.repeat(50));
 console.log('[Boot] Diraschool API starting…');
 console.log(`[Boot] NODE_ENV  : ${process.env.NODE_ENV ?? '(not set)'}`);
 console.log(`[Boot] PORT      : ${process.env.PORT ?? '(not set — will use 3000)'}`);
-console.log(`[Boot] MONGO_URI : ${process.env.MONGO_URI  ? '✓ set' : '✗ MISSING — server will exit'}`);
-console.log(`[Boot] REDIS_URL : ${process.env.REDIS_URL  ? '✓ set' : '✗ MISSING — server will exit'}`);
-console.log(`[Boot] JWT_SECRET: ${process.env.JWT_SECRET ? '✓ set' : '✗ MISSING — server will exit'}`);
+console.log(
+  `[Boot] MONGO_URI : ${process.env.MONGO_URI ? '✓ set' : '✗ MISSING — server will exit'}`
+);
+console.log(
+  `[Boot] REDIS_URL : ${process.env.REDIS_URL ? '✓ set' : '✗ MISSING — server will exit'}`
+);
+console.log(
+  `[Boot] JWT_SECRET: ${process.env.JWT_SECRET ? '✓ set' : '✗ MISSING — server will exit'}`
+);
 console.log(`[Boot] CLIENT_URL: ${process.env.CLIENT_URL ?? '✗ MISSING — server will exit'}`);
 console.log('='.repeat(50));
 // ─────────────────────────────────────────────────────────────────────────────
@@ -77,23 +84,23 @@ app.get('/health', async (req, res) => {
   // Redis is non-critical — a transient reconnect must not kill the container.
   // We always return HTTP 200 so Railway does not restart on Redis blips.
   let redisStatus = 'not_connected';
-  let redisError  = null;
+  let redisError = null;
 
   try {
     const redis = getRedis();
     if (redis) {
       const state = redis.status; // 'connecting' | 'connect' | 'ready' | 'reconnecting' | 'end'
       if (state === 'ready') {
-        await redis.ping();       // only ping when already ready — avoids 3 s hangs
+        await redis.ping(); // only ping when already ready — avoids 3 s hangs
         redisStatus = 'up';
       } else {
         // Still connecting or reconnecting — report the state but don't block
-        redisStatus = state;      // e.g. "connecting", "reconnecting"
+        redisStatus = state; // e.g. "connecting", "reconnecting"
       }
     }
   } catch (err) {
     redisStatus = 'degraded';
-    redisError  = err.message;
+    redisError = err.message;
     logger.warn(`[Health] Redis degraded: ${err.message}`);
   }
 
@@ -170,7 +177,7 @@ if (isMain) {
     };
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT',  () => shutdown('SIGINT'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   };
 
   start().catch((err) => {

@@ -58,6 +58,10 @@ const acceptInviteSchema = z.object({
     .min(8, 'Password must be at least 8 characters'),
 });
 
+const resendVerificationSchema = z.object({
+  email: z.string().trim().email('Invalid email address'),
+});
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validate = (schema) => (req, res, next) => {
@@ -70,9 +74,10 @@ const validate = (schema) => (req, res, next) => {
   next();
 };
 
-export const validateRegisterSchool  = validate(registerSchoolSchema);
-export const validateLogin           = validate(loginSchema);
-export const validateChangePassword  = validate(changePasswordSchema);
-export const validateForgotPassword  = validate(forgotPasswordSchema);
-export const validateResetPassword   = validate(resetPasswordSchema);
-export const validateAcceptInvite    = validate(acceptInviteSchema);
+export const validateRegisterSchool      = validate(registerSchoolSchema);
+export const validateLogin               = validate(loginSchema);
+export const validateChangePassword      = validate(changePasswordSchema);
+export const validateForgotPassword      = validate(forgotPasswordSchema);
+export const validateResetPassword       = validate(resetPasswordSchema);
+export const validateAcceptInvite        = validate(acceptInviteSchema);
+export const validateResendVerification  = validate(resendVerificationSchema);
