@@ -74,12 +74,14 @@ const userSchema = new mongoose.Schema(
     },
     // ── Email verification ────────────────────────────────────────────────────
     // Required for school admins on self-registration.
-    // Staff accounts created by admins skip this (invite flow handles activation).
+    // Staff accounts created by admins skip this (emailVerified = true on creation).
     emailVerified: {
       type: Boolean,
       default: false,
     },
-    emailVerificationToken: {
+    // 6-digit numeric OTP sent via email; expires after 15 minutes.
+    // Stored as plaintext — security comes from short expiry + rate limiting.
+    emailVerificationCode: {
       type: String,
       select: false,
     },

@@ -123,20 +123,37 @@ export const sendInviteEmail = async ({ to, firstName, schoolName, inviteUrl, ex
 };
 
 /**
- * Send an email verification email to a newly registered school admin.
+ * Send a 6-digit OTP verification email to a newly registered school admin.
  *
  * @param {object} opts
- * @param {string} opts.to              Recipient email
- * @param {string} opts.firstName       Recipient first name
- * @param {string} opts.schoolName      School name
- * @param {string} opts.verifyUrl       Full URL with token
- * @param {number} [opts.expiresInHours=24]
+ * @param {string} opts.to                Recipient email
+ * @param {string} opts.firstName         Recipient first name
+ * @param {string} opts.schoolName        School name
+ * @param {string} opts.code              6-digit OTP
+ * @param {number} [opts.expiresInMinutes=15]
  */
-export const sendVerificationEmail = async ({ to, firstName, schoolName, verifyUrl, expiresInHours = 24 }) => {
+export const sendVerificationEmail = async ({ to, firstName, schoolName, code, expiresInMinutes = 15 }) => {
   return sendEmail({
     to,
-    subject: `Verify your email to activate ${schoolName} on Diraschool`,
-    html:    _verifyTemplate({ firstName, schoolName, verifyUrl, expiresInHours }),
+    subject: `${code} — your Diraschool verification code`,
+    html:    _verifyTemplate({ firstName, schoolName, code, expiresInMinutes }),
+  });
+};
+
+/**
+ * Send a temporary-password email to a newly created staff member.
+ *
+ * @param {object} opts
+ * @param {string} opts.to            Recipient email
+ * @param {string} opts.firstName     Recipient first name
+ * @param {string} opts.schoolName    School display name
+ * @param {string} opts.tempPassword  Plaintext temp password (shown once)
+ */
+export const sendTempPasswordEmail = async ({ to, firstName, schoolName, tempPassword }) => {
+  return sendEmail({
+    to,
+    subject: `Your ${schoolName} login details — Diraschool`,
+    html:    _tempPasswordTemplate({ firstName, schoolName, tempPassword }),
   });
 };
 
@@ -207,26 +224,69 @@ const _btn = (url, label) =>
             font-size:15px;font-weight:600;margin:24px 0;"
   >${label}</a>`;
 
-const _verifyTemplate = ({ firstName, schoolName, verifyUrl, expiresInHours }) =>
+const _verifyTemplate = ({ firstName, schoolName, code, expiresInMinutes }) =>
   _shell(
     `Verify your email — ${schoolName}`,
     /* html */ `
       <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Welcome to Diraschool, ${firstName}!</h2>
       <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
         You've successfully created an account for <strong>${schoolName}</strong>.
-        One last step — please verify your email address to activate your account.
+        Enter the code below to verify your email address and activate your account.
       </p>
+      <div style="margin:28px 0;text-align:center;">
+        <div style="display:inline-block;background:#f0f4ff;border:2px dashed #1a56db;
+                    border-radius:10px;padding:20px 36px;">
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;letter-spacing:.5px;text-transform:uppercase;">
+            Verification Code
+          </p>
+          <p style="margin:0;font-size:38px;font-weight:700;color:#1a56db;letter-spacing:8px;
+                    font-family:'Courier New',monospace;">
+            ${code}
+          </p>
+        </div>
+      </div>
       <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
-        This link expires in <strong>${expiresInHours} hours</strong>.
-      </p>
-      ${_btn(verifyUrl, 'Verify My Email →')}
-      <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">
-        Or copy this link into your browser:<br/>
-        <span style="color:#1a56db;word-break:break-all;">${verifyUrl}</span>
+        This code expires in <strong>${expiresInMinutes} minutes</strong>.
+        If it expires, you can request a new one from the login screen.
       </p>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
       <p style="margin:0;font-size:13px;color:#6b7280;">
         If you didn't create a Diraschool account, you can safely ignore this email.
+      </p>
+    `
+  );
+
+const _tempPasswordTemplate = ({ firstName, schoolName, tempPassword }) =>
+  _shell(
+    `Your login details — ${schoolName}`,
+    /* html */ `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        An account has been created for you on <strong>Diraschool</strong>
+        for <strong>${schoolName}</strong>.
+      </p>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        Use the temporary password below to log in. You will be asked to set a
+        new password immediately after signing in.
+      </p>
+      <div style="margin:28px 0;text-align:center;">
+        <div style="display:inline-block;background:#f0f4ff;border:2px dashed #1a56db;
+                    border-radius:10px;padding:20px 36px;">
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;letter-spacing:.5px;text-transform:uppercase;">
+            Temporary Password
+          </p>
+          <p style="margin:0;font-size:28px;font-weight:700;color:#1a56db;letter-spacing:4px;
+                    font-family:'Courier New',monospace;">
+            ${tempPassword}
+          </p>
+        </div>
+      </div>
+      <p style="margin:0 0 12px;font-size:13px;color:#ef4444;">
+        ⚠ Do not share this password with anyone.
+      </p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;">
+        If you weren't expecting this email, contact your school administrator.
       </p>
     `
   );

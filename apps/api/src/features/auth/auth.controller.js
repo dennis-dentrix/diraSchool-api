@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import School from '../schools/School.model.js';
@@ -42,10 +42,9 @@ export const registerSchool = asyncHandler(async (req, res) => {
     return sendError(res, 'A school with this email is already registered.', 409);
   }
 
-  // Generate email verification token before the transaction
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-  const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  // Generate a 6-digit OTP for email verification (expires in 15 minutes)
+  const otp    = String(crypto.randomInt(100_000, 1_000_000)); // "100000"–"999999"
+  const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
   // Use a session for atomicity — both School and User must be created or neither
   const session = await mongoose.startSession();
@@ -78,7 +77,7 @@ export const registerSchool = asyncHandler(async (req, res) => {
           schoolId: school._id,
           mustChangePassword: false,
           emailVerified: false,
-          emailVerificationToken: tokenHash,
+          emailVerificationCode:   otp,
           emailVerificationExpiry: expiry,
         },
       ],
@@ -88,15 +87,14 @@ export const registerSchool = asyncHandler(async (req, res) => {
     await session.commitTransaction();
 
     // Enqueue verification email — outside the transaction (non-critical)
-    const verifyUrl = `${env.CLIENT_URL}/api/v1/auth/verify-email/${rawToken}`;
     await emailQueue.add(JOB_NAMES.SEND_VERIFICATION_EMAIL, {
       type: JOB_NAMES.SEND_VERIFICATION_EMAIL,
       payload: {
-        to: user.email,
-        firstName: user.firstName,
-        schoolName: school.name,
-        verifyUrl,
-        expiresInHours: 24,
+        to:           user.email,
+        firstName:    user.firstName,
+        schoolName:   school.name,
+        code:         otp,   // 6-digit code shown in the email
+        expiresInMinutes: 15,
       },
     });
 
@@ -330,37 +328,41 @@ export const acceptInvite = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET /api/v1/auth/verify-email/:token
- * Activates a school admin account after they click the verification link.
+ * POST /api/v1/auth/verify-email
+ * Activates a school admin account by validating the 6-digit OTP they received.
  * Public route — no auth required (user isn't logged in yet).
  *
+ * Body: { email, code }
  * On success: marks emailVerified=true, auto-logs the user in via cookie.
  */
 export const verifyEmail = asyncHandler(async (req, res) => {
-  const { token } = req.params;
-
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  const { email, code } = req.body;
 
   const user = await User.findOne({
-    emailVerificationToken: hashedToken,
-    emailVerificationExpiry: { $gt: new Date() },
-  }).select('+emailVerificationToken +emailVerificationExpiry');
+    email: email.toLowerCase().trim(),
+    emailVerified: false,
+  }).select('+emailVerificationCode +emailVerificationExpiry');
 
-  if (!user) {
-    return sendError(
+  // Unified error — don't reveal whether the email exists or the code is wrong
+  const invalid = () =>
+    sendError(
       res,
-      'This verification link is invalid or has expired. Request a new one below.',
+      'Verification code is invalid or has expired. Request a new code.',
       400
     );
-  }
+
+  if (!user)                                             return invalid();
+  if (!user.emailVerificationCode)                       return invalid();
+  if (user.emailVerificationCode !== code.trim())        return invalid();
+  if (user.emailVerificationExpiry < new Date())         return invalid();
 
   // Activate the account
-  user.emailVerified = true;
-  user.emailVerificationToken = undefined;
-  user.emailVerificationExpiry = undefined;
+  user.emailVerified              = true;
+  user.emailVerificationCode      = undefined;
+  user.emailVerificationExpiry    = undefined;
   await user.save({ validateBeforeSave: false });
 
-  // Auto-log the user in — clicking the link is proof of email ownership
+  // Auto-log the user in — submitting the correct OTP proves email ownership
   const jwtToken = signToken(user._id);
   attachCookie(res, jwtToken);
 
@@ -394,24 +396,23 @@ export const resendVerification = asyncHandler(async (req, res) => {
     });
   }
 
-  // Issue a fresh token
-  const rawToken = crypto.randomBytes(32).toString('hex');
-  user.emailVerificationToken = crypto.createHash('sha256').update(rawToken).digest('hex');
-  user.emailVerificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  // Issue a fresh 6-digit OTP (15-minute expiry)
+  const otp = String(crypto.randomInt(100_000, 1_000_000));
+  user.emailVerificationCode   = otp;
+  user.emailVerificationExpiry = new Date(Date.now() + 15 * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
   // Get school name for the email subject
   const school = await School.findById(user.schoolId).select('name').lean();
 
-  const verifyUrl = `${env.CLIENT_URL}/api/v1/auth/verify-email/${rawToken}`;
   await emailQueue.add(JOB_NAMES.SEND_VERIFICATION_EMAIL, {
     type: JOB_NAMES.SEND_VERIFICATION_EMAIL,
     payload: {
-      to: user.email,
-      firstName: user.firstName,
-      schoolName: school?.name ?? 'your school',
-      verifyUrl,
-      expiresInHours: 24,
+      to:               user.email,
+      firstName:        user.firstName,
+      schoolName:       school?.name ?? 'your school',
+      code:             otp,
+      expiresInMinutes: 15,
     },
   });
 

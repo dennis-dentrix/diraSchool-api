@@ -13,6 +13,7 @@ import {
   validateResetPassword,
   validateAcceptInvite,
   validateResendVerification,
+  validateVerifyEmail,
 } from './auth.validator.js';
 import { protect, blockIfMustChangePassword } from '../../middleware/auth.js';
 
@@ -37,7 +38,7 @@ router.post('/login',          authLimiter, validateLogin,          login);
 router.post('/forgot-password',       authLimiter, validateForgotPassword,      forgotPassword);
 router.post('/reset-password/:token',             validateResetPassword,       resetPassword);
 router.post('/accept-invite/:token',              validateAcceptInvite,        acceptInvite);
-router.get( '/verify-email/:token',                                            verifyEmail);
+router.post('/verify-email',          authLimiter, validateVerifyEmail,        verifyEmail);
 router.post('/resend-verification',   authLimiter, validateResendVerification, resendVerification);
 
 // ── Protected routes ──────────────────────────────────────────────────────────

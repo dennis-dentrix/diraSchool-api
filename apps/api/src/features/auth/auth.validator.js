@@ -61,6 +61,16 @@ const resendVerificationSchema = z.object({
   email: z.string().trim().email('Invalid email address'),
 });
 
+// OTP submitted by the user to activate their account
+const verifyEmailSchema = z.object({
+  email: z.string().trim().email('Invalid email address'),
+  code:  z
+    .string()
+    .trim()
+    .length(6, 'Verification code must be exactly 6 digits')
+    .regex(/^\d{6}$/, 'Verification code must be 6 digits'),
+});
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validate = (schema) => (req, res, next) => {
@@ -80,3 +90,4 @@ export const validateForgotPassword      = validate(forgotPasswordSchema);
 export const validateResetPassword       = validate(resetPasswordSchema);
 export const validateAcceptInvite        = validate(acceptInviteSchema);
 export const validateResendVerification  = validate(resendVerificationSchema);
+export const validateVerifyEmail         = validate(verifyEmailSchema);

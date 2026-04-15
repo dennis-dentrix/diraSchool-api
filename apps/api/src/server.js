@@ -31,6 +31,8 @@ import settingsRoutes from './features/settings/settings.routes.js';
 import timetableRoutes from './features/timetable/timetable.routes.js';
 import libraryRoutes from './features/library/library.routes.js';
 import transportRoutes from './features/transport/transport.routes.js';
+import adminRoutes from './features/admin/admin.routes.js';
+import dashboardRoutes from './features/dashboard/dashboard.routes.js';
 
 // ── Startup diagnostic — always runs first, visible in Railway logs ──────────
 // This prints BEFORE validateEnv() so missing vars are visible even if we crash.
@@ -131,6 +133,8 @@ app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/timetables', timetableRoutes);
 app.use('/api/v1/library', libraryRoutes);
 app.use('/api/v1/transport', transportRoutes);
+app.use('/api/v1/admin',     adminRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
 
 // ── 404 catch-all ────────────────────────────────────────────────────────────
 app.use((req, res) => {

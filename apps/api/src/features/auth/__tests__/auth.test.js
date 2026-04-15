@@ -52,31 +52,31 @@ const register = (overrides = {}) =>
   request(app).post(`${BASE}/register`).send({ ...validRegistration, ...overrides });
 
 /**
- * Reads the raw verification token directly from the DB.
- * (In production this arrives via email; in tests we read the DB.)
- * Then replaces it with a known raw token so we can use it in the request.
+ * Injects a known 6-digit OTP directly into the DB so tests can call
+ * POST /verify-email without a real email delivery.
  */
-const getRawVerifyToken = async (email) => {
-  const rawToken = crypto.randomBytes(32).toString('hex');
+const injectVerifyOtp = async (email, code = '123456') => {
   await User.updateOne(
     { email },
     {
-      emailVerificationToken:  crypto.createHash('sha256').update(rawToken).digest('hex'),
-      emailVerificationExpiry: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      emailVerificationCode:   code,
+      emailVerificationExpiry: new Date(Date.now() + 15 * 60 * 1000),
     }
   );
-  return rawToken;
+  return code;
 };
 
 /**
  * Register + verify email in one step.
- * Returns an authenticated supertest agent ready for protected routes.
+ * Returns the verify response (user is auto-logged in via cookie).
  */
 const registerAndVerify = async (overrides = {}) => {
   await register(overrides);
   const email = overrides.email ?? validRegistration.email;
-  const rawToken = await getRawVerifyToken(email);
-  const verifyRes = await request(app).get(`${BASE}/verify-email/${rawToken}`);
+  const code  = await injectVerifyOtp(email);
+  const verifyRes = await request(app)
+    .post(`${BASE}/verify-email`)
+    .send({ email, code });
   expect(verifyRes.status).toBe(200); // sanity-check inside helper
   return verifyRes;
 };
@@ -131,14 +131,16 @@ describe('POST /auth/register', () => {
   });
 });
 
-// ── Email verification ────────────────────────────────────────────────────────
+// ── Email verification (OTP) ─────────────────────────────────────────────────
 
-describe('GET /auth/verify-email/:token', () => {
-  it('verifies email, sets cookie, and returns user', async () => {
+describe('POST /auth/verify-email', () => {
+  it('verifies email with correct OTP, sets cookie, and returns user', async () => {
     await register();
-    const rawToken = await getRawVerifyToken(validRegistration.email);
+    const code = await injectVerifyOtp(validRegistration.email);
 
-    const res = await request(app).get(`${BASE}/verify-email/${rawToken}`);
+    const res = await request(app)
+      .post(`${BASE}/verify-email`)
+      .send({ email: validRegistration.email, code });
 
     expect(res.status).toBe(200);
     expect(res.headers['set-cookie']).toBeDefined(); // auto-logged in
@@ -147,36 +149,56 @@ describe('GET /auth/verify-email/:token', () => {
     expect(res.body.user.emailVerified).toBe(true);
   });
 
-  it('returns 400 for an invalid token', async () => {
-    const res = await request(app).get(`${BASE}/verify-email/totallywrongtoken`);
+  it('returns 400 for a wrong code', async () => {
+    await register();
+    await injectVerifyOtp(validRegistration.email, '123456');
+
+    const res = await request(app)
+      .post(`${BASE}/verify-email`)
+      .send({ email: validRegistration.email, code: '999999' });
+
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/invalid or has expired/i);
   });
 
-  it('returns 400 for an expired token', async () => {
+  it('returns 400 for an expired OTP', async () => {
     await register();
-    // Force-expire the token
-    await User.updateOne(
-      { email: validRegistration.email },
-      { emailVerificationExpiry: new Date(Date.now() - 1000) }
-    );
-    const rawToken = await getRawVerifyToken(validRegistration.email);
-    // Now expire it again after our helper set a fresh one
+    await injectVerifyOtp(validRegistration.email, '123456');
+    // Force-expire the OTP
     await User.updateOne(
       { email: validRegistration.email },
       { emailVerificationExpiry: new Date(Date.now() - 1000) }
     );
 
-    const res = await request(app).get(`${BASE}/verify-email/${rawToken}`);
+    const res = await request(app)
+      .post(`${BASE}/verify-email`)
+      .send({ email: validRegistration.email, code: '123456' });
+
     expect(res.status).toBe(400);
   });
 
-  it('token is single-use — second call returns 400', async () => {
+  it('OTP is single-use — second submit returns 400', async () => {
     await register();
-    const rawToken = await getRawVerifyToken(validRegistration.email);
+    const code = await injectVerifyOtp(validRegistration.email);
 
-    await request(app).get(`${BASE}/verify-email/${rawToken}`); // first use
-    const res = await request(app).get(`${BASE}/verify-email/${rawToken}`); // second use
+    await request(app).post(`${BASE}/verify-email`).send({ email: validRegistration.email, code });
+    const res = await request(app).post(`${BASE}/verify-email`).send({ email: validRegistration.email, code });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for non-existent email', async () => {
+    const res = await request(app)
+      .post(`${BASE}/verify-email`)
+      .send({ email: 'nobody@nowhere.com', code: '123456' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when code format is invalid', async () => {
+    const res = await request(app)
+      .post(`${BASE}/verify-email`)
+      .send({ email: validRegistration.email, code: 'abc' });
 
     expect(res.status).toBe(400);
   });

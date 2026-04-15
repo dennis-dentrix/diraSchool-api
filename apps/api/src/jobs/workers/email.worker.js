@@ -15,6 +15,7 @@ import {
   sendInviteEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
+  sendTempPasswordEmail,
 } from '../../services/email.service.js';
 
 export const startEmailWorker = () => {
@@ -36,9 +37,9 @@ export const startEmailWorker = () => {
           await sendVerificationEmail(payload);
           break;
 
-        // case JOB_NAMES.SEND_TEMP_PASSWORD_EMAIL:
-        //   await sendTempPasswordEmail(payload);
-        //   break;
+        case JOB_NAMES.SEND_TEMP_PASSWORD_EMAIL:
+          await sendTempPasswordEmail(payload);
+          break;
 
         default:
           throw new Error(`Unknown email job type: ${type}`);
