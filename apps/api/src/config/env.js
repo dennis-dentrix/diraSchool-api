@@ -35,6 +35,16 @@ export const validateEnv = () => {
     );
     process.exit(1);
   }
+
+  if (
+    process.env.EMAIL_PRIMARY_PROVIDER &&
+    !['zeptomail', 'resend'].includes(process.env.EMAIL_PRIMARY_PROVIDER)
+  ) {
+    console.error(
+      '\n[ENV ERROR] EMAIL_PRIMARY_PROVIDER must be either "zeptomail" or "resend".\n'
+    );
+    process.exit(1);
+  }
 };
 
 export const env = {
@@ -51,9 +61,13 @@ export const env = {
   AT_USERNAME: process.env.AT_USERNAME,
   AT_API_KEY: process.env.AT_API_KEY,
   AT_SENDER_ID: process.env.AT_SENDER_ID || 'SCHOOL',
-  // Email — ZeptoMail (primary) + Resend (fallback)
-  // Set both for automatic failover; at least one must be configured.
+  // Email provider routing:
+  // - EMAIL_PRIMARY_PROVIDER: zeptomail | resend
+  // - EMAIL_FAILOVER_ENABLED: true | false
+  // Set both provider keys for automatic failover.
   EMAIL_FROM: process.env.EMAIL_FROM,
+  EMAIL_PRIMARY_PROVIDER: process.env.EMAIL_PRIMARY_PROVIDER || 'zeptomail',
+  EMAIL_FAILOVER_ENABLED: process.env.EMAIL_FAILOVER_ENABLED !== 'false',
   RESEND_API_KEY: process.env.RESEND_API_KEY,
   ZEPTOMAIL_SERVER: process.env.ZEPTOMAIL_SERVER || 'smtp.zeptomail.com',
   ZEPTOMAIL_USERNAME: process.env.ZEPTOMAIL_USERNAME || 'emailapikey',

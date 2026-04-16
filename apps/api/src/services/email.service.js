@@ -4,13 +4,15 @@ import { env } from '../config/env.js';
 import logger from '../config/logger.js';
 import EmailEvent from '../features/email/EmailEvent.model.js';
 
-const FROM = env.EMAIL_FROM ?? 'Diraschool <noreply@diraschool.co.ke>';
+const FROM = env.EMAIL_FROM ?? 'Diraschool <noreply@contact.diraschool.com>';
 
 let _zeptoTransport = null;
 let _resend = null;
 
 const isZeptoConfigured = () => Boolean(env.ZEPTOMAIL_API_KEY);
 const isResendConfigured = () => Boolean(env.RESEND_API_KEY);
+const isProviderConfigured = (provider) =>
+  provider === 'zeptomail' ? isZeptoConfigured() : isResendConfigured();
 
 const getZeptoTransport = () => {
   if (!_zeptoTransport) {
@@ -127,87 +129,78 @@ const sendViaResend = async ({ to, subject, html }) => {
   };
 };
 
+const getProviderOrder = () => {
+  const primary = env.EMAIL_PRIMARY_PROVIDER === 'resend' ? 'resend' : 'zeptomail';
+  if (!env.EMAIL_FAILOVER_ENABLED) return [primary];
+  return primary === 'zeptomail' ? ['zeptomail', 'resend'] : ['resend', 'zeptomail'];
+};
+
 const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
   const attempts = [];
+  const providers = getProviderOrder().filter(isProviderConfigured);
 
-  if (isZeptoConfigured()) {
-    try {
-      const zeptoResult = await sendViaZepto({ to, subject, html });
-      await persistEmailEvent({
-        to,
-        subject,
-        template,
-        ...zeptoResult,
-        status: 'sent',
-        fallbackUsed: false,
-        attemptOrder: 1,
-        meta,
-      });
-      logger.info('[Email] Sent via ZeptoMail', {
-        to,
-        template,
-        providerMessageId: zeptoResult.providerMessageId,
-      });
-      return zeptoResult;
-    } catch (err) {
-      const normalized = normalizeError(err);
-      attempts.push({ provider: 'zeptomail', ...normalized });
-      await persistEmailEvent({
-        to,
-        subject,
-        template,
-        provider: 'zeptomail',
-        status: 'failed',
-        errorMessage: normalized.message,
-        errorCode: normalized.code,
-        fallbackUsed: isResendConfigured(),
-        attemptOrder: 1,
-        meta,
-      });
-      logger.warn('[Email] ZeptoMail send failed, trying fallback if available', {
-        to,
-        template,
-        err: normalized.message,
-      });
-    }
+  if (providers.length === 0) {
+    const configured = [];
+    if (isZeptoConfigured()) configured.push('zeptomail');
+    if (isResendConfigured()) configured.push('resend');
+    const configuredText = configured.length > 0 ? configured.join(', ') : 'none';
+    throw new Error(
+      `[Email] No eligible providers for current config. primary=${env.EMAIL_PRIMARY_PROVIDER}, failover=${env.EMAIL_FAILOVER_ENABLED}, configured=${configuredText}.`
+    );
   }
 
-  if (isResendConfigured()) {
+  for (let i = 0; i < providers.length; i += 1) {
+    const provider = providers[i];
+    const fallbackUsed = i > 0;
     try {
-      const resendResult = await sendViaResend({ to, subject, html });
+      const result =
+        provider === 'zeptomail'
+          ? await sendViaZepto({ to, subject, html })
+          : await sendViaResend({ to, subject, html });
+
       await persistEmailEvent({
         to,
         subject,
         template,
-        ...resendResult,
+        ...result,
         status: 'sent',
-        fallbackUsed: attempts.length > 0,
-        attemptOrder: attempts.length + 1,
+        fallbackUsed,
+        attemptOrder: i + 1,
         meta,
       });
-      logger.info('[Email] Sent via Resend', {
+
+      logger.info('[Email] Sent email', {
         to,
         template,
-        fallbackUsed: attempts.length > 0,
-        providerMessageId: resendResult.providerMessageId,
+        provider,
+        fallbackUsed,
+        providerOrder: getProviderOrder(),
+        providerMessageId: result.providerMessageId,
       });
-      return resendResult;
+
+      return result;
     } catch (err) {
       const normalized = normalizeError(err);
-      attempts.push({ provider: 'resend', ...normalized });
+      attempts.push({ provider, ...normalized });
       await persistEmailEvent({
         to,
         subject,
         template,
-        provider: 'resend',
+        provider,
         status: 'failed',
         errorMessage: normalized.message,
         errorCode: normalized.code,
-        fallbackUsed: attempts.length > 1,
-        attemptOrder: attempts.length,
+        fallbackUsed,
+        attemptOrder: i + 1,
         meta,
       });
-      logger.error('[Email] Resend send failed', { to, template, err: normalized.message });
+      logger.warn('[Email] Email provider failed', {
+        to,
+        template,
+        provider,
+        fallbackUsed,
+        err: normalized.message,
+      });
     }
   }
 
@@ -215,9 +208,7 @@ const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
     throw new Error('[Email] No provider configured. Set ZEPTOMAIL_API_KEY or RESEND_API_KEY.');
   }
 
-  const failureSummary = attempts
-    .map((a) => `${a.provider}: ${a.message}`)
-    .join(' | ');
+  const failureSummary = attempts.map((a) => `${a.provider}: ${a.message}`).join(' | ');
 
   throw new Error(`[Email] All providers failed. ${failureSummary}`);
 };
@@ -236,7 +227,11 @@ export const refreshResendDeliveryStatus = async (providerMessageId) => {
   const rawStatus = String(data?.last_event || data?.status || 'unknown').toLowerCase();
   let normalizedStatus = 'sent';
   if (rawStatus.includes('deliver')) normalizedStatus = 'delivered';
-  if (rawStatus.includes('bounce') || rawStatus.includes('complain') || rawStatus.includes('fail')) {
+  if (
+    rawStatus.includes('bounce') ||
+    rawStatus.includes('complain') ||
+    rawStatus.includes('fail')
+  ) {
     normalizedStatus = 'failed';
   }
 
