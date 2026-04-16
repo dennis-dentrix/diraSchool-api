@@ -74,16 +74,11 @@ const userSchema = new mongoose.Schema(
     },
     // ── Email verification ────────────────────────────────────────────────────
     // Required for school admins on self-registration.
-<<<<<<< HEAD
     // Staff accounts created by admins skip this (emailVerified = true on creation).
-=======
-    // Staff accounts created by admins skip this (invite flow handles activation).
->>>>>>> efe73423fd6ede0a8ef64087cc643b364dbf41b5
     emailVerified: {
       type: Boolean,
       default: false,
     },
-<<<<<<< HEAD
     // 6-digit numeric OTP — for manual entry on the verify screen.
     // Stored as plaintext; security comes from the short expiry + rate limiting.
     emailVerificationCode: {
@@ -92,16 +87,11 @@ const userSchema = new mongoose.Schema(
     },
     // SHA-256 hash of a 32-byte random token — for the one-click fallback link.
     // Only the hash is stored so a DB leak can't be used to bypass verification.
-=======
->>>>>>> efe73423fd6ede0a8ef64087cc643b364dbf41b5
     emailVerificationToken: {
       type: String,
       select: false,
     },
-<<<<<<< HEAD
     // Shared expiry for both OTP and link (30 minutes).
-=======
->>>>>>> efe73423fd6ede0a8ef64087cc643b364dbf41b5
     emailVerificationExpiry: {
       type: Date,
       select: false,

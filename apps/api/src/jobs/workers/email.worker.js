@@ -11,16 +11,7 @@
 import { Worker } from 'bullmq';
 import { QUEUE_NAMES, JOB_NAMES } from '../../constants/index.js';
 import { createBullMQConnection } from '../../config/redis.js';
-<<<<<<< HEAD
-import {
-  sendInviteEmail,
-  sendPasswordResetEmail,
-  sendVerificationEmail,
-  sendTempPasswordEmail,
-} from '../../services/email.service.js';
-=======
 import { sendInviteEmail, sendPasswordResetEmail, sendVerificationEmail } from '../../services/email.service.js';
->>>>>>> efe73423fd6ede0a8ef64087cc643b364dbf41b5
 
 export const startEmailWorker = () => {
   const worker = new Worker(
@@ -41,13 +32,6 @@ export const startEmailWorker = () => {
           await sendVerificationEmail(payload);
           break;
 
-<<<<<<< HEAD
-        case JOB_NAMES.SEND_TEMP_PASSWORD_EMAIL:
-          await sendTempPasswordEmail(payload);
-          break;
-
-=======
->>>>>>> efe73423fd6ede0a8ef64087cc643b364dbf41b5
         default:
           throw new Error(`Unknown email job type: ${type}`);
       }

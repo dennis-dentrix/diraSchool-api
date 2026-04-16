@@ -93,11 +93,7 @@ describe('POST /api/v1/auth/register', () => {
     expect(res.body.message).toBeDefined();
   });
 
-<<<<<<< HEAD
   it('allows a second school to register with a different email', async () => {
-=======
-  it('allows same admin email in a different school (per-school uniqueness)', async () => {
->>>>>>> efe73423fd6ede0a8ef64087cc643b364dbf41b5
     await request(app).post('/api/v1/auth/register').send(validRegistration);
 
     const res = await request(app)
