@@ -103,6 +103,11 @@ export const registerSchool = asyncHandler(async (req, res) => {
       code: otp,
       verifyUrl,
       expiresInMinutes: 30,
+      meta: {
+        schoolId: school._id,
+        userId: user._id,
+        flow: 'register',
+      },
     }).catch((err) => logger.error('[Auth] Verification email failed:', err.message));
 
     // Do NOT set a cookie — user must verify email before logging in
@@ -228,9 +233,17 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   const resetUrl = `${env.CLIENT_URL}/reset-password/${rawToken}`;
 
-  sendResetEmail({ to: user.email, firstName: user.firstName, resetUrl, expiresInHours: 1 }).catch(
-    (err) => logger.error('[Auth] Reset email failed:', err.message)
-  );
+  sendResetEmail({
+    to: user.email,
+    firstName: user.firstName,
+    resetUrl,
+    expiresInHours: 1,
+    meta: {
+      schoolId: user.schoolId,
+      userId: user._id,
+      flow: 'forgot-password',
+    },
+  }).catch((err) => logger.error('[Auth] Reset email failed:', err.message));
 
   return sendSuccess(res, {
     message: 'If an account with that email exists, a password reset link has been sent.',
@@ -448,6 +461,11 @@ export const resendVerification = asyncHandler(async (req, res) => {
     code: otp,
     verifyUrl,
     expiresInMinutes: 30,
+    meta: {
+      schoolId: user.schoolId,
+      userId: user._id,
+      flow: 'resend-verification',
+    },
   }).catch((err) => logger.error('[Auth] Resend verification email failed:', err.message));
 
   return sendSuccess(res, {

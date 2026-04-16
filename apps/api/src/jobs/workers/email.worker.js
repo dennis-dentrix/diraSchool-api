@@ -6,12 +6,13 @@
  *   - 'password-reset' → forgot-password flow
  *
  * Jobs are enqueued by controllers and processed here asynchronously
- * so HTTP responses don't block waiting for the Resend API.
+ * so HTTP responses don't block waiting for external email providers.
  */
 import { Worker } from 'bullmq';
 import { QUEUE_NAMES, JOB_NAMES } from '../../constants/index.js';
 import { createBullMQConnection } from '../../config/redis.js';
 import { sendInviteEmail, sendPasswordResetEmail, sendVerificationEmail } from '../../services/email.service.js';
+import logger from '../../config/logger.js';
 
 export const startEmailWorker = () => {
   const worker = new Worker(
@@ -19,24 +20,30 @@ export const startEmailWorker = () => {
     async (job) => {
       const { type, payload } = job.data;
 
+      let result;
       switch (type) {
         case JOB_NAMES.SEND_INVITE_EMAIL:
-          await sendInviteEmail(payload);
+          result = await sendInviteEmail(payload);
           break;
 
         case JOB_NAMES.SEND_RESET_EMAIL:
-          await sendPasswordResetEmail(payload);
+          result = await sendPasswordResetEmail(payload);
           break;
 
         case JOB_NAMES.SEND_VERIFICATION_EMAIL:
-          await sendVerificationEmail(payload);
+          result = await sendVerificationEmail(payload);
           break;
 
         default:
           throw new Error(`Unknown email job type: ${type}`);
       }
 
-      console.log(`[Email Worker] Sent "${type}" to ${job.data.payload?.to}`);
+      logger.info('[Email Worker] Sent email', {
+        type,
+        to: payload?.to,
+        provider: result?.provider,
+        providerMessageId: result?.providerMessageId,
+      });
     },
     {
       connection: createBullMQConnection(),
@@ -45,7 +52,11 @@ export const startEmailWorker = () => {
   );
 
   worker.on('failed', (job, err) => {
-    console.error(`[Email Worker] Job ${job?.id} (${job?.data?.type}) failed:`, err.message);
+    logger.error('[Email Worker] Job failed', {
+      jobId: job?.id,
+      type: job?.data?.type,
+      err: err.message,
+    });
   });
 
   return worker;

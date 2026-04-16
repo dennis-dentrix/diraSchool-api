@@ -1,111 +1,301 @@
-/**
- * Email service — ZeptoMail SMTP via nodemailer.
- *
- * All transactional email goes through ZeptoMail.
- *
- * Required env vars:
- *   ZEPTOMAIL_API_KEY   — ZeptoMail dashboard → Mail Agents → SMTP tab → API key
- *   EMAIL_FROM          — "Diraschool <noreply@yourdomain.co.ke>"
- *
- * ZeptoMail domain setup:
- *   1. zeptomail.com → Mail Agents → Add Mail Agent → your domain
- *   2. Add the SPF + DKIM + bounce DNS records they provide
- *   3. Verify in dashboard → copy the API key from the SMTP tab
- *   SMTP username is always the literal string: emailapikey
- *   SMTP password is your API key
- *   Host: smtp.zeptomail.com   Port: 587   Security: STARTTLS
- */
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { env } from '../config/env.js';
+import logger from '../config/logger.js';
+import EmailEvent from '../features/email/EmailEvent.model.js';
 
 const FROM = env.EMAIL_FROM ?? 'Diraschool <noreply@diraschool.co.ke>';
 
-// ── ZeptoMail SMTP transport ──────────────────────────────────────────────────
+let _zeptoTransport = null;
+let _resend = null;
 
-let _transport = null;
+const isZeptoConfigured = () => Boolean(env.ZEPTOMAIL_API_KEY);
+const isResendConfigured = () => Boolean(env.RESEND_API_KEY);
 
-const getTransport = () => {
-  if (!_transport) {
-    if (!env.ZEPTOMAIL_API_KEY) {
+const getZeptoTransport = () => {
+  if (!_zeptoTransport) {
+    if (!isZeptoConfigured()) {
       throw new Error('[Email] ZEPTOMAIL_API_KEY is not set.');
     }
-    _transport = nodemailer.createTransport({
-      host:   env.ZEPTOMAIL_SERVER,   // smtp.zeptomail.com (or region variant)
-      port:   587,
-      secure: false,                  // STARTTLS on port 587
+    _zeptoTransport = nodemailer.createTransport({
+      host: env.ZEPTOMAIL_SERVER,
+      port: 587,
+      secure: false,
       auth: {
-        user: env.ZEPTOMAIL_USERNAME, // always the literal string: emailapikey
+        user: env.ZEPTOMAIL_USERNAME,
         pass: env.ZEPTOMAIL_API_KEY,
       },
     });
   }
-  return _transport;
+  return _zeptoTransport;
 };
 
-// ── Core send ─────────────────────────────────────────────────────────────────
+const getResendClient = () => {
+  if (!_resend) {
+    if (!isResendConfigured()) {
+      throw new Error('[Email] RESEND_API_KEY is not set.');
+    }
+    _resend = new Resend(env.RESEND_API_KEY);
+  }
+  return _resend;
+};
 
-/**
- * @param {{ to: string, subject: string, html: string }} opts
- */
-const sendEmail = ({ to, subject, html }) =>
-  getTransport().sendMail({ from: FROM, to, subject, html });
+const normalizeError = (err) => ({
+  message: err?.message ?? 'Unknown email delivery error',
+  code: err?.code ? String(err.code) : undefined,
+});
 
-// ── Public API ────────────────────────────────────────────────────────────────
+const persistEmailEvent = async ({
+  to,
+  subject,
+  template,
+  provider,
+  status,
+  providerStatus,
+  providerMessageId,
+  accepted = [],
+  rejected = [],
+  errorMessage,
+  errorCode,
+  fallbackUsed = false,
+  attemptOrder = 1,
+  meta = {},
+}) => {
+  try {
+    await EmailEvent.create({
+      to,
+      subject,
+      template,
+      provider,
+      status,
+      providerStatus,
+      providerMessageId,
+      accepted,
+      rejected,
+      errorMessage,
+      errorCode,
+      fallbackUsed,
+      attemptOrder,
+      schoolId: meta.schoolId ?? undefined,
+      userId: meta.userId ?? undefined,
+      deliveredAt: status === 'delivered' ? new Date() : undefined,
+      lastCheckedAt: status === 'delivered' ? new Date() : undefined,
+      meta,
+    });
+  } catch (err) {
+    logger.error('[Email] Failed to persist EmailEvent', {
+      to,
+      template,
+      provider,
+      err: err.message,
+    });
+  }
+};
 
-/**
- * Verification email — 6-digit OTP for manual entry + one-click fallback link.
- *
- * @param {object} opts
- * @param {string} opts.to
- * @param {string} opts.firstName
- * @param {string} opts.schoolName
- * @param {string} opts.code              6-digit OTP
- * @param {string} opts.verifyUrl         One-click fallback link
- * @param {number} [opts.expiresInMinutes=30]
- */
-export const sendVerificationEmail = ({ to, firstName, schoolName, code, verifyUrl, expiresInMinutes = 30 }) =>
+const sendViaZepto = async ({ to, subject, html }) => {
+  const info = await getZeptoTransport().sendMail({ from: FROM, to, subject, html });
+  return {
+    provider: 'zeptomail',
+    providerMessageId: info?.messageId,
+    accepted: Array.isArray(info?.accepted) ? info.accepted : [],
+    rejected: Array.isArray(info?.rejected) ? info.rejected : [],
+    providerStatus: info?.response ?? 'accepted',
+  };
+};
+
+const sendViaResend = async ({ to, subject, html }) => {
+  const resend = getResendClient();
+  const { data, error } = await resend.emails.send({
+    from: FROM,
+    to: [to],
+    subject,
+    html,
+  });
+
+  if (error) {
+    const err = new Error(error.message || 'Resend API error');
+    err.code = error.name || error.statusCode || 'RESEND_ERROR';
+    throw err;
+  }
+
+  return {
+    provider: 'resend',
+    providerMessageId: data?.id,
+    accepted: [to],
+    rejected: [],
+    providerStatus: data?.id ? 'accepted' : 'unknown',
+  };
+};
+
+const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
+  const attempts = [];
+
+  if (isZeptoConfigured()) {
+    try {
+      const zeptoResult = await sendViaZepto({ to, subject, html });
+      await persistEmailEvent({
+        to,
+        subject,
+        template,
+        ...zeptoResult,
+        status: 'sent',
+        fallbackUsed: false,
+        attemptOrder: 1,
+        meta,
+      });
+      logger.info('[Email] Sent via ZeptoMail', {
+        to,
+        template,
+        providerMessageId: zeptoResult.providerMessageId,
+      });
+      return zeptoResult;
+    } catch (err) {
+      const normalized = normalizeError(err);
+      attempts.push({ provider: 'zeptomail', ...normalized });
+      await persistEmailEvent({
+        to,
+        subject,
+        template,
+        provider: 'zeptomail',
+        status: 'failed',
+        errorMessage: normalized.message,
+        errorCode: normalized.code,
+        fallbackUsed: isResendConfigured(),
+        attemptOrder: 1,
+        meta,
+      });
+      logger.warn('[Email] ZeptoMail send failed, trying fallback if available', {
+        to,
+        template,
+        err: normalized.message,
+      });
+    }
+  }
+
+  if (isResendConfigured()) {
+    try {
+      const resendResult = await sendViaResend({ to, subject, html });
+      await persistEmailEvent({
+        to,
+        subject,
+        template,
+        ...resendResult,
+        status: 'sent',
+        fallbackUsed: attempts.length > 0,
+        attemptOrder: attempts.length + 1,
+        meta,
+      });
+      logger.info('[Email] Sent via Resend', {
+        to,
+        template,
+        fallbackUsed: attempts.length > 0,
+        providerMessageId: resendResult.providerMessageId,
+      });
+      return resendResult;
+    } catch (err) {
+      const normalized = normalizeError(err);
+      attempts.push({ provider: 'resend', ...normalized });
+      await persistEmailEvent({
+        to,
+        subject,
+        template,
+        provider: 'resend',
+        status: 'failed',
+        errorMessage: normalized.message,
+        errorCode: normalized.code,
+        fallbackUsed: attempts.length > 1,
+        attemptOrder: attempts.length,
+        meta,
+      });
+      logger.error('[Email] Resend send failed', { to, template, err: normalized.message });
+    }
+  }
+
+  if (!isZeptoConfigured() && !isResendConfigured()) {
+    throw new Error('[Email] No provider configured. Set ZEPTOMAIL_API_KEY or RESEND_API_KEY.');
+  }
+
+  const failureSummary = attempts
+    .map((a) => `${a.provider}: ${a.message}`)
+    .join(' | ');
+
+  throw new Error(`[Email] All providers failed. ${failureSummary}`);
+};
+
+export const refreshResendDeliveryStatus = async (providerMessageId) => {
+  if (!providerMessageId) throw new Error('Missing providerMessageId.');
+  const resend = getResendClient();
+  const { data, error } = await resend.emails.get(providerMessageId);
+
+  if (error) {
+    const err = new Error(error.message || 'Resend status lookup failed');
+    err.code = error.name || error.statusCode || 'RESEND_STATUS_ERROR';
+    throw err;
+  }
+
+  const rawStatus = String(data?.last_event || data?.status || 'unknown').toLowerCase();
+  let normalizedStatus = 'sent';
+  if (rawStatus.includes('deliver')) normalizedStatus = 'delivered';
+  if (rawStatus.includes('bounce') || rawStatus.includes('complain') || rawStatus.includes('fail')) {
+    normalizedStatus = 'failed';
+  }
+
+  return {
+    providerStatus: rawStatus,
+    normalizedStatus,
+    raw: data,
+  };
+};
+
+export const sendVerificationEmail = ({
+  to,
+  firstName,
+  schoolName,
+  code,
+  verifyUrl,
+  expiresInMinutes = 30,
+  meta = {},
+}) =>
   sendEmail({
     to,
     subject: `${code} — verify your Diraschool account`,
-    html:    _verifyTemplate({ firstName, schoolName, code, verifyUrl, expiresInMinutes }),
+    html: _verifyTemplate({ firstName, schoolName, code, verifyUrl, expiresInMinutes }),
+    template: 'verification',
+    meta,
   });
 
-/**
- * Invitation email sent to a newly created staff member.
- *
- * @param {object} opts
- * @param {string} opts.to
- * @param {string} opts.firstName
- * @param {string} opts.schoolName
- * @param {string} opts.inviteUrl         Link to set password (expires in expiresInDays)
- * @param {number} [opts.expiresInDays=7]
- */
-export const sendInviteEmail = ({ to, firstName, schoolName, inviteUrl, expiresInDays = 7 }) =>
+export const sendInviteEmail = ({
+  to,
+  firstName,
+  schoolName,
+  inviteUrl,
+  expiresInDays = 7,
+  meta = {},
+}) =>
   sendEmail({
     to,
     subject: `You've been added to ${schoolName} — set your password`,
-    html:    _inviteTemplate({ firstName, schoolName, inviteUrl, expiresInDays }),
+    html: _inviteTemplate({ firstName, schoolName, inviteUrl, expiresInDays }),
+    template: 'invite',
+    meta,
   });
 
-/**
- * Password-reset email.
- *
- * @param {object} opts
- * @param {string} opts.to
- * @param {string} opts.firstName
- * @param {string} opts.resetUrl
- * @param {number} [opts.expiresInHours=1]
- */
-export const sendPasswordResetEmail = ({ to, firstName, resetUrl, expiresInHours = 1 }) =>
+export const sendPasswordResetEmail = ({
+  to,
+  firstName,
+  resetUrl,
+  expiresInHours = 1,
+  meta = {},
+}) =>
   sendEmail({
     to,
     subject: 'Reset your Diraschool password',
-    html:    _resetTemplate({ firstName, resetUrl, expiresInHours }),
+    html: _resetTemplate({ firstName, resetUrl, expiresInHours }),
+    template: 'password-reset',
+    meta,
   });
 
-// ── HTML Templates ────────────────────────────────────────────────────────────
-
-const _shell = (title, body) => /* html */ `<!DOCTYPE html>
+const _shell = (title, body) => `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -156,14 +346,12 @@ const _btn = (url, label) =>
 const _verifyTemplate = ({ firstName, schoolName, code, verifyUrl, expiresInMinutes }) =>
   _shell(
     `Verify your email — ${schoolName}`,
-    /* html */ `
+    `
       <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Welcome to Diraschool, ${firstName}!</h2>
       <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
         You've successfully created an account for <strong>${schoolName}</strong>.
         Verify your email to activate it — use either option below.
       </p>
-
-      <!-- Option 1: enter the code -->
       <p style="margin:20px 0 8px;font-size:12px;font-weight:700;color:#6b7280;
                 letter-spacing:.8px;text-transform:uppercase;">
         Option 1 — Enter this code on the verification screen
@@ -177,11 +365,7 @@ const _verifyTemplate = ({ firstName, schoolName, code, verifyUrl, expiresInMinu
                     font-family:'Courier New',monospace;">${code}</p>
         </div>
       </div>
-
-      <!-- Divider -->
       <p style="text-align:center;font-size:13px;color:#9ca3af;margin:20px 0;">— or —</p>
-
-      <!-- Option 2: click the link -->
       <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#6b7280;
                 letter-spacing:.8px;text-transform:uppercase;">
         Option 2 — Click the link to verify instantly
@@ -191,7 +375,6 @@ const _verifyTemplate = ({ firstName, schoolName, code, verifyUrl, expiresInMinu
         Or copy into your browser:<br/>
         <span style="color:#1a56db;word-break:break-all;">${verifyUrl}</span>
       </p>
-
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
       <p style="margin:0;font-size:13px;color:#6b7280;">
         Both options expire in <strong>${expiresInMinutes} minutes</strong>.
@@ -203,7 +386,7 @@ const _verifyTemplate = ({ firstName, schoolName, code, verifyUrl, expiresInMinu
 const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
   _shell(
     `Invitation to ${schoolName}`,
-    /* html */ `
+    `
       <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
       <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
         Your account has been created on <strong>Diraschool</strong> for
@@ -228,7 +411,7 @@ const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
 const _resetTemplate = ({ firstName, resetUrl, expiresInHours }) =>
   _shell(
     'Reset your Diraschool password',
-    /* html */ `
+    `
       <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
       <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
         We received a request to reset the password for your Diraschool account.

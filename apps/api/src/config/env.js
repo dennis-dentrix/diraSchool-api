@@ -10,7 +10,6 @@ const required = [
   'JWT_SECRET',
   'CLIENT_URL',
   'REDIS_URL',
-  'ZEPTOMAIL_API_KEY',
   // AT_USERNAME / AT_API_KEY are optional until the SMS feature is activated
 ];
 
@@ -29,6 +28,13 @@ export const validateEnv = () => {
     console.error('\n[ENV ERROR] JWT_SECRET must be at least 32 characters.\n');
     process.exit(1);
   }
+
+  if (!process.env.ZEPTOMAIL_API_KEY && !process.env.RESEND_API_KEY) {
+    console.error(
+      '\n[ENV ERROR] Configure at least one email provider: ZEPTOMAIL_API_KEY or RESEND_API_KEY.\n'
+    );
+    process.exit(1);
+  }
 };
 
 export const env = {
@@ -45,7 +51,7 @@ export const env = {
   AT_USERNAME: process.env.AT_USERNAME,
   AT_API_KEY: process.env.AT_API_KEY,
   AT_SENDER_ID: process.env.AT_SENDER_ID || 'SCHOOL',
-  // Email — Resend (primary) + ZeptoMail (fallback)
+  // Email — ZeptoMail (primary) + Resend (fallback)
   // Set both for automatic failover; at least one must be configured.
   EMAIL_FROM: process.env.EMAIL_FROM,
   RESEND_API_KEY: process.env.RESEND_API_KEY,

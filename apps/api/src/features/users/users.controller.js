@@ -64,6 +64,12 @@ export const createUser = asyncHandler(async (req, res) => {
     schoolName,
     inviteUrl,
     expiresInDays: 7,
+    meta: {
+      schoolId: req.user.schoolId,
+      userId: user._id,
+      flow: 'create-user',
+      initiatedBy: req.user._id,
+    },
   }).catch((err) => logger.error('[Users] Invite email failed:', err.message));
 
   return sendSuccess(
@@ -158,6 +164,12 @@ export const resendInvite = asyncHandler(async (req, res) => {
     schoolName,
     inviteUrl,
     expiresInDays: 7,
+    meta: {
+      schoolId: req.user.schoolId,
+      userId: user._id,
+      flow: 'resend-invite',
+      initiatedBy: req.user._id,
+    },
   }).catch((err) => logger.error('[Users] Resend invite email failed:', err.message));
 
   return sendSuccess(res, {
