@@ -28,6 +28,29 @@ import logger from '../../config/logger.js';
 export const createUser = asyncHandler(async (req, res) => {
   const { firstName, lastName, email, phone, role, staffId, tscNumber } = req.body;
 
+<<<<<<< HEAD
+=======
+  // Temporarily set a random unusable password so the schema required constraint
+  // is satisfied. It is replaced when the user accepts their invite.
+  const unusablePassword = crypto.randomBytes(32).toString('hex');
+
+  const user = await User.create({
+    firstName: firstName.trim(),
+    lastName:  lastName.trim(),
+    email:     email.toLowerCase().trim(),
+    phone:     phone ? normalisePhone(phone) : undefined,
+    password:  unusablePassword,
+    role,
+    staffId:   staffId ?? undefined,
+    tscNumber: tscNumber ?? undefined,
+    schoolId:  req.user.schoolId,
+    mustChangePassword: false, // invite flow handles first-login, not this flag
+    invitePending:  true,
+    emailVerified:  true, // admin-created accounts are within a verified school — no extra check
+  });
+
+  // Fetch school name for the invite email
+>>>>>>> efe73423fd6ede0a8ef64087cc643b364dbf41b5
   const school = await School.findById(req.user.schoolId).select('name').lean();
   const schoolName = school?.name ?? 'your school';
 

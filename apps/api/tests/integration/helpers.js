@@ -25,7 +25,7 @@ export async function registerAndLogin(app, schoolData) {
     { email: schoolData.email.toLowerCase() },
     {
       $set:   { emailVerified: true },
-      $unset: { emailVerificationToken: 1, emailVerificationExpiry: 1 },
+      $unset: { emailVerificationCode: 1, emailVerificationToken: 1, emailVerificationExpiry: 1 },
     }
   );
 

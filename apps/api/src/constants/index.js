@@ -132,7 +132,10 @@ export const JOB_NAMES = {
   SEND_INVITE_EMAIL:        'send-invite-email',
   SEND_RESET_EMAIL:         'send-reset-email',
   SEND_VERIFICATION_EMAIL:  'send-verification-email',
+<<<<<<< HEAD
   SEND_TEMP_PASSWORD_EMAIL: 'send-temp-password-email',
+=======
+>>>>>>> efe73423fd6ede0a8ef64087cc643b364dbf41b5
 };
 
 export const AUDIT_ACTIONS = {

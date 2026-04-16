@@ -68,8 +68,9 @@ describe('POST /api/v1/users', () => {
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('success');
     expect(res.body.user.role).toBe('teacher');
-    expect(res.body.user.invitePending).toBe(false);
-    expect(res.body.user.mustChangePassword).toBe(true);  // temp password — must change on first login
+    expect(res.body.user.invitePending).toBe(true);       // awaiting invite acceptance
+    expect(res.body.user.mustChangePassword).toBe(false); // user sets own password via invite link
+    expect(res.body.user.emailVerified).toBe(true);       // admin-created; email check skipped
     expect(res.body.user.password).toBeUndefined();
   });
 
@@ -277,7 +278,7 @@ describe('POST /api/v1/users/:id/resend-invite', () => {
     const res = await agent.post(`/api/v1/users/${userId}/resend-invite`);
 
     expect(res.status).toBe(200);
-    expect(res.body.message).toMatch(/temporary password/i);
+    expect(res.body.message).toMatch(/invitation.*sent|sent.*invitation/i);
   });
 
   it('returns 400 when trying to resend invite to yourself', async () => {
