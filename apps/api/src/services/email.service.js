@@ -1,23 +1,11 @@
 /**
- * Email service — Resend (primary) with ZeptoMail fallback.
+ * Email service — ZeptoMail SMTP via nodemailer.
  *
- * Send flow:
- *   1. Try Resend API first (clean API, 3k free/month).
- *   2. If Resend fails for any reason (rate limit, network, quota), retry
- *      immediately via ZeptoMail SMTP (10k one-time free, then pay-as-you-go).
- *   3. If both fail the error is thrown — the BullMQ worker will retry the job
- *      with exponential backoff.
- *
- * This gives you resilience at zero extra cost:
- *   - Resend free tier handles normal volume.
- *   - ZeptoMail catches the overflow or any Resend outage.
- *   - Both use your verified domain so deliverability stays high.
+ * All transactional email goes through ZeptoMail.
  *
  * Required env vars:
- *   RESEND_API_KEY        — https://resend.com/api-keys
- *   ZEPTOMAIL_API_KEY     — ZeptoMail dashboard → SMTP → API key
- *   EMAIL_FROM            — "Diraschool <noreply@yourdomain.co.ke>"
- *                           Domain must be verified in BOTH Resend and ZeptoMail.
+ *   ZEPTOMAIL_API_KEY   — ZeptoMail dashboard → Mail Agents → SMTP tab → API key
+ *   EMAIL_FROM          — "Diraschool <noreply@yourdomain.co.ke>"
  *
  * ZeptoMail domain setup:
  *   1. zeptomail.com → Mail Agents → Add Mail Agent → your domain
@@ -25,154 +13,112 @@
  *   3. Verify in dashboard → copy the API key from the SMTP tab
  *   SMTP username is always the literal string: emailapikey
  *   SMTP password is your API key
+ *   Host: smtp.zeptomail.com   Port: 587   Security: STARTTLS
  */
 import nodemailer from 'nodemailer';
-import { Resend } from 'resend';
 import { env } from '../config/env.js';
 
 const FROM = env.EMAIL_FROM ?? 'Diraschool <noreply@diraschool.co.ke>';
 
-// ── Resend client (primary) ───────────────────────────────────────────────────
+// ── ZeptoMail SMTP transport ──────────────────────────────────────────────────
 
-let _resend = null;
+let _transport = null;
 
-const getResendClient = () => {
-  if (!_resend) {
-    if (!env.RESEND_API_KEY) {
-      throw new Error('[Email] RESEND_API_KEY is not set.');
-    }
-    _resend = new Resend(env.RESEND_API_KEY);
-  }
-  return _resend;
-};
-
-// ── ZeptoMail SMTP transport (fallback) ──────────────────────────────────────
-
-let _zepto = null;
-
-const getZeptoTransport = () => {
-  if (!_zepto) {
+const getTransport = () => {
+  if (!_transport) {
     if (!env.ZEPTOMAIL_API_KEY) {
       throw new Error('[Email] ZEPTOMAIL_API_KEY is not set.');
     }
-    _zepto = nodemailer.createTransport({
-      host:   env.ZEPTOMAIL_SERVER,    // smtp.zeptomail.com (or region-specific)
+    _transport = nodemailer.createTransport({
+      host:   env.ZEPTOMAIL_SERVER,   // smtp.zeptomail.com (or region variant)
       port:   587,
-      secure: false,                   // STARTTLS on port 587
+      secure: false,                  // STARTTLS on port 587
       auth: {
-        user: env.ZEPTOMAIL_USERNAME,  // 'emailapikey' (ZeptoMail's fixed SMTP username)
+        user: env.ZEPTOMAIL_USERNAME, // always the literal string: emailapikey
         pass: env.ZEPTOMAIL_API_KEY,
       },
     });
   }
-  return _zepto;
+  return _transport;
 };
 
-// ── Unified send with automatic fallback ─────────────────────────────────────
+// ── Core send ─────────────────────────────────────────────────────────────────
 
 /**
- * Send a transactional email.
- * Tries Resend first; falls back to ZeptoMail on any failure.
- *
  * @param {{ to: string, subject: string, html: string }} opts
  */
-const sendEmail = async ({ to, subject, html }) => {
-  // ── Primary: Resend ───────────────────────────────────────
-  if (env.RESEND_API_KEY) {
-    try {
-      const result = await getResendClient().emails.send({
-        from: FROM, to, subject, html,
-      });
-      // Resend returns { data: { id }, error: null } on success
-      // and { data: null, error: {...} } on failure
-      if (!result.error) {
-        return result;
-      }
-      console.warn(`[Email] Resend failed (${result.error.message}), switching to ZeptoMail…`);
-    } catch (err) {
-      console.warn(`[Email] Resend threw (${err.message}), switching to ZeptoMail…`);
-    }
-  }
-
-  // ── Fallback: ZeptoMail ───────────────────────────────────
-  if (env.ZEPTOMAIL_API_KEY) {
-    return getZeptoTransport().sendMail({ from: FROM, to, subject, html });
-  }
-
-  throw new Error('[Email] No email provider is configured. Set RESEND_API_KEY and/or ZEPTOMAIL_API_KEY.');
-};
+const sendEmail = ({ to, subject, html }) =>
+  getTransport().sendMail({ from: FROM, to, subject, html });
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Send an account invitation email to a newly created staff member.
+ * Verification email — 6-digit OTP for manual entry + one-click fallback link.
  *
  * @param {object} opts
- * @param {string} opts.to            Recipient email
- * @param {string} opts.firstName     Recipient first name
- * @param {string} opts.schoolName    School display name
- * @param {string} opts.inviteUrl     Full URL the user clicks to set their password
+ * @param {string} opts.to
+ * @param {string} opts.firstName
+ * @param {string} opts.schoolName
+ * @param {string} opts.code              6-digit OTP
+ * @param {string} opts.verifyUrl         One-click fallback link
+ * @param {number} [opts.expiresInMinutes=30]
+ */
+export const sendVerificationEmail = ({ to, firstName, schoolName, code, verifyUrl, expiresInMinutes = 30 }) =>
+  sendEmail({
+    to,
+    subject: `${code} — verify your Diraschool account`,
+    html:    _verifyTemplate({ firstName, schoolName, code, verifyUrl, expiresInMinutes }),
+  });
+
+/**
+ * Invitation email sent to a newly created staff member.
+ *
+ * @param {object} opts
+ * @param {string} opts.to
+ * @param {string} opts.firstName
+ * @param {string} opts.schoolName
+ * @param {string} opts.inviteUrl         Link to set password (expires in expiresInDays)
  * @param {number} [opts.expiresInDays=7]
  */
-export const sendInviteEmail = async ({ to, firstName, schoolName, inviteUrl, expiresInDays = 7 }) => {
-  return sendEmail({
+export const sendInviteEmail = ({ to, firstName, schoolName, inviteUrl, expiresInDays = 7 }) =>
+  sendEmail({
     to,
     subject: `You've been added to ${schoolName} — set your password`,
     html:    _inviteTemplate({ firstName, schoolName, inviteUrl, expiresInDays }),
   });
-};
 
 /**
- * Send a 6-digit OTP verification email to a newly registered school admin.
+ * Password-reset email.
  *
  * @param {object} opts
- * @param {string} opts.to                Recipient email
- * @param {string} opts.firstName         Recipient first name
- * @param {string} opts.schoolName        School name
- * @param {string} opts.code              6-digit OTP
- * @param {number} [opts.expiresInMinutes=15]
- */
-export const sendVerificationEmail = async ({ to, firstName, schoolName, code, expiresInMinutes = 15 }) => {
-  return sendEmail({
-    to,
-    subject: `${code} — your Diraschool verification code`,
-    html:    _verifyTemplate({ firstName, schoolName, code, expiresInMinutes }),
-  });
-};
-
-/**
- * Send a temporary-password email to a newly created staff member.
- *
- * @param {object} opts
- * @param {string} opts.to            Recipient email
- * @param {string} opts.firstName     Recipient first name
- * @param {string} opts.schoolName    School display name
- * @param {string} opts.tempPassword  Plaintext temp password (shown once)
- */
-export const sendTempPasswordEmail = async ({ to, firstName, schoolName, tempPassword }) => {
-  return sendEmail({
-    to,
-    subject: `Your ${schoolName} login details — Diraschool`,
-    html:    _tempPasswordTemplate({ firstName, schoolName, tempPassword }),
-  });
-};
-
-/**
- * Send a password-reset email.
- *
- * @param {object} opts
- * @param {string} opts.to              Recipient email
- * @param {string} opts.firstName       Recipient first name
- * @param {string} opts.resetUrl        Full URL with embedded reset token
+ * @param {string} opts.to
+ * @param {string} opts.firstName
+ * @param {string} opts.resetUrl
  * @param {number} [opts.expiresInHours=1]
  */
-export const sendPasswordResetEmail = async ({ to, firstName, resetUrl, expiresInHours = 1 }) => {
-  return sendEmail({
+export const sendPasswordResetEmail = ({ to, firstName, resetUrl, expiresInHours = 1 }) =>
+  sendEmail({
     to,
     subject: 'Reset your Diraschool password',
     html:    _resetTemplate({ firstName, resetUrl, expiresInHours }),
   });
-};
+
+/**
+ * Temporary-password email for newly created staff.
+ * (Kept for backwards-compatibility; invite flow is preferred.)
+ *
+ * @param {object} opts
+ * @param {string} opts.to
+ * @param {string} opts.firstName
+ * @param {string} opts.schoolName
+ * @param {string} opts.tempPassword  Plaintext — shown once, never stored
+ */
+export const sendTempPasswordEmail = ({ to, firstName, schoolName, tempPassword }) =>
+  sendEmail({
+    to,
+    subject: `Your ${schoolName} login details — Diraschool`,
+    html:    _tempPasswordTemplate({ firstName, schoolName, tempPassword }),
+  });
 
 // ── HTML Templates ────────────────────────────────────────────────────────────
 
@@ -224,72 +170,56 @@ const _btn = (url, label) =>
             font-size:15px;font-weight:600;margin:24px 0;"
   >${label}</a>`;
 
-const _verifyTemplate = ({ firstName, schoolName, code, expiresInMinutes }) =>
+// ── Verify email (OTP + link) ─────────────────────────────────────────────────
+
+const _verifyTemplate = ({ firstName, schoolName, code, verifyUrl, expiresInMinutes }) =>
   _shell(
     `Verify your email — ${schoolName}`,
     /* html */ `
       <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Welcome to Diraschool, ${firstName}!</h2>
       <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
         You've successfully created an account for <strong>${schoolName}</strong>.
-        Enter the code below to verify your email address and activate your account.
+        Verify your email to activate it — use either option below.
       </p>
-      <div style="margin:28px 0;text-align:center;">
-        <div style="display:inline-block;background:#f0f4ff;border:2px dashed #1a56db;
-                    border-radius:10px;padding:20px 36px;">
-          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;letter-spacing:.5px;text-transform:uppercase;">
-            Verification Code
-          </p>
-          <p style="margin:0;font-size:38px;font-weight:700;color:#1a56db;letter-spacing:8px;
-                    font-family:'Courier New',monospace;">
-            ${code}
-          </p>
+
+      <!-- Option 1: enter the code -->
+      <p style="margin:20px 0 8px;font-size:12px;font-weight:700;color:#6b7280;
+                letter-spacing:.8px;text-transform:uppercase;">
+        Option 1 — Enter this code on the verification screen
+      </p>
+      <div style="text-align:center;margin-bottom:4px;">
+        <div style="display:inline-block;background:#f0f4ff;border:2px solid #1a56db;
+                    border-radius:10px;padding:18px 40px;">
+          <p style="margin:0 0 4px;font-size:12px;color:#6b7280;text-transform:uppercase;
+                    letter-spacing:.5px;">Verification Code</p>
+          <p style="margin:0;font-size:40px;font-weight:800;color:#1a56db;letter-spacing:10px;
+                    font-family:'Courier New',monospace;">${code}</p>
         </div>
       </div>
-      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
-        This code expires in <strong>${expiresInMinutes} minutes</strong>.
-        If it expires, you can request a new one from the login screen.
+
+      <!-- Divider -->
+      <p style="text-align:center;font-size:13px;color:#9ca3af;margin:20px 0;">— or —</p>
+
+      <!-- Option 2: click the link -->
+      <p style="margin:0 0 8px;font-size:12px;font-weight:700;color:#6b7280;
+                letter-spacing:.8px;text-transform:uppercase;">
+        Option 2 — Click the link to verify instantly
       </p>
+      ${_btn(verifyUrl, 'Verify My Email →')}
+      <p style="margin:0 0 0;font-size:12px;color:#6b7280;">
+        Or copy into your browser:<br/>
+        <span style="color:#1a56db;word-break:break-all;">${verifyUrl}</span>
+      </p>
+
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
       <p style="margin:0;font-size:13px;color:#6b7280;">
-        If you didn't create a Diraschool account, you can safely ignore this email.
+        Both options expire in <strong>${expiresInMinutes} minutes</strong>.
+        If they expire, request a new code from the login screen.
       </p>
     `
   );
 
-const _tempPasswordTemplate = ({ firstName, schoolName, tempPassword }) =>
-  _shell(
-    `Your login details — ${schoolName}`,
-    /* html */ `
-      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
-      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
-        An account has been created for you on <strong>Diraschool</strong>
-        for <strong>${schoolName}</strong>.
-      </p>
-      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
-        Use the temporary password below to log in. You will be asked to set a
-        new password immediately after signing in.
-      </p>
-      <div style="margin:28px 0;text-align:center;">
-        <div style="display:inline-block;background:#f0f4ff;border:2px dashed #1a56db;
-                    border-radius:10px;padding:20px 36px;">
-          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;letter-spacing:.5px;text-transform:uppercase;">
-            Temporary Password
-          </p>
-          <p style="margin:0;font-size:28px;font-weight:700;color:#1a56db;letter-spacing:4px;
-                    font-family:'Courier New',monospace;">
-            ${tempPassword}
-          </p>
-        </div>
-      </div>
-      <p style="margin:0 0 12px;font-size:13px;color:#ef4444;">
-        ⚠ Do not share this password with anyone.
-      </p>
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
-      <p style="margin:0;font-size:13px;color:#6b7280;">
-        If you weren't expecting this email, contact your school administrator.
-      </p>
-    `
-  );
+// ── Invite email ──────────────────────────────────────────────────────────────
 
 const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
   _shell(
@@ -305,7 +235,7 @@ const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
         This link expires in <strong>${expiresInDays} days</strong>.
       </p>
       ${_btn(inviteUrl, 'Set My Password →')}
-      <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">
+      <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">
         Or copy this link into your browser:<br/>
         <span style="color:#1a56db;word-break:break-all;">${inviteUrl}</span>
       </p>
@@ -315,6 +245,8 @@ const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
       </p>
     `
   );
+
+// ── Password reset ────────────────────────────────────────────────────────────
 
 const _resetTemplate = ({ firstName, resetUrl, expiresInHours }) =>
   _shell(
@@ -329,7 +261,7 @@ const _resetTemplate = ({ firstName, resetUrl, expiresInHours }) =>
         This link expires in <strong>${expiresInHours} hour${expiresInHours !== 1 ? 's' : ''}</strong>.
       </p>
       ${_btn(resetUrl, 'Reset My Password →')}
-      <p style="margin:16px 0 0;font-size:13px;color:#6b7280;">
+      <p style="margin:4px 0 0;font-size:12px;color:#6b7280;">
         Or copy this link into your browser:<br/>
         <span style="color:#1a56db;word-break:break-all;">${resetUrl}</span>
       </p>
@@ -337,6 +269,40 @@ const _resetTemplate = ({ firstName, resetUrl, expiresInHours }) =>
       <p style="margin:0;font-size:13px;color:#6b7280;">
         If you didn't request a password reset, ignore this email — your password
         won't change.
+      </p>
+    `
+  );
+
+// ── Temporary password ────────────────────────────────────────────────────────
+
+const _tempPasswordTemplate = ({ firstName, schoolName, tempPassword }) =>
+  _shell(
+    `Your login details — ${schoolName}`,
+    /* html */ `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        An account has been created for you on <strong>Diraschool</strong>
+        for <strong>${schoolName}</strong>.
+      </p>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        Use the temporary password below to log in. You will be asked to set a
+        new password immediately after signing in.
+      </p>
+      <div style="text-align:center;margin:28px 0;">
+        <div style="display:inline-block;background:#f0f4ff;border:2px dashed #1a56db;
+                    border-radius:10px;padding:20px 36px;">
+          <p style="margin:0 0 6px;font-size:12px;color:#6b7280;letter-spacing:.5px;
+                    text-transform:uppercase;">Temporary Password</p>
+          <p style="margin:0;font-size:28px;font-weight:700;color:#1a56db;letter-spacing:4px;
+                    font-family:'Courier New',monospace;">${tempPassword}</p>
+        </div>
+      </div>
+      <p style="margin:0 0 12px;font-size:13px;color:#ef4444;">
+        ⚠ Do not share this password with anyone.
+      </p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;">
+        If you weren't expecting this email, contact your school administrator.
       </p>
     `
   );

@@ -52,18 +52,28 @@ const register = (overrides = {}) =>
   request(app).post(`${BASE}/register`).send({ ...validRegistration, ...overrides });
 
 /**
- * Injects a known 6-digit OTP directly into the DB so tests can call
- * POST /verify-email without a real email delivery.
+ * Injects a known OTP + raw token into the DB so tests run without real email.
+ * Returns { code, rawToken } — use code for POST /verify-email,
+ * rawToken for GET /verify-email/:token.
  */
-const injectVerifyOtp = async (email, code = '123456') => {
+const injectVerifyCredentials = async (email, code = '123456') => {
+  const rawToken  = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
   await User.updateOne(
     { email },
     {
       emailVerificationCode:   code,
-      emailVerificationExpiry: new Date(Date.now() + 15 * 60 * 1000),
+      emailVerificationToken:  tokenHash,
+      emailVerificationExpiry: new Date(Date.now() + 30 * 60 * 1000),
     }
   );
-  return code;
+  return { code, rawToken };
+};
+
+/** Convenience alias — most tests only need the code. */
+const injectVerifyOtp = async (email, code = '123456') => {
+  const { code: c } = await injectVerifyCredentials(email, code);
+  return c;
 };
 
 /**
@@ -199,6 +209,37 @@ describe('POST /auth/verify-email', () => {
     const res = await request(app)
       .post(`${BASE}/verify-email`)
       .send({ email: validRegistration.email, code: 'abc' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+// ── Fallback link verification (GET /:token) ─────────────────────────────────
+
+describe('GET /auth/verify-email/:token', () => {
+  it('verifies email via link, sets cookie, returns user', async () => {
+    await register();
+    const { rawToken } = await injectVerifyCredentials(validRegistration.email);
+
+    const res = await request(app).get(`${BASE}/verify-email/${rawToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers['set-cookie']).toBeDefined();
+    expect(res.body.message).toMatch(/verified/i);
+    expect(res.body.user.emailVerified).toBe(true);
+  });
+
+  it('returns 400 for a wrong token', async () => {
+    const res = await request(app).get(`${BASE}/verify-email/totallywrongtoken`);
+    expect(res.status).toBe(400);
+  });
+
+  it('link is single-use — second click returns 400', async () => {
+    await register();
+    const { rawToken } = await injectVerifyCredentials(validRegistration.email);
+
+    await request(app).get(`${BASE}/verify-email/${rawToken}`); // first use
+    const res = await request(app).get(`${BASE}/verify-email/${rawToken}`); // second use
 
     expect(res.status).toBe(400);
   });

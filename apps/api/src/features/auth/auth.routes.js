@@ -1,9 +1,17 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import {
-  registerSchool, login, logout, getMe, changePassword,
-  forgotPassword, resetPassword, acceptInvite,
-  verifyEmail, resendVerification,
+  registerSchool,
+  login,
+  logout,
+  getMe,
+  changePassword,
+  forgotPassword,
+  resetPassword,
+  acceptInvite,
+  verifyEmail,
+  verifyEmailByToken,
+  resendVerification,
 } from './auth.controller.js';
 import {
   validateRegisterSchool,
@@ -33,13 +41,14 @@ const authLimiter =
       });
 
 // ── Public routes ─────────────────────────────────────────────────────────────
-router.post('/register',       authLimiter, validateRegisterSchool, registerSchool);
-router.post('/login',          authLimiter, validateLogin,          login);
-router.post('/forgot-password',       authLimiter, validateForgotPassword,      forgotPassword);
-router.post('/reset-password/:token',             validateResetPassword,       resetPassword);
-router.post('/accept-invite/:token',              validateAcceptInvite,        acceptInvite);
-router.post('/verify-email',          authLimiter, validateVerifyEmail,        verifyEmail);
-router.post('/resend-verification',   authLimiter, validateResendVerification, resendVerification);
+router.post('/register', authLimiter, validateRegisterSchool, registerSchool);
+router.post('/login', authLimiter, validateLogin, login);
+router.post('/forgot-password', authLimiter, validateForgotPassword, forgotPassword);
+router.post('/reset-password/:token', validateResetPassword, resetPassword);
+router.post('/accept-invite/:token', validateAcceptInvite, acceptInvite);
+router.post('/verify-email', authLimiter, validateVerifyEmail, verifyEmail);
+router.get('/verify-email/:token', verifyEmailByToken);
+router.post('/resend-verification', authLimiter, validateResendVerification, resendVerification);
 
 // ── Protected routes ──────────────────────────────────────────────────────────
 router.post('/logout', protect, logout);

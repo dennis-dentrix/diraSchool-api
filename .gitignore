@@ -15,6 +15,7 @@ apps/api/logs/*.log.*
 # ── Build outputs ────────────────────────────────────────────
 dist/
 build/
+.next/
 
 # ── Test coverage ────────────────────────────────────────────
 coverage/

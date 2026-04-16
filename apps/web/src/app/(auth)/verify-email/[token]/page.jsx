@@ -18,7 +18,7 @@ export default function VerifyEmailPage({ params }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['verify-email', token],
     queryFn: async () => {
-      const res = await authApi.verifyEmail(token);
+      const res = await authApi.verifyEmailByToken(token);
       return res.data.data;
     },
     retry: false,

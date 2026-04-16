@@ -38,7 +38,8 @@ export const authApi = {
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token, password) =>
     api.post(`/auth/reset-password/${token}`, { password }),
-  verifyEmail: (token) => api.get(`/auth/verify-email/${token}`),
+  verifyEmail: (email, code) => api.post('/auth/verify-email', { email, code }),
+  verifyEmailByToken: (token) => api.get(`/auth/verify-email/${token}`),
   resendVerification: (email) => api.post('/auth/resend-verification', { email }),
   acceptInvite: (token, data) => api.post(`/auth/accept-invite/${token}`, data),
   changePassword: (data) => api.post('/auth/change-password', data),
@@ -53,7 +54,7 @@ export const usersApi = {
   resendInvite: (id) => api.post(`/users/${id}/resend-invite`),
 };
 
-// ─── Schools ──────────────────────────────────────────────────────────────────
+// ─── Schools (school-scoped) ──────────────────────────────────────────────────
 export const schoolsApi = {
   me: () => api.get('/schools/me'),
   updateMe: (data) => api.patch('/schools/me', data),
@@ -62,6 +63,19 @@ export const schoolsApi = {
   get: (id) => api.get(`/schools/${id}`),
   update: (id, data) => api.patch(`/schools/${id}`, data),
   updateSubscription: (id, data) => api.patch(`/schools/${id}/subscription`, data),
+};
+
+// ─── Dashboard (school admin summary) ────────────────────────────────────────
+export const dashboardApi = {
+  get: () => api.get('/dashboard'),
+};
+
+// ─── Admin (superadmin only) ──────────────────────────────────────────────────
+export const adminApi = {
+  stats: () => api.get('/admin/stats'),
+  listSchools: (params) => api.get('/admin/schools', { params }),
+  getSchool: (id) => api.get(`/admin/schools/${id}`),
+  updateSchoolStatus: (id, data) => api.patch(`/admin/schools/${id}/status`, data),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────

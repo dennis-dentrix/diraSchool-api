@@ -1,49 +1,13 @@
+import crypto from 'node:crypto';
 import User from './User.model.js';
 import School from '../schools/School.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
-import { emailQueue } from '../../jobs/queues.js';
-import { JOB_NAMES } from '../../constants/index.js';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/**
- * Generate a human-readable temporary password.
- * Format: XXXX-XXXX-XXXX (uppercase alphanum, no ambiguous chars like 0/O/1/I).
- */
-const generateTempPassword = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const part  = (n) => Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  return `${part(4)}-${part(4)}-${part(4)}`;
-};
-
-/**
- * Issue a temporary password, save it on the user document, and
- * enqueue the email that delivers it to the new staff member.
- *
- * @param {object} user       Mongoose User document (will be mutated + saved)
- * @param {string} schoolName Display name for the email subject
- */
-const issueTempPassword = async (user, schoolName) => {
-  const tempPassword = generateTempPassword();
-
-  user.password           = tempPassword; // pre-save hook hashes it
-  user.mustChangePassword = true;
-  user.invitePending      = false;
-  await user.save();
-
-  await emailQueue.add(JOB_NAMES.SEND_TEMP_PASSWORD_EMAIL, {
-    type: JOB_NAMES.SEND_TEMP_PASSWORD_EMAIL,
-    payload: {
-      to:           user.email,
-      firstName:    user.firstName,
-      schoolName,
-      tempPassword, // plaintext — shown once in the email, never stored
-    },
-  });
-};
+import { sendInviteEmail } from '../../services/email.service.js';
+import { env } from '../../config/env.js';
+import logger from '../../config/logger.js';
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 
@@ -51,8 +15,15 @@ const issueTempPassword = async (user, schoolName) => {
  * POST /api/v1/users
  * Creates a staff user scoped to the logged-in admin's school.
  *
- * A temporary password is generated and emailed to the new user.
- * They must change it on first login (mustChangePassword = true).
+ * Flow:
+ *   1. Admin submits name, email, role.
+ *   2. A cryptographic invite token is generated and stored (hash only).
+ *   3. An invitation email is sent with a secure link (7-day expiry).
+ *   4. The user clicks the link → POST /api/v1/auth/accept-invite/:token
+ *      to set their own password and activate the account.
+ *
+ * No temporary passwords are generated — the user sets their own password
+ * on first visit via the invite link.
  */
 export const createUser = asyncHandler(async (req, res) => {
   const { firstName, lastName, email, phone, role, staffId, tscNumber } = req.body;
@@ -60,29 +31,46 @@ export const createUser = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId).select('name').lean();
   const schoolName = school?.name ?? 'your school';
 
-  // Create with a placeholder — issueTempPassword overwrites it before the email goes out
+  // Generate invite token upfront — embed in User.create to avoid an extra save round-trip
+  const rawToken  = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiry    = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
   const user = await User.create({
-    firstName: firstName.trim(),
-    lastName:  lastName.trim(),
-    email:     email.toLowerCase().trim(),
-    phone:     phone ? normalisePhone(phone) : undefined,
-    password:  'placeholder', // replaced immediately below
+    firstName:         firstName.trim(),
+    lastName:          lastName.trim(),
+    email:             email.toLowerCase().trim(),
+    phone:             phone ? normalisePhone(phone) : undefined,
+    // Random placeholder — the pre-save hash hook runs on it, but it is
+    // never used: acceptInvite overwrites it when the user sets their password.
+    password:          crypto.randomBytes(16).toString('hex'),
     role,
-    staffId:   staffId ?? undefined,
-    tscNumber: tscNumber ?? undefined,
-    schoolId:  req.user.schoolId,
-    mustChangePassword: true,
-    invitePending:      false,
-    emailVerified:      true, // admin-created accounts are within a verified school
+    staffId:           staffId   ?? undefined,
+    tscNumber:         tscNumber ?? undefined,
+    schoolId:          req.user.schoolId,
+    mustChangePassword: false,
+    invitePending:      true,
+    inviteToken:        tokenHash,
+    inviteTokenExpiry:  expiry,
+    // Admin-created accounts are within a verified school — skip email verification.
+    emailVerified:      true,
   });
 
-  await issueTempPassword(user, schoolName);
+  // Fire-and-forget — a mail failure must never fail the 201 response.
+  const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
+  sendInviteEmail({
+    to:           user.email,
+    firstName:    user.firstName,
+    schoolName,
+    inviteUrl,
+    expiresInDays: 7,
+  }).catch((err) => logger.error('[Users] Invite email failed:', err.message));
 
   return sendSuccess(
     res,
     {
-      user: user.toSafeObject(),
-      message: `Account created. A temporary password has been sent to ${user.email}.`,
+      user:    user.toSafeObject(),
+      message: `Account created. An invitation email has been sent to ${user.email}.`,
     },
     201
   );
@@ -142,8 +130,8 @@ export const updateUser = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/users/:id/resend-invite
- * Issues a fresh temporary password and re-sends the credentials email.
- * Use when a staff member hasn't logged in yet or has been locked out.
+ * Issues a fresh invite token and re-sends the invitation email.
+ * Use when a staff member hasn't accepted their invite yet, or the link expired.
  */
 export const resendInvite = asyncHandler(async (req, res) => {
   const user = await User.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
@@ -156,9 +144,23 @@ export const resendInvite = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId).select('name').lean();
   const schoolName = school?.name ?? 'your school';
 
-  await issueTempPassword(user, schoolName);
+  // Rotate the token so the old link is immediately invalidated
+  const rawToken  = crypto.randomBytes(32).toString('hex');
+  user.inviteToken       = crypto.createHash('sha256').update(rawToken).digest('hex');
+  user.inviteTokenExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  user.invitePending     = true;
+  await user.save({ validateBeforeSave: false });
+
+  const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
+  sendInviteEmail({
+    to:           user.email,
+    firstName:    user.firstName,
+    schoolName,
+    inviteUrl,
+    expiresInDays: 7,
+  }).catch((err) => logger.error('[Users] Resend invite email failed:', err.message));
 
   return sendSuccess(res, {
-    message: `A new temporary password has been sent to ${user.email}.`,
+    message: `A new invitation link has been sent to ${user.email}.`,
   });
 });

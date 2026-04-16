@@ -79,12 +79,19 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    // 6-digit numeric OTP sent via email; expires after 15 minutes.
-    // Stored as plaintext — security comes from short expiry + rate limiting.
+    // 6-digit numeric OTP — for manual entry on the verify screen.
+    // Stored as plaintext; security comes from the short expiry + rate limiting.
     emailVerificationCode: {
       type: String,
       select: false,
     },
+    // SHA-256 hash of a 32-byte random token — for the one-click fallback link.
+    // Only the hash is stored so a DB leak can't be used to bypass verification.
+    emailVerificationToken: {
+      type: String,
+      select: false,
+    },
+    // Shared expiry for both OTP and link (30 minutes).
     emailVerificationExpiry: {
       type: Date,
       select: false,

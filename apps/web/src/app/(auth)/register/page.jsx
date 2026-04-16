@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 const schema = z.object({
   schoolName: z.string().min(3, 'School name must be at least 3 characters'),
+  schoolPhone: z.string().regex(/^(\+254|0|254)?[17]\d{8}$/, 'Invalid school phone (Kenyan format required)'),
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Enter a valid email'),
@@ -36,9 +37,9 @@ export default function RegisterPage() {
 
   const { mutate, isPending } = useMutation({
     mutationFn: ({ confirmPassword, ...data }) => authApi.register(data),
-    onSuccess: () => {
-      toast.success('Account created! Check your email to verify your account.');
-      router.push('/login');
+    onSuccess: (res) => {
+      const email = res.data.data?.email;
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -55,6 +56,12 @@ export default function RegisterPage() {
             <Label htmlFor="schoolName">School name</Label>
             <Input id="schoolName" placeholder="Nairobi Primary School" {...register('schoolName')} />
             {errors.schoolName && <p className="text-xs text-destructive">{errors.schoolName.message}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="schoolPhone">School phone number</Label>
+            <Input id="schoolPhone" type="tel" placeholder="0712 345 678" {...register('schoolPhone')} />
+            {errors.schoolPhone && <p className="text-xs text-destructive">{errors.schoolPhone.message}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -6,9 +6,13 @@ import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { env } from '../../config/env.js';
-import { ROLES, SUBSCRIPTION_STATUSES, JOB_NAMES, PLAN_TIERS } from '../../constants/index.js';
+import { ROLES, SUBSCRIPTION_STATUSES, PLAN_TIERS } from '../../constants/index.js';
 import { normalisePhone } from '../../utils/phone.js';
-import { emailQueue } from '../../jobs/queues.js';
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail as sendResetEmail,
+} from '../../services/email.service.js';
+import logger from '../../config/logger.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -42,9 +46,11 @@ export const registerSchool = asyncHandler(async (req, res) => {
     return sendError(res, 'A school with this email is already registered.', 409);
   }
 
-  // Generate a 6-digit OTP for email verification (expires in 15 minutes)
-  const otp    = String(crypto.randomInt(100_000, 1_000_000)); // "100000"–"999999"
-  const expiry = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+  // Generate OTP (manual entry) + token (fallback link), both valid for 30 minutes
+  const otp = String(crypto.randomInt(100_000, 1_000_000)); // e.g. "482917"
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiry = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
   // Use a session for atomicity — both School and User must be created or neither
   const session = await mongoose.startSession();
@@ -77,7 +83,8 @@ export const registerSchool = asyncHandler(async (req, res) => {
           schoolId: school._id,
           mustChangePassword: false,
           emailVerified: false,
-          emailVerificationCode:   otp,
+          emailVerificationCode: otp,
+          emailVerificationToken: tokenHash,
           emailVerificationExpiry: expiry,
         },
       ],
@@ -86,17 +93,17 @@ export const registerSchool = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    // Enqueue verification email — outside the transaction (non-critical)
-    await emailQueue.add(JOB_NAMES.SEND_VERIFICATION_EMAIL, {
-      type: JOB_NAMES.SEND_VERIFICATION_EMAIL,
-      payload: {
-        to:           user.email,
-        firstName:    user.firstName,
-        schoolName:   school.name,
-        code:         otp,   // 6-digit code shown in the email
-        expiresInMinutes: 15,
-      },
-    });
+    // Send verification email directly — fire-and-forget so a mail failure
+    // never affects the 201 response or rolls back the committed transaction.
+    const verifyUrl = `${env.CLIENT_URL}/api/v1/auth/verify-email/${rawToken}`;
+    sendVerificationEmail({
+      to: user.email,
+      firstName: user.firstName,
+      schoolName: school.name,
+      code: otp,
+      verifyUrl,
+      expiresInMinutes: 30,
+    }).catch((err) => logger.error('[Auth] Verification email failed:', err.message));
 
     // Do NOT set a cookie — user must verify email before logging in
     return sendSuccess(
@@ -129,6 +136,7 @@ export const login = asyncHandler(async (req, res) => {
     email: email.toLowerCase().trim(),
     isActive: true,
   }).select('+password');
+  // console.log(await user.comparePassword(password));
 
   if (!user || !(await user.comparePassword(password))) {
     return sendError(res, 'Invalid email or password.', 401);
@@ -219,18 +227,11 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   user.passwordResetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
   await user.save({ validateBeforeSave: false });
 
-  // Build the reset link and enqueue the email job (non-blocking)
-  const resetUrl = `${env.CLIENT_URL}/api/v1/auth/reset-password/${rawToken}`;
+  const resetUrl = `${env.CLIENT_URL}/reset-password/${rawToken}`;
 
-  await emailQueue.add(JOB_NAMES.SEND_RESET_EMAIL, {
-    type: JOB_NAMES.SEND_RESET_EMAIL,
-    payload: {
-      to: user.email,
-      firstName: user.firstName,
-      resetUrl,
-      expiresInHours: 1,
-    },
-  });
+  sendResetEmail({ to: user.email, firstName: user.firstName, resetUrl, expiresInHours: 1 }).catch(
+    (err) => logger.error('[Auth] Reset email failed:', err.message)
+  );
 
   return sendSuccess(res, {
     message: 'If an account with that email exists, a password reset link has been sent.',
@@ -341,28 +342,61 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   const user = await User.findOne({
     email: email.toLowerCase().trim(),
     emailVerified: false,
-  }).select('+emailVerificationCode +emailVerificationExpiry');
+  }).select('+emailVerificationCode +emailVerificationToken +emailVerificationExpiry');
 
   // Unified error — don't reveal whether the email exists or the code is wrong
   const invalid = () =>
-    sendError(
-      res,
-      'Verification code is invalid or has expired. Request a new code.',
-      400
-    );
+    sendError(res, 'Verification code is invalid or has expired. Request a new code.', 400);
 
-  if (!user)                                             return invalid();
-  if (!user.emailVerificationCode)                       return invalid();
-  if (user.emailVerificationCode !== code.trim())        return invalid();
-  if (user.emailVerificationExpiry < new Date())         return invalid();
+  if (!user) return invalid();
+  if (!user.emailVerificationCode) return invalid();
+  if (user.emailVerificationCode !== code.trim()) return invalid();
+  if (user.emailVerificationExpiry < new Date()) return invalid();
 
-  // Activate the account
-  user.emailVerified              = true;
-  user.emailVerificationCode      = undefined;
-  user.emailVerificationExpiry    = undefined;
+  // Activate the account — clear both OTP and link token
+  user.emailVerified = true;
+  user.emailVerificationCode = undefined;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpiry = undefined;
   await user.save({ validateBeforeSave: false });
 
   // Auto-log the user in — submitting the correct OTP proves email ownership
+  const jwtToken = signToken(user._id);
+  attachCookie(res, jwtToken);
+
+  return sendSuccess(res, {
+    message: 'Email verified! Welcome to Diraschool.',
+    user: user.toSafeObject(),
+  });
+});
+
+/**
+ * GET /api/v1/auth/verify-email/:token
+ * Fallback one-click verification via the link sent in the email.
+ * Validates the token, marks the account verified, and auto-logs the user in.
+ * Public route — no auth required.
+ */
+export const verifyEmailByToken = asyncHandler(async (req, res) => {
+  const { token } = req.params;
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const user = await User.findOne({
+    emailVerificationToken: hashedToken,
+    emailVerificationExpiry: { $gt: new Date() },
+    emailVerified: false,
+  }).select('+emailVerificationCode +emailVerificationToken +emailVerificationExpiry');
+
+  if (!user) {
+    return sendError(res, 'Verification link is invalid or has expired. Request a new code.', 400);
+  }
+
+  // Activate — clear both OTP and token so neither can be reused
+  user.emailVerified = true;
+  user.emailVerificationCode = undefined;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpiry = undefined;
+  await user.save({ validateBeforeSave: false });
+
   const jwtToken = signToken(user._id);
   attachCookie(res, jwtToken);
 
@@ -396,25 +430,26 @@ export const resendVerification = asyncHandler(async (req, res) => {
     });
   }
 
-  // Issue a fresh 6-digit OTP (15-minute expiry)
+  // Issue a fresh OTP + fallback link token (30-minute expiry)
   const otp = String(crypto.randomInt(100_000, 1_000_000));
-  user.emailVerificationCode   = otp;
-  user.emailVerificationExpiry = new Date(Date.now() + 15 * 60 * 1000);
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  user.emailVerificationCode = otp;
+  user.emailVerificationToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+  user.emailVerificationExpiry = new Date(Date.now() + 30 * 60 * 1000);
   await user.save({ validateBeforeSave: false });
 
   // Get school name for the email subject
   const school = await School.findById(user.schoolId).select('name').lean();
+  const verifyUrl = `${env.CLIENT_URL}/api/v1/auth/verify-email/${rawToken}`;
 
-  await emailQueue.add(JOB_NAMES.SEND_VERIFICATION_EMAIL, {
-    type: JOB_NAMES.SEND_VERIFICATION_EMAIL,
-    payload: {
-      to:               user.email,
-      firstName:        user.firstName,
-      schoolName:       school?.name ?? 'your school',
-      code:             otp,
-      expiresInMinutes: 15,
-    },
-  });
+  sendVerificationEmail({
+    to: user.email,
+    firstName: user.firstName,
+    schoolName: school?.name ?? 'your school',
+    code: otp,
+    verifyUrl,
+    expiresInMinutes: 30,
+  }).catch((err) => logger.error('[Auth] Resend verification email failed:', err.message));
 
   return sendSuccess(res, {
     message:
