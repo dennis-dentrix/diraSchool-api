@@ -5,9 +5,14 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
+import { JOB_NAMES } from '../../constants/index.js';
 import { sendInviteEmail } from '../../services/email.service.js';
+import { emailQueue } from '../../jobs/queues.js';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
+
+const enqueueEmail = async (type, payload) =>
+  emailQueue.add(type, { type, payload });
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 
@@ -58,7 +63,7 @@ export const createUser = asyncHandler(async (req, res) => {
 
   // Fire-and-forget — a mail failure must never fail the 201 response.
   const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
-  sendInviteEmail({
+  const invitePayload = {
     to:           user.email,
     firstName:    user.firstName,
     schoolName,
@@ -70,7 +75,15 @@ export const createUser = asyncHandler(async (req, res) => {
       flow: 'create-user',
       initiatedBy: req.user._id,
     },
-  }).catch((err) => logger.error('[Users] Invite email failed:', err.message));
+  };
+  enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invitePayload).catch((err) => {
+    logger.error('[Users] Failed to enqueue invite email, falling back to direct send', {
+      err: err.message,
+    });
+    sendInviteEmail(invitePayload).catch((sendErr) =>
+      logger.error('[Users] Invite email fallback failed:', sendErr.message)
+    );
+  });
 
   return sendSuccess(
     res,
@@ -158,7 +171,7 @@ export const resendInvite = asyncHandler(async (req, res) => {
   await user.save({ validateBeforeSave: false });
 
   const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
-  sendInviteEmail({
+  const resendInvitePayload = {
     to:           user.email,
     firstName:    user.firstName,
     schoolName,
@@ -170,7 +183,15 @@ export const resendInvite = asyncHandler(async (req, res) => {
       flow: 'resend-invite',
       initiatedBy: req.user._id,
     },
-  }).catch((err) => logger.error('[Users] Resend invite email failed:', err.message));
+  };
+  enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, resendInvitePayload).catch((err) => {
+    logger.error('[Users] Failed to enqueue resend-invite email, falling back to direct send', {
+      err: err.message,
+    });
+    sendInviteEmail(resendInvitePayload).catch((sendErr) =>
+      logger.error('[Users] Resend invite email fallback failed:', sendErr.message)
+    );
+  });
 
   return sendSuccess(res, {
     message: `A new invitation link has been sent to ${user.email}.`,

@@ -6,12 +6,13 @@ import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { env } from '../../config/env.js';
-import { ROLES, SUBSCRIPTION_STATUSES, PLAN_TIERS } from '../../constants/index.js';
+import { ROLES, SUBSCRIPTION_STATUSES, PLAN_TIERS, JOB_NAMES } from '../../constants/index.js';
 import { normalisePhone } from '../../utils/phone.js';
 import {
   sendVerificationEmail,
   sendPasswordResetEmail as sendResetEmail,
 } from '../../services/email.service.js';
+import { emailQueue } from '../../jobs/queues.js';
 import logger from '../../config/logger.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -28,6 +29,9 @@ const attachCookie = (res, token) => {
     maxAge: oneDay,
   });
 };
+
+const enqueueEmail = async (type, payload) =>
+  emailQueue.add(type, { type, payload });
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 
@@ -93,10 +97,10 @@ export const registerSchool = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    // Send verification email directly — fire-and-forget so a mail failure
-    // never affects the 201 response or rolls back the committed transaction.
+    // Queue verification email asynchronously so worker handles delivery/retries.
+    // Fallback to direct send only if enqueue fails.
     const verifyUrl = `${env.CLIENT_URL}/verify-email/${rawToken}`;
-    sendVerificationEmail({
+    const verificationPayload = {
       to: user.email,
       firstName: user.firstName,
       schoolName: school.name,
@@ -108,7 +112,15 @@ export const registerSchool = asyncHandler(async (req, res) => {
         userId: user._id,
         flow: 'register',
       },
-    }).catch((err) => logger.error('[Auth] Verification email failed:', err.message));
+    };
+    enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, verificationPayload).catch((err) => {
+      logger.error('[Auth] Failed to enqueue verification email, falling back to direct send', {
+        err: err.message,
+      });
+      sendVerificationEmail(verificationPayload).catch((sendErr) =>
+        logger.error('[Auth] Verification email fallback failed:', sendErr.message)
+      );
+    });
 
     // Do NOT set a cookie — user must verify email before logging in
     return sendSuccess(
@@ -233,7 +245,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   const resetUrl = `${env.CLIENT_URL}/reset-password/${rawToken}`;
 
-  sendResetEmail({
+  const resetPayload = {
     to: user.email,
     firstName: user.firstName,
     resetUrl,
@@ -243,7 +255,15 @@ export const forgotPassword = asyncHandler(async (req, res) => {
       userId: user._id,
       flow: 'forgot-password',
     },
-  }).catch((err) => logger.error('[Auth] Reset email failed:', err.message));
+  };
+  enqueueEmail(JOB_NAMES.SEND_RESET_EMAIL, resetPayload).catch((err) => {
+    logger.error('[Auth] Failed to enqueue reset email, falling back to direct send', {
+      err: err.message,
+    });
+    sendResetEmail(resetPayload).catch((sendErr) =>
+      logger.error('[Auth] Reset email fallback failed:', sendErr.message)
+    );
+  });
 
   return sendSuccess(res, {
     message: 'If an account with that email exists, a password reset link has been sent.',
@@ -454,7 +474,7 @@ export const resendVerification = asyncHandler(async (req, res) => {
   const school = await School.findById(user.schoolId).select('name').lean();
   const verifyUrl = `${env.CLIENT_URL}/verify-email/${rawToken}`;
 
-  sendVerificationEmail({
+  const resendPayload = {
     to: user.email,
     firstName: user.firstName,
     schoolName: school?.name ?? 'your school',
@@ -466,7 +486,15 @@ export const resendVerification = asyncHandler(async (req, res) => {
       userId: user._id,
       flow: 'resend-verification',
     },
-  }).catch((err) => logger.error('[Auth] Resend verification email failed:', err.message));
+  };
+  enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, resendPayload).catch((err) => {
+    logger.error('[Auth] Failed to enqueue resend-verification email, falling back to direct send', {
+      err: err.message,
+    });
+    sendVerificationEmail(resendPayload).catch((sendErr) =>
+      logger.error('[Auth] Resend verification email fallback failed:', sendErr.message)
+    );
+  });
 
   return sendSuccess(res, {
     message:
