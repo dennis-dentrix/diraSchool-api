@@ -14,13 +14,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
+const kenyaPhoneRegex = /^(\+254|0|254)?[17]\d{8}$/;
+
 const schema = z.object({
   schoolName: z.string().min(3, 'School name must be at least 3 characters'),
-  schoolPhone: z.string().regex(/^(\+254|0|254)?[17]\d{8}$/, 'Invalid school phone (Kenyan format required)'),
+  schoolPhone: z
+    .string()
+    .trim()
+    .regex(kenyaPhoneRegex, 'Invalid school phone (Kenyan format required)'),
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   email: z.string().email('Enter a valid email'),
-  phone: z.string().optional(),
+  phone: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z
+      .string()
+      .trim()
+      .regex(kenyaPhoneRegex, 'Invalid phone number (Kenyan format required)')
+      .optional()
+  ),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
 }).refine((d) => d.password === d.confirmPassword, {
@@ -38,9 +50,14 @@ export default function RegisterPage() {
   const { mutate, isPending } = useMutation({
     mutationFn: ({ confirmPassword, ...data }) => authApi.register(data),
     onSuccess: (res) => {
-      const email = res.data.data?.email;
+      const email = res.data.data?.email ?? res.data.email;
+      if (!email) {
+        toast.error('Registration succeeded, but we could not read your email from the server response.');
+        return;
+      }
       router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     },
+
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 

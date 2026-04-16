@@ -10,9 +10,21 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+const normalizeSuccessPayload = (payload) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  if (payload.status !== 'success' || Object.prototype.hasOwnProperty.call(payload, 'data')) {
+    return payload;
+  }
+  const { status, ...rest } = payload;
+  return { status, data: rest, ...rest };
+};
+
 // Redirect to login on 401
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    res.data = normalizeSuccessPayload(res.data);
+    return res;
+  },
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
       window.location.href = '/login';
