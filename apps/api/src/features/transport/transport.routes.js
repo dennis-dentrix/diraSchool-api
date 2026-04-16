@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { protect, blockIfMustChangePassword, adminOnly, authorize } from '../../middleware/auth.js';
+import { protect, blockIfMustChangePassword, authorize } from '../../middleware/auth.js';
 import requireFeature from '../../middleware/requireFeature.js';
 import {
   createRoute,
@@ -24,20 +24,21 @@ const router = Router();
 // TODO: Assign to correct plan tier in PLAN_FEATURE_MAP once pricing is finalised.
 router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.TRANSPORT));
 
-// Read access: any school staff
-const canRead = authorize(
-  ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT
+// Transport is managed by deputy headteacher, secretary, and accountant.
+// School admin and headteacher retain full access.
+const canAccess = authorize(
+  ROLES.SCHOOL_ADMIN, ROLES.HEADTEACHER,
+  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT
 );
 
-router.get('/routes',      canRead, validateListRoutes, listRoutes);
-router.get('/routes/:id',  canRead, getRoute);
+router.get('/routes',      canAccess, validateListRoutes, listRoutes);
+router.get('/routes/:id',  canAccess, getRoute);
 
-// Write access: admins only
-router.post('/routes',                   adminOnly, validateCreateRoute, createRoute);
-router.patch('/routes/:id',              adminOnly, validateUpdateRoute, updateRoute);
-router.delete('/routes/:id',             adminOnly, deleteRoute);
-router.post('/routes/:id/assign',        adminOnly, validateStudentIds, assignStudents);
-router.post('/routes/:id/unassign',      adminOnly, validateStudentIds, unassignStudents);
+// Write access: same roles — transport is operational, not teacher-facing
+router.post('/routes',                   canAccess, validateCreateRoute, createRoute);
+router.patch('/routes/:id',              canAccess, validateUpdateRoute, updateRoute);
+router.delete('/routes/:id',             canAccess, deleteRoute);
+router.post('/routes/:id/assign',        canAccess, validateStudentIds, assignStudents);
+router.post('/routes/:id/unassign',      canAccess, validateStudentIds, unassignStudents);
 
 export default router;

@@ -93,10 +93,10 @@ export default function SuperadminUsersPage() {
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="w-56"
         />
-        <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
+        <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v === '__all__' ? '' : v); setPage(1); }}>
           <SelectTrigger className="w-44"><SelectValue placeholder="All roles" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All roles</SelectItem>
+            <SelectItem value="__all__">All roles</SelectItem>
             {ROLE_OPTIONS.map((r) => (
               <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>
             ))}

@@ -8,9 +8,9 @@ const timeRegex     = /^\d{2}:\d{2}$/;
 
 const stopSchema = z.object({
   name:  z.string().trim().min(1, 'Stop name is required'),
-  order: z.number().int().min(1, 'Stop order must be at least 1'),
-  lat:   z.number().optional(),
-  lng:   z.number().optional(),
+  order: z.coerce.number().int().min(1, 'Stop order must be at least 1'),
+  lat:   z.coerce.number().optional(),
+  lng:   z.coerce.number().optional(),
 });
 
 // ── Create Route ──────────────────────────────────────────────────────────────
@@ -21,11 +21,11 @@ const createRouteSchema = z.object({
   vehicleReg:         z.string().trim().optional(),
   driverName:         z.string().trim().optional(),
   driverPhone:        z.string().trim().optional(),
-  capacity:           z.number().int().min(1).optional(),
+  capacity:           z.coerce.number().int().min(1).optional(),
   stops:              z.array(stopSchema).optional(),
   morningDeparture:   z.string().regex(timeRegex, 'morningDeparture must be HH:MM').optional(),
   afternoonDeparture: z.string().regex(timeRegex, 'afternoonDeparture must be HH:MM').optional(),
-}).strict();
+});
 
 // ── Update Route ──────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ const updateRouteSchema = z.object({
   vehicleReg:         z.string().trim().optional(),
   driverName:         z.string().trim().optional(),
   driverPhone:        z.string().trim().optional(),
-  capacity:           z.number().int().min(1).optional(),
+  capacity:           z.coerce.number().int().min(1).optional(),
   stops:              z.array(stopSchema).optional(),
   morningDeparture:   z.string().regex(timeRegex).optional(),
   afternoonDeparture: z.string().regex(timeRegex).optional(),

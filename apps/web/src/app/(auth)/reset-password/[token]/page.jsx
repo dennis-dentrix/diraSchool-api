@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,9 +22,10 @@ const schema = z.object({
   path: ['confirmPassword'],
 });
 
-export default function ResetPasswordPage({ params }) {
+export default function ResetPasswordPage() {
   const router = useRouter();
-  const { token } = params;
+  const params = useParams();
+  const token = Array.isArray(params?.token) ? params.token[0] : params?.token;
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
@@ -57,7 +58,7 @@ export default function ResetPasswordPage({ params }) {
             <Input id="confirmPassword" type="password" placeholder="••••••••" {...register('confirmPassword')} />
             {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
           </div>
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <Button type="submit" className="w-full" disabled={isPending || !token}>
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Reset password
           </Button>

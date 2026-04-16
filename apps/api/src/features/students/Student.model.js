@@ -1,6 +1,27 @@
 import mongoose from 'mongoose';
 import { STUDENT_STATUSES } from '../../constants/index.js';
 
+// ── Guardian sub-schema ───────────────────────────────────────────────────────
+// Stores rich parent/guardian contact details at enrollment time.
+// If the guardian is also given a portal account, userId links to their User record.
+const guardianSchema = new mongoose.Schema(
+  {
+    firstName:    { type: String, required: true, trim: true },
+    lastName:     { type: String, required: true, trim: true },
+    relationship: {
+      type: String,
+      enum: ['mother', 'father', 'guardian', 'other'],
+      required: true,
+    },
+    phone: { type: String, trim: true },
+    email: { type: String, trim: true, lowercase: true },
+    occupation: { type: String, trim: true },
+    // If this guardian has been given a parent portal account
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  },
+  { _id: false }
+);
+
 const studentSchema = new mongoose.Schema(
   {
     schoolId: {
@@ -39,7 +60,20 @@ const studentSchema = new mongoose.Schema(
     dateOfBirth: {
       type: Date,
     },
-    // Parent/guardian users linked to this student
+    birthCertificateNumber: {
+      type: String,
+      trim: true,
+    },
+    enrollmentDate: {
+      type: Date,
+      default: Date.now,
+    },
+    // Rich guardian details captured at enrollment
+    guardians: {
+      type: [guardianSchema],
+      default: [],
+    },
+    // Parent/guardian users with portal access (subset of guardians who have accounts)
     parentIds: [
       {
         type: mongoose.Schema.Types.ObjectId,

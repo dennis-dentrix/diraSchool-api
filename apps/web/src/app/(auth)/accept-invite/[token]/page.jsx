@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -14,18 +14,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-const schema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
-  confirmPassword: z.string(),
-}).refine((d) => d.password === d.confirmPassword, {
-  message: "Passwords don't match",
-  path: ['confirmPassword'],
-});
+// Only ask for password — the admin already captured the name during account creation.
+// If the name needs updating, the user can do so from their profile after logging in.
+const schema = z
+  .object({
+    password:        z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match",
+    path:    ['confirmPassword'],
+  });
 
-export default function AcceptInvitePage({ params }) {
-  const { token } = params;
+export default function AcceptInvitePage() {
+  const params = useParams();
+  const token  = Array.isArray(params?.token) ? params.token[0] : params?.token;
   const router = useRouter();
   const { setUser } = useAuthStore();
 
@@ -36,9 +39,9 @@ export default function AcceptInvitePage({ params }) {
   const { mutate, isPending } = useMutation({
     mutationFn: ({ confirmPassword, ...data }) => authApi.acceptInvite(token, data),
     onSuccess: (res) => {
-      const user = res.data.data?.user ?? res.data.user ?? null;
+      const user = res.data?.data?.user ?? res.data?.user ?? null;
       setUser(user);
-      toast.success('Account activated! Welcome to Diraschool.');
+      toast.success('Account activated! Welcome.');
       router.push('/dashboard');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -48,34 +51,38 @@ export default function AcceptInvitePage({ params }) {
     <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur">
       <CardHeader>
         <CardTitle className="text-2xl font-bold">Activate your account</CardTitle>
-        <CardDescription>Set your name and password to get started</CardDescription>
+        <CardDescription>
+          Your name has been set by your administrator. Create a password to get started.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(mutate)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="firstName">First name</Label>
-              <Input id="firstName" placeholder="John" {...register('firstName')} />
-              {errors.firstName && <p className="text-xs text-destructive">{errors.firstName.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName">Last name</Label>
-              <Input id="lastName" placeholder="Kamau" {...register('lastName')} />
-              {errors.lastName && <p className="text-xs text-destructive">{errors.lastName.message}</p>}
-            </div>
-          </div>
           <div className="space-y-2">
             <Label htmlFor="password">Create password</Label>
-            <Input id="password" type="password" placeholder="Min. 8 characters" {...register('password')} />
-            {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+            <Input
+              id="password"
+              type="password"
+              placeholder="Min. 8 characters"
+              {...register('password')}
+            />
+            {errors.password && (
+              <p className="text-xs text-destructive">{errors.password.message}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm password</Label>
-            <Input id="confirmPassword" type="password" placeholder="••••••••" {...register('confirmPassword')} />
-            {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="••••••••"
+              {...register('confirmPassword')}
+            />
+            {errors.confirmPassword && (
+              <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
+            )}
           </div>
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          <Button type="submit" className="w-full" disabled={isPending || !token}>
+            {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Activate account
           </Button>
         </form>

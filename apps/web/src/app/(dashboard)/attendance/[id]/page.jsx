@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CheckCircle, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import { attendanceApi, getErrorMessage } from '@/lib/api';
 import { formatDate, capitalize } from '@/lib/utils';
 import { ATTENDANCE_STATUSES } from '@/lib/constants';
@@ -21,8 +22,9 @@ const statusColors = {
   excused: 'bg-blue-100 text-blue-700',
 };
 
-export default function AttendanceRegisterPage({ params }) {
-  const { id } = params;
+export default function AttendanceRegisterPage() {
+  const params = useParams();
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const queryClient = useQueryClient();
   const [entries, setEntries] = useState([]);
 
@@ -32,6 +34,7 @@ export default function AttendanceRegisterPage({ params }) {
       const res = await attendanceApi.getRegister(id);
       return res.data.data;
     },
+    enabled: !!id,
   });
 
   useEffect(() => {

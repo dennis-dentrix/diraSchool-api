@@ -5,21 +5,24 @@ import { EXAM_TYPES } from '../../constants/index.js';
 const objectIdRegex = /^[a-f\d]{24}$/i;
 
 const createExamSchema = z.object({
-  classId: z.string().regex(objectIdRegex, 'Invalid class ID'),
-  subjectId: z.string().regex(objectIdRegex, 'Invalid subject ID'),
-  name: z.string().trim().min(1, 'Exam name is required'),
-  type: z.enum(Object.values(EXAM_TYPES), {
+  classId:    z.string().regex(objectIdRegex, 'Invalid class ID'),
+  subjectId:  z.string().regex(objectIdRegex, 'Invalid subject ID'),
+  name:       z.string().trim().min(1, 'Exam name is required'),
+  type:       z.enum(Object.values(EXAM_TYPES), {
     message: `Exam type must be one of: ${Object.values(EXAM_TYPES).join(', ')}`,
   }),
-  totalMarks: z.number().positive('Total marks must be greater than 0'),
-}).strict();
+  totalMarks: z.coerce.number().positive('Total marks must be greater than 0'),
+  // term and academicYear come from the class — frontend may send them; we ignore them.
+  term:         z.string().optional(),
+  academicYear: z.string().optional(),
+});
 
 const updateExamSchema = z.object({
-  name: z.string().trim().min(1).optional(),
-  type: z.enum(Object.values(EXAM_TYPES)).optional(),
-  totalMarks: z.number().positive().optional(),
+  name:        z.string().trim().min(1).optional(),
+  type:        z.enum(Object.values(EXAM_TYPES)).optional(),
+  totalMarks:  z.coerce.number().positive().optional(),
   isPublished: z.boolean().optional(),
-}).strict();
+});
 
 const listExamsSchema = z.object({
   classId: z.string().regex(objectIdRegex, 'Invalid class ID').optional(),

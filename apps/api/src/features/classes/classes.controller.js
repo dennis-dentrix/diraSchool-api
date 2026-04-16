@@ -5,7 +5,11 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { getRedis } from '../../config/redis.js';
-import { CACHE_TTL, STUDENT_STATUSES } from '../../constants/index.js';
+import { CACHE_TTL, STUDENT_STATUSES, PAYMENT_STATUSES } from '../../constants/index.js';
+
+// Lazy-load to avoid circular deps at module init time
+const getPaymentModel  = () => mongoose.model('Payment');
+const getFeeStructureModel = () => mongoose.model('FeeStructure');
 
 // Invalidate ALL class-list cache entries for a school (on any create/update/delete)
 const bustClassCache = async (schoolId) => {
@@ -88,8 +92,75 @@ export const listClasses = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Shared helper: fetches a class with students + per-student fee balance for the
+ * class's current academic year + term.
+ */
+async function fetchClassDetails(cls) {
+  const Payment      = getPaymentModel();
+  const FeeStructure = getFeeStructureModel();
+
+  // Students in this class (active only for the detail view)
+  const students = await Student.find({
+    classId:  cls._id,
+    schoolId: cls.schoolId,
+    status:   STUDENT_STATUSES.ACTIVE,
+  })
+    .select('admissionNumber firstName lastName gender dateOfBirth status parentIds')
+    .populate('parentIds', 'firstName lastName phone email')
+    .lean();
+
+  // Fee structure for this class/term/year
+  const feeStructure = await FeeStructure.findOne({
+    schoolId:     cls.schoolId,
+    classId:      cls._id,
+    academicYear: cls.academicYear,
+    term:         cls.term,
+  }).lean();
+
+  let studentBalances = [];
+
+  if (feeStructure && students.length) {
+    // Aggregate total completed payments per student in this term
+    const payments = await Payment.aggregate([
+      {
+        $match: {
+          schoolId:     cls.schoolId,
+          classId:      cls._id,
+          academicYear: cls.academicYear,
+          term:         cls.term,
+          status:       PAYMENT_STATUSES.COMPLETED,
+        },
+      },
+      { $group: { _id: '$studentId', totalPaid: { $sum: '$amount' } } },
+    ]);
+
+    const paidMap = Object.fromEntries(
+      payments.map((p) => [p._id.toString(), p.totalPaid])
+    );
+
+    studentBalances = students.map((s) => {
+      const totalPaid = paidMap[s._id.toString()] ?? 0;
+      const expected  = feeStructure.totalAmount ?? 0;
+      return {
+        ...s,
+        fees: {
+          expected,
+          paid:        totalPaid,
+          balance:     Math.max(0, expected - totalPaid),
+          overpaid:    Math.max(0, totalPaid - expected),
+        },
+      };
+    });
+  } else {
+    studentBalances = students.map((s) => ({ ...s, fees: null }));
+  }
+
+  return { students: studentBalances, feeStructure };
+}
+
+/**
  * GET /api/v1/classes/:id
- * Returns a single class belonging to the school.
+ * Returns a class with its students + fee balance summary.
  */
 export const getClass = asyncHandler(async (req, res) => {
   const cls = await Class.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
@@ -97,7 +168,30 @@ export const getClass = asyncHandler(async (req, res) => {
 
   if (!cls) return sendError(res, 'Class not found.', 404);
 
-  return sendSuccess(res, { class: cls });
+  const { students, feeStructure } = await fetchClassDetails(cls);
+
+  return sendSuccess(res, { class: cls, students, feeStructure });
+});
+
+/**
+ * GET /api/v1/classes/my-class
+ * Returns the class where the logged-in user is the class teacher, including
+ * full student list and fee balance summary.
+ */
+export const myClass = asyncHandler(async (req, res) => {
+  const cls = await Class.findOne({
+    classTeacherId: req.user._id,
+    schoolId:       req.user.schoolId,
+    isActive:       true,
+  }).populate('classTeacherId', 'firstName lastName email');
+
+  if (!cls) {
+    return sendError(res, 'You are not assigned as class teacher of any active class.', 404);
+  }
+
+  const { students, feeStructure } = await fetchClassDetails(cls);
+
+  return sendSuccess(res, { class: cls, students, feeStructure });
 });
 
 /**

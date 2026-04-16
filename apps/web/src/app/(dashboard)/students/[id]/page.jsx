@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, GraduationCap } from 'lucide-react';
 import { studentsApi } from '@/lib/api';
 import { formatDate, getStatusColor, capitalize } from '@/lib/utils';
@@ -10,8 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-export default function StudentDetailPage({ params }) {
-  const { id } = params;
+export default function StudentDetailPage() {
+  const params = useParams();
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const router = useRouter();
 
   const { data, isLoading } = useQuery({
@@ -20,6 +21,7 @@ export default function StudentDetailPage({ params }) {
       const res = await studentsApi.get(id);
       return res.data.data;
     },
+    enabled: !!id,
   });
 
   if (isLoading) return (

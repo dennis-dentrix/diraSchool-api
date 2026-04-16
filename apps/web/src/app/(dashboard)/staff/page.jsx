@@ -10,12 +10,13 @@ import { z } from 'zod';
 import { usersApi, getErrorMessage } from '@/lib/api';
 import { ROLE_LABELS } from '@/lib/constants';
 import { getRoleBadgeColor } from '@/lib/utils';
-import { formatDate, capitalize } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -61,13 +62,17 @@ const columns = (onResendInvite) => [
     cell: ({ row }) => <span className="text-sm">{row.original.phone ?? '—'}</span>,
   },
   {
-    accessorKey: 'isEmailVerified',
+    accessorKey: 'status',
     header: 'Status',
-    cell: ({ row }) => (
-      <span className={`text-xs px-2 py-1 rounded-full font-medium ${row.original.isEmailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-        {row.original.isEmailVerified ? 'Active' : 'Invite Pending'}
-      </span>
-    ),
+    cell: ({ row }) => {
+      if (!row.original.isActive) {
+        return <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-800">Paused</span>;
+      }
+      if (row.original.invitePending) {
+        return <span className="text-xs px-2 py-1 rounded-full font-medium bg-yellow-100 text-yellow-800">Invite Pending</span>;
+      }
+      return <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-800">Invite Accepted</span>;
+    },
   },
   {
     accessorKey: 'createdAt',
@@ -84,7 +89,7 @@ const columns = (onResendInvite) => [
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {!row.original.isEmailVerified && (
+          {row.original.invitePending && row.original.isActive && (
             <DropdownMenuItem onClick={() => onResendInvite(row.original._id)}>
               <Mail className="h-4 w-4 mr-2" /> Resend invite
             </DropdownMenuItem>
@@ -115,9 +120,20 @@ export default function StaffPage() {
         search: debouncedSearch || undefined,
         role: roleFilter || undefined,
       });
-      return res.data;
+      return res.data.data ?? res.data;
     },
   });
+
+  const staffRows = Array.isArray(data?.users)
+    ? data.users
+    : Array.isArray(data?.data)
+      ? data.data
+      : [];
+  const pagination = data?.meta ?? data?.pagination;
+
+  const pendingInvites = staffRows.filter((u) => u.isActive && u.invitePending);
+  const acceptedInvites = staffRows.filter((u) => u.isActive && !u.invitePending);
+  const pausedAccounts = staffRows.filter((u) => !u.isActive);
 
   const { mutate: createUser, isPending } = useMutation({
     mutationFn: (data) => usersApi.create(data),
@@ -150,10 +166,10 @@ export default function StaffPage() {
           <Input placeholder="Search staff…" className="pl-9" value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
+        <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v === '__all__' ? '' : v)}>
           <SelectTrigger className="w-44"><SelectValue placeholder="All roles" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All roles</SelectItem>
+            <SelectItem value="__all__">All roles</SelectItem>
             {STAFF_ROLES.map((r) => (
               <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
             ))}
@@ -161,11 +177,44 @@ export default function StaffPage() {
         </Select>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3 mb-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Pending Invites ({pendingInvites.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {pendingInvites.length ? pendingInvites.slice(0, 5).map((u) => (
+              <p key={u._id} className="text-sm">{u.firstName} {u.lastName}</p>
+            )) : <p className="text-sm text-muted-foreground">No pending invites</p>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Accepted Invites ({acceptedInvites.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {acceptedInvites.length ? acceptedInvites.slice(0, 5).map((u) => (
+              <p key={u._id} className="text-sm">{u.firstName} {u.lastName}</p>
+            )) : <p className="text-sm text-muted-foreground">No accepted invites</p>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Paused Accounts ({pausedAccounts.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {pausedAccounts.length ? pausedAccounts.slice(0, 5).map((u) => (
+              <p key={u._id} className="text-sm">{u.firstName} {u.lastName}</p>
+            )) : <p className="text-sm text-muted-foreground">No paused accounts</p>}
+          </CardContent>
+        </Card>
+      </div>
+
       <DataTable
         columns={columns(resendInvite)}
-        data={data?.data}
+        data={staffRows}
         loading={isLoading}
-        pageCount={data?.pagination?.pages}
+        pageCount={pagination?.pages}
         currentPage={page}
         onPageChange={setPage}
       />

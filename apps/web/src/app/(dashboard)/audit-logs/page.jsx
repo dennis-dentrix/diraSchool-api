@@ -66,17 +66,17 @@ export default function AuditLogsPage() {
       <PageHeader title="Audit Logs" description="Immutable trail of all system actions" />
 
       <div className="flex gap-3 mb-4">
-        <Select value={actionFilter} onValueChange={setActionFilter}>
+        <Select value={actionFilter} onValueChange={(v) => setActionFilter(v === '__all__' ? '' : v)}>
           <SelectTrigger className="w-36"><SelectValue placeholder="All actions" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All actions</SelectItem>
+            <SelectItem value="__all__">All actions</SelectItem>
             {ACTIONS.map((a) => <SelectItem key={a} value={a}>{capitalize(a)}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={resourceFilter} onValueChange={setResourceFilter}>
+        <Select value={resourceFilter} onValueChange={(v) => setResourceFilter(v === '__all__' ? '' : v)}>
           <SelectTrigger className="w-36"><SelectValue placeholder="All resources" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All resources</SelectItem>
+            <SelectItem value="__all__">All resources</SelectItem>
             {RESOURCES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
           </SelectContent>
         </Select>

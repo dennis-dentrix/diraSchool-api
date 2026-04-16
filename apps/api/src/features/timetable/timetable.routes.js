@@ -30,9 +30,12 @@ const canRead = authorize(
 router.get('/',   canRead, validateListTimetables, listTimetables);
 router.get('/:id', canRead, getTimetable);
 
-// Write access: admins only
-router.post('/',            adminOnly, validateCreateTimetable, createTimetable);
-router.put('/:id/slots',    adminOnly, validateUpdateSlots, updateSlots);
-router.delete('/:id',       adminOnly, deleteTimetable);
+// Write access: school admin, headteacher and deputy headteacher
+// (directors are excluded — they approve, not schedule)
+const canWrite = authorize(ROLES.SCHOOL_ADMIN, ROLES.HEADTEACHER, ROLES.DEPUTY_HEADTEACHER);
+
+router.post('/',            canWrite, validateCreateTimetable, createTimetable);
+router.put('/:id/slots',    canWrite, validateUpdateSlots, updateSlots);
+router.delete('/:id',       canWrite, deleteTimetable);
 
 export default router;

@@ -16,7 +16,30 @@ const normalizeSuccessPayload = (payload) => {
     return payload;
   }
   const { status, ...rest } = payload;
-  return { status, data: rest, ...rest };
+
+  const metaLikeKeys = new Set(['meta', 'pagination']);
+  const nonMetaKeys = Object.keys(rest).filter((k) => !metaLikeKeys.has(k));
+  const arrayKeys = nonMetaKeys.filter((k) => Array.isArray(rest[k]));
+
+  let normalizedData = rest;
+
+  // List endpoints: { users: [...], meta: {...} } -> data: [...]
+  if (arrayKeys.length === 1 && nonMetaKeys.length === 1) {
+    normalizedData = rest[arrayKeys[0]];
+  }
+  // Detail endpoints: { student: {...} } -> data: {...}
+  else if (nonMetaKeys.length === 1) {
+    normalizedData = rest[nonMetaKeys[0]];
+  }
+
+  const pagination = rest.pagination ?? rest.meta;
+
+  return {
+    status,
+    data: normalizedData,
+    ...(pagination ? { pagination } : {}),
+    ...rest,
+  };
 };
 
 // Redirect to login on 401
@@ -97,7 +120,9 @@ export const classesApi = {
   get: (id) => api.get(`/classes/${id}`),
   update: (id, data) => api.patch(`/classes/${id}`, data),
   delete: (id) => api.delete(`/classes/${id}`),
-  promote: (id) => api.post(`/classes/${id}/promote`),
+  promote: (id, data) => api.post(`/classes/${id}/promote`, data),
+  /** Teacher shortcut — returns the class where the teacher is classTeacher */
+  myClass: () => api.get('/classes/my-class'),
 };
 
 // ─── Students ─────────────────────────────────────────────────────────────────
@@ -131,7 +156,10 @@ export const subjectsApi = {
   get: (id) => api.get(`/subjects/${id}`),
   update: (id, data) => api.patch(`/subjects/${id}`, data),
   delete: (id) => api.delete(`/subjects/${id}`),
-  assignTeacher: (id, data) => api.patch(`/subjects/${id}/teacher`, data),
+  /** Replace the teacher list + HOD for a subject */
+  assignTeachers: (id, data) => api.patch(`/subjects/${id}/teachers`, data),
+  /** Teacher shortcut — my subjects */
+  mySubjects: () => api.get('/subjects/my-subjects'),
 };
 
 // ─── Exams ────────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeft, Building2, Users, GraduationCap } from 'lucide-react';
 import { schoolsApi, usersApi, studentsApi, getErrorMessage } from '@/lib/api';
@@ -35,8 +35,9 @@ const staffColumns = [
   { accessorKey: 'status', header: 'Status', cell: ({ row }) => <span className={`text-xs px-2 py-1 rounded-full capitalize ${row.original.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>{row.original.status}</span> },
 ];
 
-export default function SchoolDetailPage({ params }) {
-  const { id } = params;
+export default function SchoolDetailPage() {
+  const params = useParams();
+  const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const router = useRouter();
   const queryClient = useQueryClient();
   const [subForm, setSubForm] = useState(null);
@@ -47,6 +48,7 @@ export default function SchoolDetailPage({ params }) {
       const res = await schoolsApi.get(id);
       return res.data.data;
     },
+    enabled: !!id,
     onSuccess: (d) => {
       if (!subForm) {
         setSubForm({
@@ -64,6 +66,7 @@ export default function SchoolDetailPage({ params }) {
       const res = await usersApi.list({ schoolId: id, limit: 50 });
       return res.data;
     },
+    enabled: !!id,
   });
 
   const { data: studentsData, isLoading: studentsLoading } = useQuery({
@@ -72,6 +75,7 @@ export default function SchoolDetailPage({ params }) {
       const res = await studentsApi.list({ schoolId: id, limit: 10 });
       return res.data;
     },
+    enabled: !!id,
   });
 
   const { mutate: updateSub, isPending } = useMutation({

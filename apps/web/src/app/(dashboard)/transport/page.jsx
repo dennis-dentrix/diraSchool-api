@@ -85,7 +85,7 @@ export default function TransportPage() {
             <div className="space-y-1.5"><Label>Route Name</Label><Input {...register('name', { required: true })} placeholder="Westlands — School" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Vehicle Reg</Label><Input {...register('vehicleReg')} placeholder="KBZ 123A" /></div>
-              <div className="space-y-1.5"><Label>Capacity</Label><Input {...register('capacity')} type="number" placeholder="40" /></div>
+              <div className="space-y-1.5"><Label>Capacity</Label><Input {...register('capacity', { valueAsNumber: true })} type="number" placeholder="40" min="1" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5"><Label>Driver Name</Label><Input {...register('driverName')} placeholder="John Mwangi" /></div>

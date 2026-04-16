@@ -75,6 +75,46 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/(dashboard)/results/page.js"
+    ],
+    "/(auth)/accept-invite/[token]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(auth)/accept-invite/[token]/page.js"
+    ],
+    "/(dashboard)/timetable/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/timetable/page.js"
+    ],
+    "/(dashboard)/students/[id]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/students/[id]/page.js"
+    ],
+    "/(dashboard)/fees/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/fees/page.js"
+    ],
+    "/(dashboard)/fees/structures/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/fees/structures/page.js"
+    ],
+    "/(dashboard)/audit-logs/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/audit-logs/page.js"
+    ],
+    "/(dashboard)/transport/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/transport/page.js"
+    ],
+    "/(dashboard)/library/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/library/page.js"
     ]
   }
 }

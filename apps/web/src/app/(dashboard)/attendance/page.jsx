@@ -110,10 +110,10 @@ export default function AttendancePage() {
   return (
     <div>
       <PageHeader title="Attendance" description="Daily attendance registers">
-        <Select value={classFilter} onValueChange={setClassFilter}>
+        <Select value={classFilter} onValueChange={(v) => setClassFilter(v === '__all__' ? '' : v)}>
           <SelectTrigger className="w-40"><SelectValue placeholder="All classes" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All classes</SelectItem>
+            <SelectItem value="__all__">All classes</SelectItem>
             {classesData?.data?.map((c) => (
               <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>
             ))}

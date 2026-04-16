@@ -1,20 +1,31 @@
+import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import Student from './Student.model.js';
 import Class from '../classes/Class.model.js';
 import User from '../users/User.model.js';
+import School from '../schools/School.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
+import { sendInviteEmail } from '../../services/email.service.js';
 import { ROLES, STUDENT_STATUSES, JOB_NAMES, AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
 import { importQueue } from '../../jobs/queues.js';
 import { getRedis } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
+import { env } from '../../config/env.js';
+import logger from '../../config/logger.js';
 
 /**
  * POST /api/v1/students
  * Enrolls a new student.
- * If a parent object is supplied, auto-creates a parent User (or links an existing one).
+ *
+ * Guardian handling:
+ *   - guardians[] — rich contact details; stored on the student record
+ *   - If a guardian has an email, a parent portal account is created and an
+ *     invite email is sent (fire-and-forget). No invite = placeholder account
+ *     only when a portal account is explicitly requested via existingUserId or email.
+ *   - parent (legacy) — single-guardian shortcut, still supported
  */
 export const enrollStudent = asyncHandler(async (req, res) => {
   const {
@@ -24,22 +35,98 @@ export const enrollStudent = asyncHandler(async (req, res) => {
     lastName,
     gender,
     dateOfBirth,
-    parent,
+    birthCertificateNumber,
+    enrollmentDate,
+    guardians = [],
+    parent, // legacy single-guardian field
   } = req.body;
 
   // Verify the target class belongs to this school
   const cls = await Class.findOne({ _id: classId, schoolId: req.user.schoolId });
   if (!cls) return sendError(res, 'Class not found.', 404);
 
+  // Fetch school name for invite emails
+  const school = await School.findById(req.user.schoolId).select('name').lean();
+  const schoolName = school?.name ?? 'your school';
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    let parentId;
+    const parentIds = [];
+    // Track pending invite emails so we can fire them AFTER commit
+    const pendingInvites = [];
 
-    if (parent) {
+    // ── Process guardians array ───────────────────────────────────────────────
+    for (const guardian of guardians) {
+      // Normalize guardian data
+      const guardianEntry = {
+        firstName:    guardian.firstName.trim(),
+        lastName:     guardian.lastName.trim(),
+        relationship: guardian.relationship,
+        phone:        guardian.phone ? normalisePhone(guardian.phone) : undefined,
+        email:        guardian.email?.toLowerCase().trim(),
+        occupation:   guardian.occupation?.trim(),
+      };
+
+      if (guardian.existingUserId) {
+        // Link an already-existing parent user
+        const existingUser = await User.findOne({
+          _id: guardian.existingUserId,
+          schoolId: req.user.schoolId,
+          role: ROLES.PARENT,
+        }).session(session);
+
+        if (!existingUser) {
+          await session.abortTransaction();
+          return sendError(res, `Parent user ${guardian.existingUserId} not found in this school.`, 404);
+        }
+        guardianEntry.userId = existingUser._id;
+        parentIds.push(existingUser._id);
+      } else if (guardian.email) {
+        // Email provided → create parent portal account + send invite
+        const rawToken  = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const expiry    = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+        const [newParent] = await User.create(
+          [
+            {
+              firstName:         guardian.firstName.trim(),
+              lastName:          guardian.lastName.trim(),
+              email:             guardian.email.toLowerCase().trim(),
+              phone:             guardian.phone ? normalisePhone(guardian.phone) : undefined,
+              password:          crypto.randomBytes(16).toString('hex'), // placeholder
+              role:              ROLES.PARENT,
+              schoolId:          req.user.schoolId,
+              mustChangePassword: false,
+              invitePending:      true,
+              inviteToken:        tokenHash,
+              inviteTokenExpiry:  expiry,
+              emailVerified:      true,
+            },
+          ],
+          { session }
+        );
+
+        guardianEntry.userId = newParent._id;
+        parentIds.push(newParent._id);
+
+        const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
+        pendingInvites.push({
+          to:           newParent.email,
+          firstName:    newParent.firstName,
+          schoolName,
+          inviteUrl,
+          meta: { schoolId: req.user.schoolId, userId: newParent._id, flow: 'parent-invite' },
+        });
+      }
+      // No email and no existingUserId → store contact only, no portal account
+    }
+
+    // ── Legacy single-parent shortcut ─────────────────────────────────────────
+    if (parent && !guardians.length) {
       if (parent.existingUserId) {
-        // Link an already-existing user in this school
         const existingUser = await User.findOne({
           _id: parent.existingUserId,
           schoolId: req.user.schoolId,
@@ -50,53 +137,82 @@ export const enrollStudent = asyncHandler(async (req, res) => {
           await session.abortTransaction();
           return sendError(res, 'Existing parent user not found in this school.', 404);
         }
-        parentId = existingUser._id;
+        parentIds.push(existingUser._id);
       } else {
-        // Create a new parent user
         const phone = normalisePhone(parent.phone);
-        const email = parent.email?.toLowerCase().trim() ||
-          // Generate a placeholder email from phone if none provided
-          `parent${phone.replace('+', '')}@placeholder.diraschool`;
+        const email = parent.email?.toLowerCase().trim();
+
+        const rawToken  = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+        const expiry    = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
         const [newParent] = await User.create(
           [
             {
-              firstName: parent.firstName.trim(),
-              lastName: parent.lastName.trim(),
-              email,
+              firstName:          parent.firstName.trim(),
+              lastName:           parent.lastName.trim(),
+              email:              email || `parent${phone.replace('+', '')}@placeholder.diraschool`,
               phone,
-              password: phone, // temp password = their phone number; they must change on first login
-              role: ROLES.PARENT,
-              schoolId: req.user.schoolId,
-              mustChangePassword: true,
+              password:           crypto.randomBytes(16).toString('hex'),
+              role:               ROLES.PARENT,
+              schoolId:           req.user.schoolId,
+              mustChangePassword: false,
+              invitePending:      !!email, // only pending if we can invite them
+              inviteToken:        email ? tokenHash : undefined,
+              inviteTokenExpiry:  email ? expiry : undefined,
+              emailVerified:      true,
             },
           ],
           { session }
         );
-        parentId = newParent._id;
+
+        parentIds.push(newParent._id);
+
+        if (email) {
+          const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
+          pendingInvites.push({
+            to:       newParent.email,
+            firstName: newParent.firstName,
+            schoolName,
+            inviteUrl,
+            meta: { schoolId: req.user.schoolId, userId: newParent._id, flow: 'parent-invite' },
+          });
+        }
       }
     }
 
+    // ── Create student ────────────────────────────────────────────────────────
     const [student] = await Student.create(
       [
         {
-          schoolId: req.user.schoolId,
+          schoolId:               req.user.schoolId,
           classId,
-          admissionNumber: admissionNumber.trim().toUpperCase(),
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
+          admissionNumber:        admissionNumber.trim().toUpperCase(),
+          firstName:              firstName.trim(),
+          lastName:               lastName.trim(),
           gender,
-          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
-          parentIds: parentId ? [parentId] : [],
+          dateOfBirth:            dateOfBirth ? new Date(dateOfBirth) : undefined,
+          birthCertificateNumber: birthCertificateNumber?.trim(),
+          enrollmentDate:         enrollmentDate ? new Date(enrollmentDate) : new Date(),
+          guardians:              guardians.map((g, i) => ({
+            firstName:    g.firstName.trim(),
+            lastName:     g.lastName.trim(),
+            relationship: g.relationship,
+            phone:        g.phone ? normalisePhone(g.phone) : undefined,
+            email:        g.email?.toLowerCase().trim(),
+            occupation:   g.occupation?.trim(),
+            // Match userId assigned above (by index, only for guardians with portal accounts)
+          })),
+          parentIds,
         },
       ],
       { session }
     );
 
-    // If we created a parent, link this student to their children array
-    if (parentId && !parent?.existingUserId) {
-      await User.updateOne(
-        { _id: parentId },
+    // Link student to all parent portal accounts
+    if (parentIds.length) {
+      await User.updateMany(
+        { _id: { $in: parentIds } },
         { $addToSet: { children: student._id } },
         { session }
       );
@@ -104,11 +220,20 @@ export const enrollStudent = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    const populated = await Student.findById(student._id).populate('parentIds', 'firstName lastName phone email');
+    // ── Fire invite emails after commit (fire-and-forget) ─────────────────────
+    for (const invite of pendingInvites) {
+      sendInviteEmail(invite).catch((err) =>
+        logger.error('[Students] Parent invite email failed:', err.message)
+      );
+    }
+
+    const populated = await Student.findById(student._id)
+      .populate('classId', 'name stream levelCategory academicYear term')
+      .populate('parentIds', 'firstName lastName phone email');
 
     logAction(req, {
-      action: AUDIT_ACTIONS.CREATE,
-      resource: AUDIT_RESOURCES.STUDENT,
+      action:     AUDIT_ACTIONS.CREATE,
+      resource:   AUDIT_RESOURCES.STUDENT,
       resourceId: student._id,
       meta: { admissionNumber: student.admissionNumber, classId: classId.toString() },
     });

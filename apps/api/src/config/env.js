@@ -13,24 +13,27 @@ const required = [
   // AT_USERNAME / AT_API_KEY are optional until the SMS feature is activated
 ];
 
+const writeStderr = (message) => {
+  process.stderr.write(`${message}\n`);
+};
+
 export const validateEnv = () => {
   const missing = required.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
-    console.error(
-      `\n[ENV ERROR] Missing required environment variables:\n  ${missing.join('\n  ')}`
-    );
-    console.error('\nCopy .env.example to .env and fill in all required values.\n');
+    // USED THIS INSTEAD OF CONSOLE.ERROR DUE TO A WARNING FROM ESLINT
+    writeStderr(`\n[ENV ERROR] Missing required environment variables:\n  ${missing.join('\n  ')}`);
+    writeStderr('\nCopy .env.example to .env and fill in all required values.\n');
     process.exit(1);
   }
 
   if (process.env.JWT_SECRET && process.env.JWT_SECRET.length < 32) {
-    console.error('\n[ENV ERROR] JWT_SECRET must be at least 32 characters.\n');
+    writeStderr('\n[ENV ERROR] JWT_SECRET must be at least 32 characters.\n');
     process.exit(1);
   }
 
   if (!process.env.ZEPTOMAIL_API_KEY && !process.env.RESEND_API_KEY) {
-    console.error(
+    writeStderr(
       '\n[ENV ERROR] Configure at least one email provider: ZEPTOMAIL_API_KEY or RESEND_API_KEY.\n'
     );
     process.exit(1);
@@ -40,9 +43,7 @@ export const validateEnv = () => {
     process.env.EMAIL_PRIMARY_PROVIDER &&
     !['zeptomail', 'resend'].includes(process.env.EMAIL_PRIMARY_PROVIDER)
   ) {
-    console.error(
-      '\n[ENV ERROR] EMAIL_PRIMARY_PROVIDER must be either "zeptomail" or "resend".\n'
-    );
+    writeStderr('\n[ENV ERROR] EMAIL_PRIMARY_PROVIDER must be either "zeptomail" or "resend".\n');
     process.exit(1);
   }
 };

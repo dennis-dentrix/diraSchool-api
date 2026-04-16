@@ -6,6 +6,8 @@ import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { LEVEL_CATEGORIES, ROLES } from '../../constants/index.js';
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 const validateClassForSubject = async (schoolId, classId) => {
   const cls = await Class.findOne({ _id: classId, schoolId });
   if (!cls) return { error: { message: 'Class not found.', statusCode: 404 } };
@@ -23,22 +25,80 @@ const validateClassForSubject = async (schoolId, classId) => {
 };
 
 /**
+ * Validates that all provided teacher IDs belong to active teachers in this school.
+ * Returns the resolved teacher IDs or an error object.
+ */
+const resolveTeacherIds = async (schoolId, teacherIds = []) => {
+  if (!teacherIds.length) return { ids: [] };
+
+  const teachers = await User.find({
+    _id: { $in: teacherIds },
+    schoolId,
+    role: ROLES.TEACHER,
+    isActive: true,
+  }).select('_id');
+
+  if (teachers.length !== teacherIds.length) {
+    return { error: { message: 'One or more teacher IDs are invalid or not active teachers in this school.', statusCode: 404 } };
+  }
+
+  return { ids: teachers.map((t) => t._id) };
+};
+
+/**
+ * Validates that the provided HOD ID belongs to an active user (any management role) in this school.
+ */
+const resolveHodId = async (schoolId, hodId) => {
+  if (!hodId) return { id: undefined };
+
+  const hod = await User.findOne({
+    _id: hodId,
+    schoolId,
+    isActive: true,
+  }).select('_id');
+
+  if (!hod) return { error: { message: 'Head of Department user not found or inactive.', statusCode: 404 } };
+  return { id: hod._id };
+};
+
+const populateSubject = (query) =>
+  query
+    .populate('classId', 'name stream levelCategory academicYear term')
+    .populate('teacherIds', 'firstName lastName email')
+    .populate('hodId', 'firstName lastName email');
+
+// ── Controllers ───────────────────────────────────────────────────────────────
+
+/**
  * POST /api/v1/subjects
  */
 export const createSubject = asyncHandler(async (req, res) => {
-  const { classId, name, code } = req.body;
+  const { classId, name, code, department, teacherIds = [], hodId } = req.body;
 
   const check = await validateClassForSubject(req.user.schoolId, classId);
   if (check.error) return sendError(res, check.error.message, check.error.statusCode);
 
+  // Validate teachers
+  const tResult = await resolveTeacherIds(req.user.schoolId, teacherIds);
+  if (tResult.error) return sendError(res, tResult.error.message, tResult.error.statusCode);
+
+  // Validate HOD
+  const hodResult = await resolveHodId(req.user.schoolId, hodId);
+  if (hodResult.error) return sendError(res, hodResult.error.message, hodResult.error.statusCode);
+
   const subject = await Subject.create({
-    schoolId: req.user.schoolId,
+    schoolId:   req.user.schoolId,
     classId,
-    name: name.trim(),
-    code: code?.trim().toUpperCase(),
+    name:       name.trim(),
+    code:       code?.trim().toUpperCase(),
+    department: department?.trim(),
+    teacherIds: tResult.ids,
+    hodId:      hodResult.id,
   });
 
-  return sendSuccess(res, { subject }, 201);
+  const populated = await populateSubject(Subject.findById(subject._id));
+
+  return sendSuccess(res, { subject: populated }, 201);
 });
 
 /**
@@ -46,18 +106,21 @@ export const createSubject = asyncHandler(async (req, res) => {
  */
 export const listSubjects = asyncHandler(async (req, res) => {
   const filter = { schoolId: req.user.schoolId };
-  if (req.query.classId) filter.classId = req.query.classId;
+  if (req.query.classId)              filter.classId    = req.query.classId;
+  if (req.query.department)           filter.department = req.query.department;
   if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
+
+  // Teachers can see only subjects assigned to them
+  if (req.user.role === ROLES.TEACHER) {
+    filter.teacherIds = req.user._id;
+  }
 
   const total = await Subject.countDocuments(filter);
   const { skip, limit, meta } = paginate(req.query, total);
 
-  const subjects = await Subject.find(filter)
-    .sort({ name: 1 })
-    .skip(skip)
-    .limit(limit)
-    .populate('classId', 'name stream levelCategory academicYear term')
-    .populate('teacherId', 'firstName lastName email');
+  const subjects = await populateSubject(
+    Subject.find(filter).sort({ name: 1 }).skip(skip).limit(limit)
+  );
 
   return sendSuccess(res, { subjects, meta });
 });
@@ -66,12 +129,9 @@ export const listSubjects = asyncHandler(async (req, res) => {
  * GET /api/v1/subjects/:id
  */
 export const getSubject = asyncHandler(async (req, res) => {
-  const subject = await Subject.findOne({
-    _id: req.params.id,
-    schoolId: req.user.schoolId,
-  })
-    .populate('classId', 'name stream levelCategory academicYear term')
-    .populate('teacherId', 'firstName lastName email');
+  const subject = await populateSubject(
+    Subject.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
+  );
 
   if (!subject) return sendError(res, 'Subject not found.', 404);
 
@@ -89,7 +149,7 @@ export const updateSubject = asyncHandler(async (req, res) => {
 
   if (!subject) return sendError(res, 'Subject not found.', 404);
 
-  const { classId, name, code, isActive } = req.body;
+  const { classId, name, code, isActive, department, teacherIds, hodId } = req.body;
 
   if (classId !== undefined) {
     const check = await validateClassForSubject(req.user.schoolId, classId);
@@ -97,45 +157,62 @@ export const updateSubject = asyncHandler(async (req, res) => {
     subject.classId = classId;
   }
 
-  if (name !== undefined) subject.name = name.trim();
-  if (code !== undefined) subject.code = code ? code.trim().toUpperCase() : undefined;
-  if (isActive !== undefined) subject.isActive = isActive;
+  if (teacherIds !== undefined) {
+    const tResult = await resolveTeacherIds(req.user.schoolId, teacherIds);
+    if (tResult.error) return sendError(res, tResult.error.message, tResult.error.statusCode);
+    subject.teacherIds = tResult.ids;
+  }
+
+  if (hodId !== undefined) {
+    if (hodId === null) {
+      subject.hodId = undefined;
+    } else {
+      const hodResult = await resolveHodId(req.user.schoolId, hodId);
+      if (hodResult.error) return sendError(res, hodResult.error.message, hodResult.error.statusCode);
+      subject.hodId = hodResult.id;
+    }
+  }
+
+  if (name       !== undefined) subject.name       = name.trim();
+  if (code       !== undefined) subject.code       = code ? code.trim().toUpperCase() : undefined;
+  if (isActive   !== undefined) subject.isActive   = isActive;
+  if (department !== undefined) subject.department = department ? department.trim() : undefined;
 
   await subject.save();
 
-  return sendSuccess(res, { subject });
+  const populated = await populateSubject(Subject.findById(subject._id));
+
+  return sendSuccess(res, { subject: populated });
 });
 
 /**
- * PATCH /api/v1/subjects/:id/teacher
- * Assigns (or unassigns) a teacher to a subject.
- * teacherId must belong to this school and have role = teacher.
- * Pass teacherId: null to remove the current assignment.
+ * PATCH /api/v1/subjects/:id/teachers
+ * Replaces the full teacher list (and optionally the HOD) for a subject.
+ * Body: { teacherIds: ["id1","id2"], hodId: "id" | null }
  */
-export const assignTeacher = asyncHandler(async (req, res) => {
+export const assignTeachers = asyncHandler(async (req, res) => {
   const subject = await Subject.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
   if (!subject) return sendError(res, 'Subject not found.', 404);
 
-  const { teacherId } = req.body;
+  const { teacherIds, hodId } = req.body;
 
-  if (teacherId === null || teacherId === undefined) {
-    subject.teacherId = undefined;
-  } else {
-    const teacher = await User.findOne({
-      _id: teacherId,
-      schoolId: req.user.schoolId,
-      role: ROLES.TEACHER,
-      isActive: true,
-    });
-    if (!teacher) return sendError(res, 'Active teacher not found in this school.', 404);
-    subject.teacherId = teacher._id;
+  const tResult = await resolveTeacherIds(req.user.schoolId, teacherIds);
+  if (tResult.error) return sendError(res, tResult.error.message, tResult.error.statusCode);
+  subject.teacherIds = tResult.ids;
+
+  if (hodId !== undefined) {
+    if (hodId === null) {
+      subject.hodId = undefined;
+    } else {
+      const hodResult = await resolveHodId(req.user.schoolId, hodId);
+      if (hodResult.error) return sendError(res, hodResult.error.message, hodResult.error.statusCode);
+      subject.hodId = hodResult.id;
+    }
   }
 
   await subject.save();
 
-  const populated = await Subject.findById(subject._id)
-    .populate('classId', 'name stream levelCategory academicYear term')
-    .populate('teacherId', 'firstName lastName email');
+  const populated = await populateSubject(Subject.findById(subject._id));
 
   return sendSuccess(res, { subject: populated });
 });
@@ -153,4 +230,20 @@ export const deleteSubject = asyncHandler(async (req, res) => {
 
   await subject.deleteOne();
   return sendSuccess(res, { message: 'Subject deleted.' });
+});
+
+/**
+ * GET /api/v1/subjects/my-subjects
+ * Returns subjects assigned to the currently logged-in teacher.
+ */
+export const mySubjects = asyncHandler(async (req, res) => {
+  const subjects = await populateSubject(
+    Subject.find({
+      schoolId:   req.user.schoolId,
+      teacherIds: req.user._id,
+      isActive:   true,
+    }).sort({ name: 1 })
+  );
+
+  return sendSuccess(res, { subjects });
 });

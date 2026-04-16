@@ -78,10 +78,10 @@ export default function ExamsPage() {
   return (
     <div>
       <PageHeader title="Exams" description="Manage exam configuration">
-        <Select value={selectedClass} onValueChange={setSelectedClass}>
+        <Select value={selectedClass} onValueChange={(v) => setSelectedClass(v === '__all__' ? '' : v)}>
           <SelectTrigger className="w-40"><SelectValue placeholder="All classes" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All classes</SelectItem>
+            <SelectItem value="__all__">All classes</SelectItem>
             {classesData?.data?.map((c) => <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>)}
           </SelectContent>
         </Select>

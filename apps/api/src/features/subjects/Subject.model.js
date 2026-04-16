@@ -24,11 +24,23 @@ const subjectSchema = new mongoose.Schema(
       trim: true,
       uppercase: true,
     },
-    // Teacher assigned to deliver this subject (optional — may differ from class teacher)
-    teacherId: {
+    // Department this subject belongs to (e.g. "Sciences", "Languages")
+    department: {
+      type: String,
+      trim: true,
+    },
+    // Head of Department for this subject's department
+    hodId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
     },
+    // List of teachers who can deliver this subject (primary teacher is teacherIds[0])
+    teacherIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     isActive: {
       type: Boolean,
       default: true,

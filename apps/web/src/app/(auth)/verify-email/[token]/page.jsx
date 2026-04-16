@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
@@ -10,8 +10,9 @@ import { useAuthStore } from '@/store/auth.store';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-export default function VerifyEmailPage({ params }) {
-  const { token } = params;
+export default function VerifyEmailPage() {
+  const params = useParams();
+  const token = Array.isArray(params?.token) ? params.token[0] : params?.token;
   const router = useRouter();
   const { setUser } = useAuthStore();
 
@@ -21,6 +22,7 @@ export default function VerifyEmailPage({ params }) {
       const res = await authApi.verifyEmailByToken(token);
       return res.data.data?.user ?? res.data.user ?? null;
     },
+    enabled: !!token,
     retry: false,
   });
 

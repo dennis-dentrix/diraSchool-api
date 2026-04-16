@@ -143,10 +143,10 @@ export default function SuperadminSchoolsPage() {
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="w-56"
         />
-        <Select value={planFilter} onValueChange={(v) => { setPlanFilter(v); setPage(1); }}>
+        <Select value={planFilter} onValueChange={(v) => { setPlanFilter(v === '__all__' ? '' : v); setPage(1); }}>
           <SelectTrigger className="w-36"><SelectValue placeholder="All plans" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All plans</SelectItem>
+            <SelectItem value="__all__">All plans</SelectItem>
             <SelectItem value="trial">Trial</SelectItem>
             <SelectItem value="basic">Basic</SelectItem>
             <SelectItem value="standard">Standard</SelectItem>

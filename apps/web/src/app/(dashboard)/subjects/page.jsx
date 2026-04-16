@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, MoreHorizontal } from 'lucide-react';
+import { Plus, MoreHorizontal, Users } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,16 +16,29 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const schema = z.object({
-  name: z.string().min(1, 'Required'),
-  code: z.string().optional(),
-  classId: z.string().min(1, 'Required'),
-  teacherId: z.string().optional(),
+  name:       z.string().min(1, 'Required'),
+  code:       z.string().optional(),
+  classId:    z.string().min(1, 'Required'),
+  department: z.string().optional(),
 });
 
 const columns = (onDelete, onAssign) => [
-  { accessorKey: 'name', header: 'Subject', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+  {
+    accessorKey: 'name',
+    header: 'Subject',
+    cell: ({ row }) => (
+      <div>
+        <p className="font-medium">{row.original.name}</p>
+        {row.original.department && (
+          <p className="text-xs text-muted-foreground">{row.original.department}</p>
+        )}
+      </div>
+    ),
+  },
   { accessorKey: 'code', header: 'Code', cell: ({ row }) => <span className="text-sm font-mono">{row.original.code ?? '—'}</span> },
   {
     accessorKey: 'classId',
@@ -36,11 +49,31 @@ const columns = (onDelete, onAssign) => [
     },
   },
   {
-    accessorKey: 'teacherId',
-    header: 'Teacher',
+    accessorKey: 'teacherIds',
+    header: 'Teachers',
     cell: ({ row }) => {
-      const t = row.original.teacherId;
-      return <span className="text-sm">{typeof t === 'object' ? `${t.firstName} ${t.lastName}` : 'Unassigned'}</span>;
+      const teachers = row.original.teacherIds ?? [];
+      if (!teachers.length) return <span className="text-xs text-muted-foreground">None</span>;
+      return (
+        <div className="flex flex-wrap gap-1">
+          {teachers.slice(0, 2).map((t) => (
+            <Badge key={t._id ?? t} variant="secondary" className="text-xs">
+              {typeof t === 'object' ? `${t.firstName} ${t.lastName}` : t}
+            </Badge>
+          ))}
+          {teachers.length > 2 && (
+            <Badge variant="outline" className="text-xs">+{teachers.length - 2}</Badge>
+          )}
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: 'hodId',
+    header: 'HOD',
+    cell: ({ row }) => {
+      const h = row.original.hodId;
+      return <span className="text-sm">{typeof h === 'object' ? `${h.firstName} ${h.lastName}` : '—'}</span>;
     },
   },
   {
@@ -51,8 +84,12 @@ const columns = (onDelete, onAssign) => [
           <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => onAssign(row.original)}>Assign teacher</DropdownMenuItem>
-          <DropdownMenuItem className="text-destructive" onClick={() => { if (confirm('Delete subject?')) onDelete(row.original._id); }}>Delete</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onAssign(row.original)}>
+            <Users className="h-4 w-4 mr-2" />Assign teachers
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive" onClick={() => { if (confirm('Delete subject?')) onDelete(row.original._id); }}>
+            Delete
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     ),
@@ -63,7 +100,8 @@ export default function SubjectsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [assignTarget, setAssignTarget] = useState(null);
-  const [assignTeacherId, setAssignTeacherId] = useState('');
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState([]);
+  const [selectedHodId, setSelectedHodId] = useState('');
   const [page, setPage] = useState(1);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({ resolver: zodResolver(schema) });
@@ -72,8 +110,16 @@ export default function SubjectsPage() {
     queryKey: ['subjects', page],
     queryFn: async () => { const res = await subjectsApi.list({ page, limit: 20 }); return res.data; },
   });
-  const { data: classesData } = useQuery({ queryKey: ['classes'], queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; } });
-  const { data: teachersData } = useQuery({ queryKey: ['users', 'teachers'], queryFn: async () => { const res = await usersApi.list({ role: 'teacher', limit: 100 }); return res.data; } });
+  const { data: classesData } = useQuery({
+    queryKey: ['classes'],
+    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; },
+  });
+  const { data: teachersData } = useQuery({
+    queryKey: ['users', 'teachers'],
+    queryFn: async () => { const res = await usersApi.list({ role: 'teacher', limit: 100 }); return res.data; },
+  });
+
+  const teachers = teachersData?.users ?? teachersData?.data ?? [];
 
   const { mutate: createSubject, isPending } = useMutation({
     mutationFn: (data) => subjectsApi.create(data),
@@ -87,24 +133,46 @@ export default function SubjectsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const { mutate: assignTeacher } = useMutation({
-    mutationFn: ({ id, teacherId }) => subjectsApi.assignTeacher(id, { teacherId: teacherId || null }),
-    onSuccess: () => { toast.success('Teacher assigned'); queryClient.invalidateQueries({ queryKey: ['subjects'] }); setAssignTarget(null); },
+  const { mutate: assignTeachers, isPending: isAssigning } = useMutation({
+    mutationFn: ({ id, teacherIds, hodId }) =>
+      subjectsApi.assignTeachers(id, { teacherIds, hodId: hodId || null }),
+    onSuccess: () => { toast.success('Teachers updated'); queryClient.invalidateQueries({ queryKey: ['subjects'] }); setAssignTarget(null); },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const toggleTeacher = (id) => {
+    setSelectedTeacherIds((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
+    );
+  };
+
+  const openAssign = (subj) => {
+    const existing = (subj.teacherIds ?? []).map((t) => (typeof t === 'object' ? t._id : t));
+    const hod = typeof subj.hodId === 'object' ? subj.hodId?._id : subj.hodId ?? '';
+    setAssignTarget(subj);
+    setSelectedTeacherIds(existing);
+    setSelectedHodId(hod);
+  };
+
+  const subjects = data?.subjects ?? data?.data ?? [];
+  const meta     = data?.meta ?? data?.pagination;
+
   return (
     <div>
-      <PageHeader title="Subjects" description="Manage subjects and teacher assignments">
-        <Button size="sm" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Add Subject</Button>
+      <PageHeader title="Subjects" description="Manage subjects, departments, and teacher assignments">
+        <Button size="sm" onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-1" /> Add Subject</Button>
       </PageHeader>
 
       <DataTable
-        columns={columns(deleteSubject, (subj) => { setAssignTarget(subj); setAssignTeacherId(typeof subj.teacherId === 'object' ? subj.teacherId._id : subj.teacherId ?? ''); })}
-        data={data?.data} loading={isLoading}
-        pageCount={data?.pagination?.pages} currentPage={page} onPageChange={setPage}
+        columns={columns(deleteSubject, openAssign)}
+        data={subjects}
+        loading={isLoading}
+        pageCount={meta?.totalPages ?? meta?.pages}
+        currentPage={page}
+        onPageChange={setPage}
       />
 
+      {/* Create subject dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add Subject</DialogTitle></DialogHeader>
@@ -121,19 +189,22 @@ export default function SubjectsPage() {
               </div>
             </div>
             <div className="space-y-1.5">
+              <Label>Department (optional)</Label>
+              <Input {...register('department')} placeholder="e.g. Sciences, Languages" />
+            </div>
+            <div className="space-y-1.5">
               <Label>Class</Label>
               <Select onValueChange={(v) => setValue('classId', v)}>
                 <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
-                <SelectContent>{classesData?.data?.map((c) => <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {(classesData?.classes ?? classesData?.data ?? []).map((c) => (
+                    <SelectItem key={c._id} value={c._id}>
+                      {c.name}{c.stream ? ` ${c.stream}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
               {errors.classId && <p className="text-xs text-destructive">{errors.classId.message}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Teacher (optional)</Label>
-              <Select onValueChange={(v) => setValue('teacherId', v)}>
-                <SelectTrigger><SelectValue placeholder="Assign later" /></SelectTrigger>
-                <SelectContent>{teachersData?.data?.map((t) => <SelectItem key={t._id} value={t._id}>{t.firstName} {t.lastName}</SelectItem>)}</SelectContent>
-              </Select>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -143,22 +214,55 @@ export default function SubjectsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Assign teachers + HOD dialog */}
       <Dialog open={!!assignTarget} onOpenChange={() => setAssignTarget(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Assign Teacher — {assignTarget?.name}</DialogTitle></DialogHeader>
-          <div className="space-y-1.5">
-            <Label>Teacher</Label>
-            <Select value={assignTeacherId} onValueChange={setAssignTeacherId}>
-              <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">None (unassign)</SelectItem>
-                {teachersData?.data?.map((t) => <SelectItem key={t._id} value={t._id}>{t.firstName} {t.lastName}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <DialogHeader>
+            <DialogTitle>Teachers — {assignTarget?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Select Teachers</Label>
+              <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-2">
+                {teachers.length === 0 && (
+                  <p className="text-xs text-muted-foreground p-2">No teachers found</p>
+                )}
+                {teachers.map((t) => (
+                  <label key={t._id} className="flex items-center gap-2 cursor-pointer p-1 hover:bg-muted rounded">
+                    <Checkbox
+                      checked={selectedTeacherIds.includes(t._id)}
+                      onCheckedChange={() => toggleTeacher(t._id)}
+                    />
+                    <span className="text-sm">{t.firstName} {t.lastName}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Head of Department (optional)</Label>
+              <Select value={selectedHodId || '__none__'} onValueChange={(v) => setSelectedHodId(v === '__none__' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="Select HOD" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {teachers.map((t) => (
+                    <SelectItem key={t._id} value={t._id}>{t.firstName} {t.lastName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignTarget(null)}>Cancel</Button>
-            <Button onClick={() => assignTeacher({ id: assignTarget._id, teacherId: assignTeacherId })}>Save</Button>
+            <Button
+              disabled={isAssigning}
+              onClick={() => assignTeachers({
+                id: assignTarget._id,
+                teacherIds: selectedTeacherIds,
+                hodId: selectedHodId,
+              })}
+            >
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
