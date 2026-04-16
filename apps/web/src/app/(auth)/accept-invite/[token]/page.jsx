@@ -36,7 +36,8 @@ export default function AcceptInvitePage({ params }) {
   const { mutate, isPending } = useMutation({
     mutationFn: ({ confirmPassword, ...data }) => authApi.acceptInvite(token, data),
     onSuccess: (res) => {
-      setUser(res.data.data);
+      const user = res.data.data?.user ?? res.data.user ?? null;
+      setUser(user);
       toast.success('Account activated! Welcome to Diraschool.');
       router.push('/dashboard');
     },

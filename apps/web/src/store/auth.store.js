@@ -12,7 +12,16 @@ export const useAuthStore = create()(
     }),
     {
       name: 'diraschool-auth',
+      version: 2,
       partialize: (state) => ({ user: state.user }),
+      migrate: (persistedState) => {
+        if (!persistedState || typeof persistedState !== 'object') return persistedState;
+        const next = { ...persistedState };
+        if (next.user && typeof next.user === 'object' && next.user.user) {
+          next.user = next.user.user;
+        }
+        return next;
+      },
     },
   ),
 );

@@ -12,7 +12,7 @@ export function useAuth() {
     queryKey: ['auth', 'me'],
     queryFn: async () => {
       const res = await authApi.me();
-      return res.data.data;
+      return res.data.data?.user ?? res.data.user ?? null;
     },
     retry: false,
     staleTime: 5 * 60 * 1000,

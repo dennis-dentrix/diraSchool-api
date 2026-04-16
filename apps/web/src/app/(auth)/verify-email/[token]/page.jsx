@@ -19,7 +19,7 @@ export default function VerifyEmailPage({ params }) {
     queryKey: ['verify-email', token],
     queryFn: async () => {
       const res = await authApi.verifyEmailByToken(token);
-      return res.data.data;
+      return res.data.data?.user ?? res.data.user ?? null;
     },
     retry: false,
   });

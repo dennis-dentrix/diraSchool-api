@@ -63,9 +63,18 @@ export default function DashboardPage() {
 
   const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
     queryKey: ['payments', 'recent'],
-    queryFn: async () => { const res = await feesApi.listPayments({ limit: 6 }); return res.data; },
+    queryFn: async () => {
+      const res = await feesApi.listPayments({ limit: 6 });
+      return res.data.data ?? res.data;
+    },
     enabled: isFinance,
   });
+
+  const recentPayments = Array.isArray(paymentsData?.payments)
+    ? paymentsData.payments
+    : Array.isArray(paymentsData?.data)
+      ? paymentsData.data
+      : [];
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
@@ -74,7 +83,7 @@ export default function DashboardPage() {
     const d = new Date();
     d.setMonth(d.getMonth() - (5 - i));
     const month = d.toLocaleString('default', { month: 'short' });
-    const total = (paymentsData?.data ?? [])
+    const total = recentPayments
       .filter((p) => { const pd = new Date(p.createdAt); return pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear(); })
       .reduce((sum, p) => sum + (p.amount ?? 0), 0);
     return { month, collected: total };
@@ -82,7 +91,7 @@ export default function DashboardPage() {
 
   const trialDaysLeft = summary?.school?.trialDaysLeft ?? null;
   const pendingStaff = summary?.alerts?.staffAwaitingFirstLogin ?? 0;
-  const termCollections = (paymentsData?.data ?? []).reduce((s, p) => s + (p.amount ?? 0), 0);
+  const termCollections = recentPayments.reduce((s, p) => s + (p.amount ?? 0), 0);
 
   return (
     <div className="space-y-5">
@@ -202,9 +211,9 @@ export default function DashboardPage() {
             <CardContent>
               {paymentsLoading ? (
                 <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
-              ) : paymentsData?.data?.length ? (
+              ) : recentPayments.length ? (
                 <div className="divide-y">
-                  {paymentsData.data.map((p) => (
+                  {recentPayments.map((p) => (
                     <div key={p._id} className="flex items-center justify-between py-2.5">
                       <div>
                         <p className="text-sm font-medium">{p.studentId?.firstName ?? 'Student'} {p.studentId?.lastName ?? ''}</p>

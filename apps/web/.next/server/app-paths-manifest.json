@@ -1,4 +1,7 @@
 {
-  "/(auth)/register/page": "app/(auth)/register/page.js",
-  "/(auth)/verify-email/page": "app/(auth)/verify-email/page.js"
+  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/settings/page": "app/(dashboard)/settings/page.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/(dashboard)/staff/page": "app/(dashboard)/staff/page.js",
+  "/(dashboard)/results/page": "app/(dashboard)/results/page.js"
 }

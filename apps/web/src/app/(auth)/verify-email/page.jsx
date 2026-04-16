@@ -30,7 +30,7 @@ export default function VerifyEmailPage() {
   const { mutate: verify, isPending } = useMutation({
     mutationFn: (code) => authApi.verifyEmail(email, code),
     onSuccess: (res) => {
-      const user = res.data.data?.user;
+      const user = res.data.data?.user ?? res.data.user;
       setUser(user);
       toast.success('Email verified! Welcome to Diraschool.');
       if (user?.role === 'parent') router.push('/portal');
