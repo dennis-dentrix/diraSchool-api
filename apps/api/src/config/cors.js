@@ -3,8 +3,10 @@ import { env } from './env.js';
 const allowedOrigins = [
   env.CLIENT_URL,
   env.CLIENT_URL_STAGING,
-  'http://localhost:3000',
+  'http://localhost:3001',
   'http://localhost:5173',
+  'https://www.diraschool.com',
+  'www.diraschool.com',
 ].filter(Boolean);
 
 export const corsOptions = {
