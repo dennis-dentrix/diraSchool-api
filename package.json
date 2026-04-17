@@ -12,6 +12,7 @@
     "dev:all": "concurrently \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
     "build:web": "npm run build  --workspace=apps/web",
     "start:web": "npm run start  --workspace=apps/web",
+    "prod:web": "npm run build --workspace=apps/web",
     "start": "npm run start  --workspace=apps/api",
     "worker": "npm run worker --workspace=apps/api",
     "test": "npm test       --workspace=apps/api",

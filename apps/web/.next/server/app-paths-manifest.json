@@ -1,8 +1,8 @@
 {
   "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/(dashboard)/settings/page": "app/(dashboard)/settings/page.js",
-  "/(superadmin)/superadmin/schools/page": "app/(superadmin)/superadmin/schools/page.js",
   "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/students/[id]/page": "app/(dashboard)/students/[id]/page.js",
+  "/(dashboard)/students/page": "app/(dashboard)/students/page.js",
   "/(superadmin)/superadmin/audit-logs/page": "app/(superadmin)/superadmin/audit-logs/page.js",
-  "/(dashboard)/staff/page": "app/(dashboard)/staff/page.js"
+  "/(dashboard)/classes/page": "app/(dashboard)/classes/page.js"
 }
