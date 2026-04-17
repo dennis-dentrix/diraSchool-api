@@ -60,6 +60,7 @@ validateEnv();
 const app = express();
 
 // ── Security middleware ──────────────────────────────────────────────────────
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(csrf); // Origin/Referer validation — defense-in-depth CSRF guard
@@ -134,9 +135,9 @@ app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/timetables', timetableRoutes);
 app.use('/api/v1/library', libraryRoutes);
 app.use('/api/v1/transport', transportRoutes);
-app.use('/api/v1/admin',     adminRoutes);
+app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
-app.use('/api/v1/email',     emailRoutes);
+app.use('/api/v1/email', emailRoutes);
 
 // ── 404 catch-all ────────────────────────────────────────────────────────────
 app.use((req, res) => {
