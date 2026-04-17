@@ -7,6 +7,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://www.diraschool.com',
   'www.diraschool.com',
+  'diraschool.com',
 ].filter(Boolean);
 
 export const corsOptions = {

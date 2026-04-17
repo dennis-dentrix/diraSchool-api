@@ -5,7 +5,10 @@ const ALLOWED_ORIGINS = [
   env.CLIENT_URL,
   env.CLIENT_URL_STAGING,
   'http://localhost:3000',
+  'http://localhost:3001',
   'http://localhost:5173',
+  'https://diraschool.com',
+  'https://www.diraschool.com',
 ].filter(Boolean);
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -41,7 +44,7 @@ export const csrf = (req, res, next) => {
   // ── 1. Only guard state-changing methods ──────────────────────────────────
   if (!STATE_CHANGING.has(req.method)) return next();
 
-  const origin  = req.headers['origin'];
+  const origin = req.headers['origin'];
   const referer = req.headers['referer'];
 
   // ── 2. No browser headers → non-browser client → allow ───────────────────
