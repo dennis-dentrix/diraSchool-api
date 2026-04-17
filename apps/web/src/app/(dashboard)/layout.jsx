@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+import { NavigationProgress } from '@/components/layout/navigation-progress';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/use-auth';
 import { schoolNavItems, superadminNavItems } from '@/components/layout/nav-items';
@@ -23,9 +24,17 @@ export default function DashboardLayout({ children }) {
   const { user, isLoading } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const title = getPageTitle(pathname, user);
 
-  if (isLoading) {
+  // Guard: redirect unauthenticated users to login
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    }
+  }, [user, isLoading, router, pathname]);
+
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="space-y-3 w-48">
@@ -39,6 +48,7 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      <NavigationProgress />
       {/* Desktop sidebar */}
       <div className="hidden md:flex">
         <Sidebar user={user} />

@@ -18,10 +18,14 @@ import {
 } from 'lucide-react';
 
 // Role groups
-const ADMIN = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
-const FINANCE = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'accountant', 'secretary'];
-const ACADEMIC = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'secretary'];
+const ADMIN     = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
+const FINANCE   = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'accountant', 'secretary'];
+const ACADEMIC  = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'secretary'];
 const ALL_STAFF = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'secretary', 'accountant'];
+// Transport: operational staff who manage student pickups
+const TRANSPORT_ACCESS = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'];
+// Audit logs: senior leadership only (no deputy)
+const AUDIT_ACCESS = ['school_admin', 'director', 'headteacher'];
 
 export const schoolNavItems = [
   {
@@ -105,13 +109,13 @@ export const schoolNavItems = [
     label: 'Transport',
     href: '/transport',
     icon: Bus,
-    roles: ADMIN,
+    roles: TRANSPORT_ACCESS,
   },
   {
     label: 'Audit Logs',
     href: '/audit-logs',
     icon: ShieldAlert,
-    roles: ADMIN,
+    roles: AUDIT_ACCESS,
   },
   {
     label: 'Settings',
@@ -122,9 +126,10 @@ export const schoolNavItems = [
 ];
 
 export const superadminNavItems = [
-  { label: 'Overview', href: '/superadmin', icon: LayoutDashboard },
-  { label: 'Schools', href: '/superadmin/schools', icon: Building2 },
-  { label: 'Users', href: '/superadmin/users', icon: UserCog },
+  { label: 'Overview',   href: '/superadmin',            icon: LayoutDashboard },
+  { label: 'Schools',    href: '/superadmin/schools',     icon: Building2 },
+  { label: 'Users',      href: '/superadmin/users',       icon: UserCog },
+  { label: 'Audit Logs', href: '/superadmin/audit-logs',  icon: ShieldAlert },
 ];
 
 export const parentNavItems = [

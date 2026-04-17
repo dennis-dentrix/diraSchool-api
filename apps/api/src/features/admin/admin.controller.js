@@ -9,8 +9,10 @@
  *   GET  /api/v1/admin/schools/:id           — single school detail
  *   PATCH /api/v1/admin/schools/:id/status   — update subscription status / plan tier
  */
-import School from '../schools/School.model.js';
-import User   from '../users/User.model.js';
+import School   from '../schools/School.model.js';
+import User     from '../users/User.model.js';
+import Student  from '../students/Student.model.js';
+import AuditLog from '../audit/AuditLog.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
@@ -145,9 +147,20 @@ export const listSchools = asyncHandler(async (req, res) => {
     return acc;
   }, {});
 
+  // Also attach student counts
+  const studentCounts = await Student.aggregate([
+    { $match: { schoolId: { $in: schoolIds } } },
+    { $group: { _id: '$schoolId', count: { $sum: 1 } } },
+  ]);
+  const studentMap = studentCounts.reduce((acc, { _id, count }) => {
+    acc[_id.toString()] = count;
+    return acc;
+  }, {});
+
   const enriched = schools.map((s) => ({
     ...s,
-    staffCount: staffMap[s._id.toString()] ?? 0,
+    staffCount:   staffMap[s._id.toString()]   ?? 0,
+    studentCount: studentMap[s._id.toString()] ?? 0,
   }));
 
   return sendSuccess(res, { schools: enriched, meta });
@@ -224,4 +237,36 @@ export const updateSchoolStatus = asyncHandler(async (req, res) => {
     message: 'School updated successfully.',
     school,
   });
+});
+
+// ── GET /api/v1/admin/audit-logs ─────────────────────────────────────────────
+
+/**
+ * System-wide audit log for the superadmin. Unlike the school-scoped version,
+ * this queries all schools and includes the school name for context.
+ */
+export const listSystemAuditLogs = asyncHandler(async (req, res) => {
+  const filter = {};
+
+  if (req.query.schoolId) filter.schoolId = req.query.schoolId;
+  if (req.query.resource) filter.resource = req.query.resource;
+  if (req.query.action)   filter.action   = req.query.action;
+
+  if (req.query.from || req.query.to) {
+    filter.createdAt = {};
+    if (req.query.from) filter.createdAt.$gte = new Date(req.query.from);
+    if (req.query.to)   filter.createdAt.$lte = new Date(req.query.to);
+  }
+
+  const total = await AuditLog.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const logs = await AuditLog.find(filter)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('userId', 'firstName lastName role')
+    .populate('schoolId', 'name');
+
+  return sendSuccess(res, { logs, meta });
 });

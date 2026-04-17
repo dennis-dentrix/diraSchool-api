@@ -15,8 +15,9 @@ const hasUniqueStudents = (entries = []) => {
 
 const bulkUpsertResultsSchema = z.object({
   examId: z.string().regex(objectIdRegex, 'Invalid exam ID'),
+  classId: z.string().regex(objectIdRegex).optional(), // allowed passthrough — ignored by controller
   entries: z.array(resultEntrySchema).min(1, 'At least one result entry is required'),
-}).strict().refine((data) => hasUniqueStudents(data.entries), {
+}).refine((data) => hasUniqueStudents(data.entries), {
   message: 'Each student can appear only once in result entries.',
   path: ['entries'],
 });

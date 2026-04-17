@@ -2,44 +2,68 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Save, Plus, Trash2 } from 'lucide-react';
+import { Save, Plus, Trash2, Pencil, X, CalendarDays, School, Info } from 'lucide-react';
 import { useState } from 'react';
 import { settingsApi, getErrorMessage } from '@/lib/api';
-import { ACADEMIC_YEARS, WORKING_DAYS } from '@/lib/constants';
+import { useAuthStore, isAdmin } from '@/store/auth.store';
+import { ACADEMIC_YEARS } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+
+const CONFIRM_INIT = { open: false, holidayId: null };
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="flex items-start justify-between py-2.5 border-b last:border-0 gap-4">
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <span className="text-sm font-medium text-right">{value || <span className="text-muted-foreground/60 italic">Not set</span>}</span>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
+  const { user } = useAuthStore();
   const queryClient = useQueryClient();
+  const [editing, setEditing]       = useState(false);
+  const [form, setForm]             = useState(null);
   const [newHoliday, setNewHoliday] = useState({ name: '', date: '', description: '' });
-  const [form, setForm] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
     queryFn: async () => {
       const res = await settingsApi.get();
-      const settings = res.data.data;
-      setForm(settings);
-      return settings;
+      const s = res.data?.settings ?? res.data?.data ?? res.data;
+      return s;
     },
   });
 
   const { mutate: saveSettings, isPending } = useMutation({
     mutationFn: () => settingsApi.update(form),
-    onSuccess: () => { toast.success('Settings saved'); queryClient.invalidateQueries({ queryKey: ['settings'] }); },
+    onSuccess: () => {
+      toast.success('Settings saved');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      setEditing(false);
+    },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const { mutate: addHoliday } = useMutation({
+  const { mutate: addHoliday, isPending: addingHoliday } = useMutation({
     mutationFn: () => settingsApi.addHoliday(newHoliday),
-    onSuccess: () => { toast.success('Holiday added'); queryClient.invalidateQueries({ queryKey: ['settings'] }); setNewHoliday({ name: '', date: '', description: '' }); },
+    onSuccess: () => {
+      toast.success('Holiday added');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      setNewHoliday({ name: '', date: '', description: '' });
+    },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
@@ -49,82 +73,194 @@ export default function SettingsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  if (isLoading) return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)}</div>;
+  const startEditing = () => {
+    setForm({
+      principalName:      data?.principalName ?? '',
+      motto:              data?.motto ?? '',
+      physicalAddress:    data?.physicalAddress ?? '',
+      currentAcademicYear: data?.currentAcademicYear ?? String(new Date().getFullYear()),
+    });
+    setEditing(true);
+  };
+
+  const cancelEditing = () => { setEditing(false); setForm(null); };
+
+  if (!isAdmin(user)) {
+    return (
+      <div className="text-center py-16 text-muted-foreground">
+        <p className="font-medium">Access denied</p>
+        <p className="text-sm mt-1">Only school administrators can manage settings.</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-36" />)}</div>;
+  }
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="School Settings" description="Configure academic year, terms and holidays">
-        <Button size="sm" onClick={() => saveSettings()} disabled={isPending}>
-          <Save className="h-4 w-4" /> Save Changes
-        </Button>
+    <div className="space-y-6 max-w-3xl">
+      <PageHeader
+        title="School Settings"
+        description="Academic year, school information, and holidays"
+      >
+        {editing ? (
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={cancelEditing}><X className="h-4 w-4" /> Cancel</Button>
+            <Button size="sm" onClick={() => saveSettings()} disabled={isPending}><Save className="h-4 w-4" /> Save Changes</Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" onClick={startEditing}><Pencil className="h-4 w-4" /> Edit Settings</Button>
+        )}
       </PageHeader>
 
-      {/* General */}
+      {/* ── School Information ────────────────────────────────────────────────── */}
       <Card>
-        <CardHeader><CardTitle className="text-base">General</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Principal Name</Label>
-              <Input value={form?.principalName ?? ''} onChange={(e) => setForm((p) => ({ ...p, principalName: e.target.value }))} placeholder="Mr. Kamau" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>School Motto</Label>
-              <Input value={form?.motto ?? ''} onChange={(e) => setForm((p) => ({ ...p, motto: e.target.value }))} placeholder="Excelling in all" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Physical Address</Label>
-              <Input value={form?.physicalAddress ?? ''} onChange={(e) => setForm((p) => ({ ...p, physicalAddress: e.target.value }))} placeholder="P.O. Box 123, Nairobi" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Current Academic Year</Label>
-              <Select value={form?.currentAcademicYear ?? ''} onValueChange={(v) => setForm((p) => ({ ...p, currentAcademicYear: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <School className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">School Information</CardTitle>
           </div>
+          <CardDescription>Appears on invoices, report cards, and the parent portal.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {editing ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Principal Name</Label>
+                <Input value={form?.principalName ?? ''} onChange={(e) => setForm((p) => ({ ...p, principalName: e.target.value }))} placeholder="Mr. John Kamau" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>School Motto</Label>
+                <Input value={form?.motto ?? ''} onChange={(e) => setForm((p) => ({ ...p, motto: e.target.value }))} placeholder="Faith and Diligence" />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Physical Address / P.O. Box</Label>
+                <Input value={form?.physicalAddress ?? ''} onChange={(e) => setForm((p) => ({ ...p, physicalAddress: e.target.value }))} placeholder="P.O. Box 4413-00100, Westlands, Nairobi" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Current Academic Year</Label>
+                <Select value={form?.currentAcademicYear ?? ''} onValueChange={(v) => setForm((p) => ({ ...p, currentAcademicYear: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <InfoRow label="Principal" value={data?.principalName} />
+              <InfoRow label="Motto" value={data?.motto} />
+              <InfoRow label="Address" value={data?.physicalAddress} />
+              <InfoRow
+                label="Current Academic Year"
+                value={
+                  data?.currentAcademicYear
+                    ? <Badge variant="secondary" className="font-mono">{data.currentAcademicYear}</Badge>
+                    : null
+                }
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Holidays */}
+      {/* ── Term Dates ────────────────────────────────────────────────────────── */}
+      {data?.terms?.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">Term Dates</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-0">
+              {data.terms.map((t, i) => (
+                <div key={i} className="flex items-center justify-between py-2.5 border-b last:border-0">
+                  <span className="text-sm font-medium">{t.name}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {formatDate(t.startDate)} → {formatDate(t.endDate)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Holidays ─────────────────────────────────────────────────────────── */}
       <Card>
-        <CardHeader><CardTitle className="text-base">School Holidays</CardTitle></CardHeader>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Info className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">School Holidays</CardTitle>
+          </div>
+          <CardDescription>Public and school holidays for the academic calendar.</CardDescription>
+        </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
+          {/* List */}
+          <div>
             {data?.holidays?.length ? data.holidays.map((h) => (
-              <div key={h._id} className="flex items-center justify-between py-2 border-b last:border-0">
+              <div key={h._id} className="flex items-center justify-between py-2.5 border-b last:border-0">
                 <div>
                   <p className="text-sm font-medium">{h.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(h.date)}{h.description ? ` · ${h.description}` : ''}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(h.date)}{h.description ? ` · ${h.description}` : ''}
+                  </p>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"
-                  onClick={() => { if (confirm('Remove holiday?')) deleteHoliday(h._id); }}>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                  onClick={() => setConfirmDialog({ open: true, holidayId: h._id })}
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               </div>
-            )) : <p className="text-sm text-muted-foreground">No holidays configured.</p>}
+            )) : (
+              <p className="text-sm text-muted-foreground py-1">No holidays configured.</p>
+            )}
           </div>
+
           <Separator />
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="space-y-1.5">
-              <Label>Holiday Name</Label>
-              <Input value={newHoliday.name} onChange={(e) => setNewHoliday((p) => ({ ...p, name: e.target.value }))} placeholder="Madaraka Day" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Date</Label>
-              <input type="date" value={newHoliday.date} onChange={(e) => setNewHoliday((p) => ({ ...p, date: e.target.value }))}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>&nbsp;</Label>
-              <Button className="w-full" variant="outline" onClick={() => addHoliday()} disabled={!newHoliday.name || !newHoliday.date}>
-                <Plus className="h-4 w-4" /> Add Holiday
-              </Button>
+
+          {/* Add new */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Add Holiday</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label>Name</Label>
+                <Input value={newHoliday.name} onChange={(e) => setNewHoliday((p) => ({ ...p, name: e.target.value }))} placeholder="Madaraka Day" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Date</Label>
+                <Input type="date" value={newHoliday.date} onChange={(e) => setNewHoliday((p) => ({ ...p, date: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>&nbsp;</Label>
+                <Button className="w-full" variant="outline" onClick={() => addHoliday()} disabled={!newHoliday.name || !newHoliday.date || addingHoliday}>
+                  <Plus className="h-4 w-4" /> Add
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Confirm delete ────────────────────────────────────────────────────── */}
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove holiday?</AlertDialogTitle>
+            <AlertDialogDescription>This holiday will be permanently removed from the school calendar.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (confirmDialog.holidayId) deleteHoliday(confirmDialog.holidayId); setConfirmDialog(CONFIRM_INIT); }}>
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

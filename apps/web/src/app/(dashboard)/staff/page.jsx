@@ -3,14 +3,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, MoreHorizontal, Mail } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Mail, KeyRound, PauseCircle, PlayCircle, UserCheck, UserX } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { usersApi, getErrorMessage } from '@/lib/api';
 import { ROLE_LABELS } from '@/lib/constants';
-import { getRoleBadgeColor } from '@/lib/utils';
-import { formatDate } from '@/lib/utils';
+import { getRoleBadgeColor, formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
@@ -19,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useDebounce } from '@/hooks/use-debounce';
 
 const STAFF_ROLES = [
@@ -36,14 +35,21 @@ const schema = z.object({
   tscNumber: z.string().optional(),
 });
 
-const columns = (onResendInvite) => [
+const columns = ({ onResendInvite, onResetPassword, onToggleActive }) => [
   {
     id: 'name',
     header: 'Staff Member',
     cell: ({ row }) => (
-      <div>
-        <p className="font-medium">{row.original.firstName} {row.original.lastName}</p>
-        <p className="text-xs text-muted-foreground">{row.original.email}</p>
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+          <span className="text-xs font-bold text-blue-700">
+            {row.original.firstName?.[0]}{row.original.lastName?.[0]}
+          </span>
+        </div>
+        <div>
+          <p className="font-medium text-sm">{row.original.firstName} {row.original.lastName}</p>
+          <p className="text-xs text-muted-foreground">{row.original.email}</p>
+        </div>
       </div>
     ),
   },
@@ -62,41 +68,67 @@ const columns = (onResendInvite) => [
     cell: ({ row }) => <span className="text-sm">{row.original.phone ?? '—'}</span>,
   },
   {
-    accessorKey: 'status',
+    id: 'status',
     header: 'Status',
     cell: ({ row }) => {
-      if (!row.original.isActive) {
-        return <span className="text-xs px-2 py-1 rounded-full font-medium bg-gray-100 text-gray-800">Paused</span>;
-      }
-      if (row.original.invitePending) {
+      const u = row.original;
+      if (!u.isActive)
+        return <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">Paused</span>;
+      if (u.invitePending)
         return <span className="text-xs px-2 py-1 rounded-full font-medium bg-yellow-100 text-yellow-800">Invite Pending</span>;
-      }
-      return <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-800">Invite Accepted</span>;
+      return <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-800">Active</span>;
     },
   },
   {
     accessorKey: 'createdAt',
     header: 'Joined',
-    cell: ({ row }) => <span className="text-sm">{formatDate(row.original.createdAt)}</span>,
+    cell: ({ row }) => <span className="text-sm text-muted-foreground">{formatDate(row.original.createdAt)}</span>,
   },
   {
     id: 'actions',
-    cell: ({ row }) => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {row.original.invitePending && row.original.isActive && (
-            <DropdownMenuItem onClick={() => onResendInvite(row.original._id)}>
-              <Mail className="h-4 w-4 mr-2" /> Resend invite
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
+    cell: ({ row }) => {
+      const u = row.original;
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {u.invitePending && u.isActive && (
+              <DropdownMenuItem onClick={() => onResendInvite(u._id)}>
+                <Mail className="h-4 w-4 mr-2" /> Resend Invite
+              </DropdownMenuItem>
+            )}
+            {!u.invitePending && (
+              <DropdownMenuItem onClick={() => onResetPassword(u._id)}>
+                <KeyRound className="h-4 w-4 mr-2" /> Send Password Reset
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            {u.isActive ? (
+              <DropdownMenuItem
+                className="text-red-600 focus:text-red-600"
+                onClick={() => {
+                  if (confirm(`Pause account for ${u.firstName} ${u.lastName}? They will not be able to log in.`))
+                    onToggleActive(u._id, false);
+                }}
+              >
+                <PauseCircle className="h-4 w-4 mr-2" /> Pause Account
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                className="text-green-700 focus:text-green-700"
+                onClick={() => onToggleActive(u._id, true)}
+              >
+                <PlayCircle className="h-4 w-4 mr-2" /> Reactivate Account
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    },
   },
 ];
 
@@ -112,34 +144,32 @@ export default function StaffPage() {
     resolver: zodResolver(schema),
   });
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['staff', page, debouncedSearch, roleFilter],
+  const { data: rawData, isLoading } = useQuery({
+    queryKey: ['users', page, debouncedSearch, roleFilter],
     queryFn: async () => {
       const res = await usersApi.list({
         page, limit: 20,
         search: debouncedSearch || undefined,
         role: roleFilter || undefined,
       });
-      return res.data.data ?? res.data;
+      // normalizer puts the array in res.data.data AND res.data.users
+      return res.data;
     },
   });
 
-  const staffRows = Array.isArray(data?.users)
-    ? data.users
-    : Array.isArray(data?.data)
-      ? data.data
-      : [];
-  const pagination = data?.meta ?? data?.pagination;
+  // Handle both normalized shape { users: [...], meta/pagination: {...} } and raw array
+  const staffRows = rawData?.users ?? (Array.isArray(rawData?.data) ? rawData.data : Array.isArray(rawData) ? rawData : []);
+  const pagination = rawData?.pagination ?? rawData?.meta;
 
-  const pendingInvites = staffRows.filter((u) => u.isActive && u.invitePending);
-  const acceptedInvites = staffRows.filter((u) => u.isActive && !u.invitePending);
-  const pausedAccounts = staffRows.filter((u) => !u.isActive);
+  const active   = staffRows.filter((u) => u.isActive && !u.invitePending);
+  const pending  = staffRows.filter((u) => u.isActive && u.invitePending);
+  const paused   = staffRows.filter((u) => !u.isActive);
 
   const { mutate: createUser, isPending } = useMutation({
     mutationFn: (data) => usersApi.create(data),
     onSuccess: () => {
       toast.success('Staff member invited via email');
-      queryClient.invalidateQueries({ queryKey: ['staff'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
       setOpen(false);
       reset();
     },
@@ -152,66 +182,99 @@ export default function StaffPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const { mutate: resetPassword } = useMutation({
+    mutationFn: (id) => usersApi.resetPassword(id),
+    onSuccess: () => toast.success('Password reset email sent'),
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: toggleActive } = useMutation({
+    mutationFn: ({ id, isActive }) => usersApi.toggleActive(id, isActive),
+    onSuccess: (_, { isActive }) => {
+      toast.success(isActive ? 'Account reactivated' : 'Account paused');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const actionHandlers = {
+    onResendInvite: (id) => resendInvite(id),
+    onResetPassword: (id) => resetPassword(id),
+    onToggleActive: (id, isActive) => toggleActive({ id, isActive }),
+  };
+
   return (
-    <div>
-      <PageHeader title="Staff" description="Manage teaching and non-teaching staff">
+    <div className="space-y-6">
+      <PageHeader
+        title={`Staff ${staffRows.length ? `(${pagination?.total ?? staffRows.length})` : ''}`}
+        description="Manage teaching and non-teaching staff"
+      >
         <Button size="sm" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" /> Invite Staff
         </Button>
       </PageHeader>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+      {/* ── Summary cards ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4 px-5">
+            <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+              <UserCheck className="h-4 w-4 text-green-700" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold leading-none">{active.length}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Active</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4 px-5">
+            <div className="w-9 h-9 rounded-full bg-yellow-100 flex items-center justify-center shrink-0">
+              <Mail className="h-4 w-4 text-yellow-700" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold leading-none">{pending.length}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Invite Pending</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 py-4 px-5">
+            <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+              <UserX className="h-4 w-4 text-red-700" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold leading-none">{paused.length}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Paused</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Filters ──────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search staff…" className="pl-9" value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+          <Input
+            placeholder="Search by name or email…"
+            className="pl-9"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          />
         </div>
-        <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v === '__all__' ? '' : v)}>
+        <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v === '__all__' ? '' : v); setPage(1); }}>
           <SelectTrigger className="w-44"><SelectValue placeholder="All roles" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">All roles</SelectItem>
             {STAFF_ROLES.map((r) => (
-              <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+              <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3 mb-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Pending Invites ({pendingInvites.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {pendingInvites.length ? pendingInvites.slice(0, 5).map((u) => (
-              <p key={u._id} className="text-sm">{u.firstName} {u.lastName}</p>
-            )) : <p className="text-sm text-muted-foreground">No pending invites</p>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Accepted Invites ({acceptedInvites.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {acceptedInvites.length ? acceptedInvites.slice(0, 5).map((u) => (
-              <p key={u._id} className="text-sm">{u.firstName} {u.lastName}</p>
-            )) : <p className="text-sm text-muted-foreground">No accepted invites</p>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Paused Accounts ({pausedAccounts.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {pausedAccounts.length ? pausedAccounts.slice(0, 5).map((u) => (
-              <p key={u._id} className="text-sm">{u.firstName} {u.lastName}</p>
-            )) : <p className="text-sm text-muted-foreground">No paused accounts</p>}
-          </CardContent>
-        </Card>
-      </div>
-
       <DataTable
-        columns={columns(resendInvite)}
+        columns={columns(actionHandlers)}
         data={staffRows}
         loading={isLoading}
         pageCount={pagination?.pages}
@@ -219,7 +282,8 @@ export default function StaffPage() {
         onPageChange={setPage}
       />
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* ── Invite dialog ─────────────────────────────────────────────────────── */}
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Invite Staff Member</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit(createUser)} className="space-y-4">
@@ -247,7 +311,7 @@ export default function StaffPage() {
                   <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                   <SelectContent>
                     {STAFF_ROLES.map((r) => (
-                      <SelectItem key={r} value={r}>{ROLE_LABELS[r]}</SelectItem>
+                      <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

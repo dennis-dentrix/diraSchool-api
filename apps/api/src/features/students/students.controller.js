@@ -10,11 +10,14 @@ import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
 import { sendInviteEmail } from '../../services/email.service.js';
 import { ROLES, STUDENT_STATUSES, JOB_NAMES, AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
-import { importQueue } from '../../jobs/queues.js';
+import { importQueue, emailQueue } from '../../jobs/queues.js';
 import { getRedis } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
+
+const enqueueEmail = async (type, payload) =>
+  emailQueue.add(type, { type, payload });
 
 /**
  * POST /api/v1/students
@@ -54,6 +57,7 @@ export const enrollStudent = asyncHandler(async (req, res) => {
 
   try {
     const parentIds = [];
+    const guardianEntries = [];
     // Track pending invite emails so we can fire them AFTER commit
     const pendingInvites = [];
 
@@ -121,6 +125,7 @@ export const enrollStudent = asyncHandler(async (req, res) => {
           meta: { schoolId: req.user.schoolId, userId: newParent._id, flow: 'parent-invite' },
         });
       }
+      guardianEntries.push(guardianEntry);
       // No email and no existingUserId → store contact only, no portal account
     }
 
@@ -194,15 +199,7 @@ export const enrollStudent = asyncHandler(async (req, res) => {
           dateOfBirth:            dateOfBirth ? new Date(dateOfBirth) : undefined,
           birthCertificateNumber: birthCertificateNumber?.trim(),
           enrollmentDate:         enrollmentDate ? new Date(enrollmentDate) : new Date(),
-          guardians:              guardians.map((g, i) => ({
-            firstName:    g.firstName.trim(),
-            lastName:     g.lastName.trim(),
-            relationship: g.relationship,
-            phone:        g.phone ? normalisePhone(g.phone) : undefined,
-            email:        g.email?.toLowerCase().trim(),
-            occupation:   g.occupation?.trim(),
-            // Match userId assigned above (by index, only for guardians with portal accounts)
-          })),
+          guardians: guardianEntries,
           parentIds,
         },
       ],
@@ -222,9 +219,15 @@ export const enrollStudent = asyncHandler(async (req, res) => {
 
     // ── Fire invite emails after commit (fire-and-forget) ─────────────────────
     for (const invite of pendingInvites) {
-      sendInviteEmail(invite).catch((err) =>
-        logger.error('[Students] Parent invite email failed:', err.message)
-      );
+      enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invite).catch((err) => {
+        logger.error('[Students] Failed to enqueue parent invite email, falling back to direct send', {
+          err: err.message,
+          to: invite.to,
+        });
+        sendInviteEmail(invite).catch((sendErr) =>
+          logger.error('[Students] Parent invite email fallback failed:', sendErr.message)
+        );
+      });
     }
 
     const populated = await Student.findById(student._id)

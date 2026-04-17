@@ -1,9 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Menu, Bell, LogOut, User, Settings } from 'lucide-react';
+import { Menu, Bell, LogOut, Settings, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { authApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ export function Header({ onMenuClick, title }) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const queryClient = useQueryClient();
+  const isFetching = useIsFetching();
 
   const { mutate: doLogout } = useMutation({
     mutationFn: () => authApi.logout(),
@@ -40,8 +41,13 @@ export function Header({ onMenuClick, title }) {
         <Menu className="h-5 w-5" />
       </Button>
 
-      {/* Page title */}
-      <h1 className="text-lg font-semibold flex-1 hidden sm:block">{title}</h1>
+      {/* Page title + global fetch indicator */}
+      <div className="flex-1 hidden sm:flex items-center gap-2">
+        <h1 className="text-lg font-semibold">{title}</h1>
+        {isFetching > 0 && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        )}
+      </div>
       <div className="flex-1 md:hidden" />
 
       {/* Right side */}

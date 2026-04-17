@@ -1,18 +1,52 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { GraduationCap, Users, CreditCard, ClipboardList, AlertTriangle, UserX } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { dashboardApi, feesApi } from '@/lib/api';
+import {
+  GraduationCap, Users, CreditCard, ClipboardList,
+  AlertTriangle, UserX, BookOpen, BookMarked, ChevronRight,
+  Plus, FileText, CalendarCheck,
+} from 'lucide-react';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar,
+} from 'recharts';
+import { dashboardApi, feesApi, classesApi, subjectsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
+import { useRouter } from 'next/navigation';
 import { StatCard } from '@/components/shared/stat-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import Link from 'next/link';
 
-const ADMIN_ROLES = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
+const ADMIN_ROLES   = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
 const FINANCE_ROLES = [...ADMIN_ROLES, 'accountant', 'secretary'];
+
+function QuickActions({ isAdmin: admin, isFinance: finance }) {
+  const router = useRouter();
+  const actions = [
+    { label: 'Take Attendance', icon: CalendarCheck, href: '/attendance', show: true, color: 'text-green-600 bg-green-50 border-green-200' },
+    { label: 'Enroll Student',  icon: Plus,          href: '/students',   show: admin, color: 'text-blue-600 bg-blue-50 border-blue-200' },
+    { label: 'Record Payment',  icon: CreditCard,    href: '/fees/payments', show: finance, color: 'text-purple-600 bg-purple-50 border-purple-200' },
+    { label: 'Report Cards',    icon: FileText,      href: '/report-cards',  show: admin,   color: 'text-orange-600 bg-orange-50 border-orange-200' },
+  ].filter((a) => a.show);
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      {actions.map((a) => (
+        <button
+          key={a.href}
+          onClick={() => router.push(a.href)}
+          className={`flex flex-col items-center gap-2 p-4 rounded-xl border text-sm font-medium transition-all hover:shadow-sm active:scale-95 ${a.color}`}
+        >
+          <a.icon className="h-5 w-5" />
+          {a.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const weeklyAttendance = [
   { day: 'Mon', present: 92, absent: 8 },
@@ -50,10 +84,165 @@ function PendingStaffBanner({ count }) {
   );
 }
 
+// ── Teacher Dashboard ──────────────────────────────────────────────────────────
+function TeacherDashboard({ user }) {
+  const { data: myClassData, isLoading: classLoading } = useQuery({
+    queryKey: ['my-class'],
+    queryFn: async () => { const res = await classesApi.myClass(); return res.data; },
+  });
+
+  const { data: mySubjectsData, isLoading: subjectsLoading } = useQuery({
+    queryKey: ['my-subjects'],
+    queryFn: async () => { const res = await subjectsApi.mySubjects(); return res.data; },
+  });
+
+  const myClass    = myClassData?.data ?? myClassData;
+  const mySubjects = mySubjectsData?.data ?? mySubjectsData ?? [];
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-2xl font-bold">{greeting}, {user?.firstName}</h2>
+        <p className="text-muted-foreground text-sm mt-0.5">Here's your teaching overview for today.</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* My Class card */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BookOpen className="h-4 w-4 text-blue-600" /> My Class
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {classLoading ? (
+              <Skeleton className="h-16" />
+            ) : myClass ? (
+              <div>
+                <p className="text-xl font-bold">{myClass.name}{myClass.stream ? ` ${myClass.stream}` : ''}</p>
+                <p className="text-sm text-muted-foreground">{myClass.levelCategory}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Users className="h-3.5 w-3.5" />
+                    <span>{myClass.studentCount ?? 0} students</span>
+                  </div>
+                  <Link href="/classes" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+                    View <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{myClass.term} · {myClass.academicYear}</p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-muted-foreground">No class assigned yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Contact admin to be assigned a class</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* My Subjects card */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BookMarked className="h-4 w-4 text-purple-600" /> My Subjects
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {subjectsLoading ? (
+              <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-6" />)}</div>
+            ) : mySubjects.length ? (
+              <div className="space-y-2">
+                {mySubjects.slice(0, 5).map((s) => (
+                  <div key={s._id} className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{s.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {typeof s.classId === 'object' ? s.classId.name : ''}
+                    </span>
+                  </div>
+                ))}
+                {mySubjects.length > 5 && (
+                  <Link href="/subjects" className="text-xs text-blue-600 hover:underline">
+                    +{mySubjects.length - 5} more
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No subjects assigned yet</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Attendance stat */}
+        <StatCard
+          title="Class Attendance"
+          value="91%"
+          description="Average this week"
+          icon={ClipboardList}
+          color="orange"
+          trend={3}
+        />
+      </div>
+
+      {/* Weekly attendance chart */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold">Weekly Attendance</CardTitle>
+          <CardDescription>Present vs absent in your class this week</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={weeklyAttendance} barSize={20}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Bar dataKey="present" fill="#22c55e" radius={[4, 4, 0, 0]} name="Present" />
+              <Bar dataKey="absent"  fill="#f87171" radius={[4, 4, 0, 0]} name="Absent" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* All subjects table if teacher teaches multiple classes */}
+      {mySubjects.length > 1 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">All My Subjects</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y">
+              {mySubjects.map((s) => (
+                <div key={s._id} className="flex items-center justify-between py-2.5">
+                  <div>
+                    <p className="text-sm font-medium">{s.name}</p>
+                    {s.department && <p className="text-xs text-muted-foreground">{s.department}</p>}
+                  </div>
+                  <Badge variant="secondary" className="text-xs">
+                    {typeof s.classId === 'object' ? `${s.classId.name}${s.classId.stream ? ` ${s.classId.stream}` : ''}` : '—'}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── Main Dashboard (admin / finance) ──────────────────────────────────────────
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const isAdmin = ADMIN_ROLES.includes(user?.role);
+  const isAdmin   = ADMIN_ROLES.includes(user?.role);
   const isFinance = FINANCE_ROLES.includes(user?.role);
+  const isTeacher = user?.role === 'teacher';
+
+  // Teachers get their own focused dashboard
+  if (isTeacher) return <TeacherDashboard user={user} />;
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['dashboard-summary'],
@@ -65,42 +254,47 @@ export default function DashboardPage() {
     queryKey: ['payments', 'recent'],
     queryFn: async () => {
       const res = await feesApi.listPayments({ limit: 6 });
-      return res.data.data ?? res.data;
+      return res.data;
     },
     enabled: isFinance,
   });
 
-  const recentPayments = Array.isArray(paymentsData?.payments)
-    ? paymentsData.payments
-    : Array.isArray(paymentsData?.data)
-      ? paymentsData.data
-      : [];
+  const recentPayments = paymentsData?.payments ?? paymentsData?.data ?? [];
 
-  const hour = new Date().getHours();
+  const now = new Date();
+  const hour = now.getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const todayStr = now.toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const feeChartData = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
     d.setMonth(d.getMonth() - (5 - i));
     const month = d.toLocaleString('default', { month: 'short' });
     const total = recentPayments
-      .filter((p) => { const pd = new Date(p.createdAt); return pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear(); })
+      .filter((p) => {
+        const pd = new Date(p.createdAt);
+        return pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear();
+      })
       .reduce((sum, p) => sum + (p.amount ?? 0), 0);
     return { month, collected: total };
   });
 
-  const trialDaysLeft = summary?.school?.trialDaysLeft ?? null;
-  const pendingStaff = summary?.alerts?.staffAwaitingFirstLogin ?? 0;
+  const trialDaysLeft   = summary?.school?.trialDaysLeft ?? null;
+  const pendingStaff    = summary?.alerts?.staffAwaitingFirstLogin ?? 0;
   const termCollections = recentPayments.reduce((s, p) => s + (p.amount ?? 0), 0);
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold">{greeting}, {user?.firstName}</h2>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Here's what's happening at {summary?.school?.name ?? 'your school'} today.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-2xl font-bold">{greeting}, {user?.firstName}</h2>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {todayStr} · {summary?.school?.name ?? 'your school'}
+          </p>
+        </div>
       </div>
+
+      <QuickActions isAdmin={isAdmin} isFinance={isFinance} />
 
       {isAdmin && !summaryLoading && (
         <div className="space-y-2">
@@ -147,7 +341,7 @@ export default function DashboardPage() {
                 <AreaChart data={feeChartData}>
                   <defs>
                     <linearGradient id="feeGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
+                      <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.25} />
                       <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -175,7 +369,7 @@ export default function DashboardPage() {
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Bar dataKey="present" fill="#22c55e" radius={[4, 4, 0, 0]} name="Present" />
-                <Bar dataKey="absent" fill="#f87171" radius={[4, 4, 0, 0]} name="Absent" />
+                <Bar dataKey="absent"  fill="#f87171" radius={[4, 4, 0, 0]} name="Absent" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>

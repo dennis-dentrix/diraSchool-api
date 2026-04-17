@@ -1,0 +1,6 @@
+Superadmin:  superadmin@diraschool.com  /  SuperAdmin@2025
+School 1:    admin@joyfulprimary.ac.ke  /  Admin@2025!
+School 2:    admin@hilltopacademy.ac.ke /  Admin@2025!
+Staff:       (deputy/secretary/accounts)  Staff@2025!
+Teachers:    (beatrice, samuel, etc.)     Teacher@2025!
+Parents:     (auto-generated emails)      Parent@2025!

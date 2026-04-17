@@ -197,3 +197,34 @@ export const resendInvite = asyncHandler(async (req, res) => {
     message: `A new invitation link has been sent to ${user.email}.`,
   });
 });
+
+/**
+ * POST /api/v1/users/:id/reset-password
+ * Admin triggers a password-reset email for any staff member.
+ * Generates a reset token (same flow as forgot-password) so the user
+ * sets their own new password via the standard reset link.
+ */
+export const adminResetPassword = asyncHandler(async (req, res) => {
+  const user = await User.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
+  if (!user) return sendError(res, 'User not found.', 404);
+
+  if (user._id.equals(req.user._id)) {
+    return sendError(res, 'Use /auth/change-password to reset your own password.', 400);
+  }
+
+  const { sendPasswordResetEmail } = await import('../../services/email.service.js');
+
+  const rawToken  = crypto.randomBytes(32).toString('hex');
+  user.resetPasswordToken  = crypto.createHash('sha256').update(rawToken).digest('hex');
+  user.resetPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  await user.save({ validateBeforeSave: false });
+
+  const resetUrl = `${env.CLIENT_URL}/reset-password/${rawToken}`;
+  sendPasswordResetEmail({ to: user.email, firstName: user.firstName, resetUrl }).catch((err) =>
+    logger.error('[Users] Admin reset-password email failed:', err.message)
+  );
+
+  return sendSuccess(res, {
+    message: `A password reset link has been sent to ${user.email}.`,
+  });
+});

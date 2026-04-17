@@ -57,6 +57,7 @@ const updateSubscriptionSchema = z
     subscriptionStatus: z.enum(Object.values(SUBSCRIPTION_STATUSES), {
       message: `Status must be one of: ${Object.values(SUBSCRIPTION_STATUSES).join(', ')}`,
     }),
+    planTier: z.enum(['trial', 'basic', 'standard', 'premium']).optional(),
     // Optional: extend or set trial/subscription expiry
     trialExpiry: z.coerce.date().optional(),
   })

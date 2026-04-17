@@ -1,7 +1,7 @@
 import express from 'express';
 import { protect, blockIfMustChangePassword, adminOnly } from '../../middleware/auth.js';
 import { validateCreateUser, validateUpdateUser } from './users.validator.js';
-import { createUser, listUsers, getUser, updateUser, resendInvite } from './users.controller.js';
+import { createUser, listUsers, getUser, updateUser, resendInvite, adminResetPassword } from './users.controller.js';
 
 const router = express.Router();
 
@@ -17,5 +17,6 @@ router.route('/:id')
   .patch(validateUpdateUser, updateUser);
 
 router.post('/:id/resend-invite', resendInvite);
+router.post('/:id/reset-password', adminResetPassword);
 
 export default router;

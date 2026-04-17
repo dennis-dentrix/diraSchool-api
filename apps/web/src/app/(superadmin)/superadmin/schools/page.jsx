@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Building2, MoreHorizontal, Plus } from 'lucide-react';
-import { schoolsApi, getErrorMessage } from '@/lib/api';
-import { formatDate, capitalize } from '@/lib/utils';
+import { Search, MoreHorizontal, GraduationCap, Users } from 'lucide-react';
+import { adminApi, getErrorMessage } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { useForm } from 'react-hook-form';
 
 const planColors = {
   trial: 'bg-yellow-100 text-yellow-800',
@@ -25,9 +24,10 @@ const planColors = {
 };
 
 const statusColors = {
+  trial: 'bg-yellow-100 text-yellow-800',
   active: 'bg-green-100 text-green-800',
   suspended: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-800',
+  expired: 'bg-gray-100 text-gray-800',
 };
 
 export default function SuperadminSchoolsPage() {
@@ -35,29 +35,28 @@ export default function SuperadminSchoolsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [planFilter, setPlanFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [subOpen, setSubOpen] = useState(false);
   const [selectedSchool, setSelectedSchool] = useState(null);
-  const [subForm, setSubForm] = useState({ planTier: '', status: '', trialExpiry: '' });
+  const [subForm, setSubForm] = useState({ planTier: '', subscriptionStatus: '', trialExpiry: '' });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sa-schools-list', page, search, planFilter],
+    queryKey: ['sa-schools-list', page, search, statusFilter],
     queryFn: async () => {
-      const res = await schoolsApi.list({
+      const res = await adminApi.listSchools({
         page, limit: 20,
         search: search || undefined,
-        planTier: planFilter || undefined,
+        status: statusFilter || undefined,
       });
       return res.data;
     },
   });
 
   const { mutate: updateSub, isPending } = useMutation({
-    mutationFn: ({ id, data }) => schoolsApi.updateSubscription(id, data),
+    mutationFn: ({ id, data }) => adminApi.updateSchoolStatus(id, data),
     onSuccess: () => {
       toast.success('Subscription updated');
       queryClient.invalidateQueries({ queryKey: ['sa-schools-list'] });
-      queryClient.invalidateQueries({ queryKey: ['sa-schools'] });
       setSubOpen(false);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -66,55 +65,65 @@ export default function SuperadminSchoolsPage() {
   function openSubDialog(school) {
     setSelectedSchool(school);
     setSubForm({
-      planTier: school.subscription?.planTier ?? 'trial',
-      status: school.subscription?.status ?? 'active',
-      trialExpiry: school.subscription?.trialExpiry
-        ? new Date(school.subscription.trialExpiry).toISOString().slice(0, 10)
-        : '',
+      planTier: school.planTier ?? 'standard',
+      subscriptionStatus: school.subscriptionStatus ?? 'active',
+      trialExpiry: school.trialExpiry ? new Date(school.trialExpiry).toISOString().slice(0, 10) : '',
     });
     setSubOpen(true);
   }
 
   const columns = [
     {
-      accessorKey: 'name',
+      id: 'school',
       header: 'School',
       cell: ({ row }) => (
         <div>
           <p className="font-medium text-sm">{row.original.name}</p>
-          <p className="text-xs text-muted-foreground">{row.original.email ?? '—'}</p>
+          <p className="text-xs text-muted-foreground">{row.original.county ?? '—'} · {row.original.email ?? '—'}</p>
         </div>
       ),
     },
     {
-      accessorKey: 'subscription.planTier',
-      header: 'Plan',
+      id: 'plan',
+      header: 'Plan / Status',
       cell: ({ row }) => (
-        <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${planColors[row.original.subscription?.planTier] ?? 'bg-gray-100 text-gray-800'}`}>
-          {row.original.subscription?.planTier ?? 'trial'}
-        </span>
+        <div className="flex flex-col gap-1">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize w-fit ${planColors[row.original.planTier] ?? 'bg-gray-100 text-gray-800'}`}>
+            {row.original.planTier ?? 'standard'}
+          </span>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize w-fit ${statusColors[row.original.subscriptionStatus] ?? 'bg-gray-100 text-gray-800'}`}>
+            {row.original.subscriptionStatus ?? 'active'}
+          </span>
+        </div>
       ),
     },
     {
-      accessorKey: 'subscription.status',
-      header: 'Status',
+      id: 'counts',
+      header: 'Staff / Students',
       cell: ({ row }) => (
-        <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${statusColors[row.original.subscription?.status] ?? 'bg-gray-100 text-gray-800'}`}>
-          {row.original.subscription?.status ?? '—'}
-        </span>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />{row.original.staffCount ?? '—'}
+          </span>
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <GraduationCap className="h-3.5 w-3.5" />{row.original.studentCount ?? '—'}
+          </span>
+        </div>
       ),
     },
     {
-      accessorKey: 'subscription.trialExpiry',
+      id: 'expiry',
       header: 'Trial Expiry',
       cell: ({ row }) => (
-        <span className="text-sm">{row.original.subscription?.trialExpiry ? formatDate(row.original.subscription.trialExpiry) : '—'}</span>
+        <span className="text-sm text-muted-foreground">
+          {row.original.trialExpiry ? formatDate(row.original.trialExpiry) : '—'}
+        </span>
       ),
     },
     {
       accessorKey: 'createdAt',
       header: 'Registered',
-      cell: ({ row }) => <span className="text-sm">{formatDate(row.original.createdAt)}</span>,
+      cell: ({ row }) => <span className="text-sm text-muted-foreground">{formatDate(row.original.createdAt)}</span>,
     },
     {
       id: 'actions',
@@ -132,42 +141,51 @@ export default function SuperadminSchoolsPage() {
     },
   ];
 
+  const schools = data?.schools ?? data?.data ?? [];
+  const pagination = data?.pagination ?? data?.meta;
+
   return (
     <div>
-      <PageHeader title="Schools" description="All registered schools on the platform" />
+      <PageHeader
+        title={`Schools ${pagination?.total ? `(${pagination.total})` : ''}`}
+        description="All registered schools on the platform"
+      />
 
       <div className="flex gap-3 mb-4 flex-wrap">
-        <Input
-          placeholder="Search schools…"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="w-56"
-        />
-        <Select value={planFilter} onValueChange={(v) => { setPlanFilter(v === '__all__' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="All plans" /></SelectTrigger>
+        <div className="relative flex-1 max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search schools…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="pl-9"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === '__all__' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="w-36"><SelectValue placeholder="All statuses" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All plans</SelectItem>
+            <SelectItem value="__all__">All statuses</SelectItem>
             <SelectItem value="trial">Trial</SelectItem>
-            <SelectItem value="basic">Basic</SelectItem>
-            <SelectItem value="standard">Standard</SelectItem>
-            <SelectItem value="premium">Premium</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="expired">Expired</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <DataTable
         columns={columns}
-        data={data?.data}
+        data={schools}
         loading={isLoading}
-        pageCount={data?.pagination?.pages}
+        pageCount={pagination?.pages}
         currentPage={page}
         onPageChange={setPage}
       />
 
-      {/* Subscription dialog */}
+      {/* ── Subscription quick-edit dialog ────────────────────────────────── */}
       <Dialog open={subOpen} onOpenChange={setSubOpen}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Manage Subscription — {selectedSchool?.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Subscription — {selectedSchool?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Plan Tier</Label>
@@ -182,13 +200,14 @@ export default function SuperadminSchoolsPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={subForm.status} onValueChange={(v) => setSubForm((p) => ({ ...p, status: v }))}>
+              <Label>Subscription Status</Label>
+              <Select value={subForm.subscriptionStatus} onValueChange={(v) => setSubForm((p) => ({ ...p, subscriptionStatus: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="trial">Trial</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="suspended">Suspended</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="expired">Expired</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -206,7 +225,10 @@ export default function SuperadminSchoolsPage() {
             <Button variant="outline" onClick={() => setSubOpen(false)}>Cancel</Button>
             <Button
               disabled={isPending}
-              onClick={() => updateSub({ id: selectedSchool._id, data: { planTier: subForm.planTier, status: subForm.status, trialExpiry: subForm.trialExpiry || undefined } })}
+              onClick={() => updateSub({
+                id: selectedSchool._id,
+                data: { planTier: subForm.planTier, subscriptionStatus: subForm.subscriptionStatus, trialExpiry: subForm.trialExpiry || undefined },
+              })}
             >
               Save Changes
             </Button>

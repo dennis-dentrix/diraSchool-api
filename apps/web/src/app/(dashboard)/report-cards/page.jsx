@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { FileText, Zap, MoreHorizontal } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { reportCardsApi, classesApi, studentsApi, getErrorMessage } from '@/lib/api';
 import { formatDate, getStatusColor, capitalize } from '@/lib/utils';
 import { ACADEMIC_YEARS, TERMS } from '@/lib/constants';
@@ -17,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 
-const columns = (onPublish) => [
+const columns = (onPublish, onView, onPrint) => [
   {
     id: 'student',
     header: 'Student',
@@ -57,6 +58,8 @@ const columns = (onPublish) => [
           <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onView(row.original._id)}>View / Edit</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onPrint(row.original._id)}>Print</DropdownMenuItem>
           {row.original.status === 'draft' && (
             <DropdownMenuItem onClick={() => onPublish(row.original._id)}>Publish</DropdownMenuItem>
           )}
@@ -67,6 +70,7 @@ const columns = (onPublish) => [
 ];
 
 export default function ReportCardsPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
@@ -114,7 +118,11 @@ export default function ReportCardsPage() {
       </PageHeader>
 
       <DataTable
-        columns={columns((id) => { if (confirm('Publish this report card?')) publish(id); })}
+        columns={columns(
+          (id) => { if (confirm('Publish this report card?')) publish(id); },
+          (id) => router.push(`/report-cards/${id}`),
+          (id) => window.open(`/report-cards/${id}/print`, '_blank'),
+        )}
         data={data?.data}
         loading={isLoading}
         pageCount={data?.pagination?.pages}

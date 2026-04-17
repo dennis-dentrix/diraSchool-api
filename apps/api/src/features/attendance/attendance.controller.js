@@ -86,13 +86,24 @@ export const createAttendanceRegister = asyncHandler(async (req, res) => {
     return sendError(res, 'Substitute teacher not found in this school.', 404);
   }
 
+  // Auto-populate entries from all active students in the class when none are provided
+  let finalEntries = entries && entries.length > 0 ? entries : null;
+  if (!finalEntries) {
+    const classStudents = await Student.find({
+      classId,
+      schoolId: req.user.schoolId,
+      status: STUDENT_STATUSES.ACTIVE,
+    }).select('_id').lean();
+    finalEntries = classStudents.map((s) => ({ studentId: s._id, status: 'present' }));
+  }
+
   const register = await Attendance.create({
     schoolId: req.user.schoolId,
     classId,
     date: normaliseDate(date),
     academicYear: cls.academicYear,
     term: cls.term,
-    entries: entries || [],
+    entries: finalEntries,
     substituteNote: substituteNote || undefined,
     ...substituteMeta,
   });

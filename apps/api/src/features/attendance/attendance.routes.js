@@ -1,5 +1,5 @@
 import express from 'express';
-import { protect, blockIfMustChangePassword, adminOnly } from '../../middleware/auth.js';
+import { protect, blockIfMustChangePassword } from '../../middleware/auth.js';
 import {
   validateCreateAttendanceRegister,
   validateListAttendanceRegisters,
@@ -15,13 +15,15 @@ import {
 
 const router = express.Router();
 
-router.use(protect, blockIfMustChangePassword, adminOnly);
+router.use(protect, blockIfMustChangePassword);
 
-router.route('/registers')
+router
+  .route('/registers')
   .get(validateListAttendanceRegisters, listAttendanceRegisters)
   .post(validateCreateAttendanceRegister, createAttendanceRegister);
 
-router.route('/registers/:id')
+router
+  .route('/registers/:id')
   .get(getAttendanceRegister)
   .patch(validateUpdateAttendanceRegister, updateAttendanceRegister);
 

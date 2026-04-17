@@ -11,7 +11,14 @@ export function Providers({ children }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 30_000,
+            // Data stays "fresh" for 3 minutes — navigating between pages won't
+            // re-fetch if the data was loaded less than 3 minutes ago.
+            staleTime: 3 * 60 * 1000,
+            // Keep unused data in memory for 10 minutes (survives navigation).
+            gcTime: 10 * 60 * 1000,
+            // Don't refetch just because the browser tab regains focus.
+            // This was firing a full page re-fetch every time the user alt-tabbed.
+            refetchOnWindowFocus: false,
             retry: (failureCount, error) => {
               const status = error?.response?.status;
               if (status === 401 || status === 403 || status === 404) return false;

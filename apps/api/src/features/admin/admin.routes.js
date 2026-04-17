@@ -5,6 +5,7 @@ import {
   listSchools,
   getSchool,
   updateSchoolStatus,
+  listSystemAuditLogs,
 } from './admin.controller.js';
 
 const router = express.Router();
@@ -16,5 +17,6 @@ router.get('/stats',               getStats);
 router.get('/schools',             listSchools);
 router.get('/schools/:id',         getSchool);
 router.patch('/schools/:id/status', updateSchoolStatus);
+router.get('/audit-logs',           listSystemAuditLogs);
 
 export default router;

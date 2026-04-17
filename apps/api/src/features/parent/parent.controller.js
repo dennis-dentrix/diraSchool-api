@@ -51,11 +51,11 @@ export const getMyChildren = asyncHandler(async (req, res) => {
  */
 export const getChildFees = asyncHandler(async (req, res) => {
   const { studentId } = req.params;
-  const { academicYear, term } = req.query;
 
-  if (!academicYear || !term) {
-    return sendError(res, 'academicYear and term query params are required.', 400);
-  }
+  // Default to current year / Term 1 when not supplied by client
+  const currentYear = String(new Date().getFullYear());
+  const academicYear = req.query.academicYear || currentYear;
+  const term = req.query.term || 'Term 1';
 
   const student = await resolveChild(req, studentId);
   if (!student) return sendError(res, 'Child not found.', 404);
@@ -81,11 +81,11 @@ export const getChildFees = asyncHandler(async (req, res) => {
   ]);
 
   const totalPaid = agg?.totalPaid ?? 0;
-  const expectedFee = structure?.totalAmount ?? 0;
-  const outstanding = Math.max(0, expectedFee - totalPaid);
+  const totalBilled = structure?.totalAmount ?? 0;
+  const balance = Math.max(0, totalBilled - totalPaid);
 
   // Recent payments (latest 10 — enough for parent view)
-  const recentPayments = await Payment.find({
+  const payments = await Payment.find({
     schoolId: req.user.schoolId,
     studentId: student._id,
     academicYear,
@@ -94,7 +94,7 @@ export const getChildFees = asyncHandler(async (req, res) => {
   })
     .sort({ createdAt: -1 })
     .limit(10)
-    .select('amount method reference createdAt receiptUrl');
+    .select('amount method reference createdAt paidAt receiptUrl description');
 
   return sendSuccess(res, {
     student: {
@@ -105,11 +105,11 @@ export const getChildFees = asyncHandler(async (req, res) => {
     },
     academicYear,
     term,
-    expectedFee,
+    totalBilled,
     totalPaid,
-    outstanding,
-    isPaidUp: outstanding === 0,
-    recentPayments,
+    balance,
+    isPaidUp: balance === 0,
+    payments,
   });
 });
 
@@ -133,19 +133,16 @@ export const getChildAttendance = asyncHandler(async (req, res) => {
   if (academicYear) filter.academicYear = academicYear;
   if (term) filter.term = term;
 
-  const total = await Attendance.countDocuments(filter);
-  const { skip, limit, meta } = paginate(req.query, total);
-
   const registers = await Attendance.find(filter)
     .sort({ date: -1 })
-    .skip(skip)
-    .limit(limit)
-    .select('date academicYear term entries.$');
+    .limit(200)
+    .select('date academicYear term entries');
 
-  // Flatten to just this student's entry per day
-  const days = registers.map((r) => {
+  // Flatten to this student's entry per day
+  const records = registers.map((r) => {
     const entry = r.entries.find((e) => e.studentId.toString() === studentId);
     return {
+      _id: r._id,
       date: r.date,
       academicYear: r.academicYear,
       term: r.term,
@@ -154,7 +151,21 @@ export const getChildAttendance = asyncHandler(async (req, res) => {
     };
   });
 
-  return sendSuccess(res, { student: { firstName: student.firstName, lastName: student.lastName }, days, meta });
+  // Compute summary counts
+  const summary = records.reduce(
+    (acc, r) => {
+      const s = r.status;
+      acc[s] = (acc[s] ?? 0) + 1;
+      return acc;
+    },
+    { present: 0, absent: 0, late: 0, excused: 0 }
+  );
+
+  return sendSuccess(res, {
+    student: { firstName: student.firstName, lastName: student.lastName },
+    summary,
+    records,
+  });
 });
 
 /**

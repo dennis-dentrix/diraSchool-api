@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 export default function AuthLayout({ children }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
@@ -13,7 +15,10 @@ export default function AuthLayout({ children }) {
           <h1 className="text-2xl font-bold text-white">Diraschool</h1>
           <p className="text-slate-400 text-sm mt-1">CBC School Management System</p>
         </div>
-        {children}
+        {/* Suspense required for useSearchParams in Next.js 15 */}
+        <Suspense fallback={null}>
+          {children}
+        </Suspense>
       </div>
     </div>
   );

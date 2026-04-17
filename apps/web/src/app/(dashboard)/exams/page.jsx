@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, MoreHorizontal } from 'lucide-react';
+import { Plus, MoreHorizontal, ClipboardList } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -29,7 +30,7 @@ const schema = z.object({
   totalMarks: z.coerce.number().positive(),
 });
 
-const columns = (onDelete) => [
+const columns = (onDelete, onEnterResults) => [
   { accessorKey: 'name', header: 'Exam', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
   { accessorKey: 'subjectId', header: 'Subject', cell: ({ row }) => { const s = row.original.subjectId; return <span className="text-sm">{typeof s === 'object' ? s.name : '—'}</span>; } },
   { accessorKey: 'classId', header: 'Class', cell: ({ row }) => { const c = row.original.classId; return <span className="text-sm">{typeof c === 'object' ? c.name : '—'}</span>; } },
@@ -42,6 +43,9 @@ const columns = (onDelete) => [
       <DropdownMenu>
         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => onEnterResults(row.original._id)}>
+            <ClipboardList className="h-4 w-4 mr-2" /> Enter Results
+          </DropdownMenuItem>
           <DropdownMenuItem className="text-destructive" onClick={() => { if (confirm('Delete exam?')) onDelete(row.original._id); }}>Delete</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -50,6 +54,7 @@ const columns = (onDelete) => [
 ];
 
 export default function ExamsPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -88,7 +93,7 @@ export default function ExamsPage() {
         <Button size="sm" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Create Exam</Button>
       </PageHeader>
 
-      <DataTable columns={columns(deleteExam)} data={data?.data} loading={isLoading} pageCount={data?.pagination?.pages} currentPage={page} onPageChange={setPage} />
+      <DataTable columns={columns(deleteExam, (id) => router.push(`/exams/${id}`))} data={data?.data} loading={isLoading} pageCount={data?.pagination?.pages} currentPage={page} onPageChange={setPage} />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">

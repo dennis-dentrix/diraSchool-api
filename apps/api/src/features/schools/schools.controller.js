@@ -171,9 +171,10 @@ export const updateSubscription = asyncHandler(async (req, res) => {
   const school = await School.findById(req.params.id);
   if (!school) return sendError(res, 'School not found.', 404);
 
-  const { subscriptionStatus, trialExpiry } = req.body;
+  const { subscriptionStatus, planTier, trialExpiry } = req.body;
 
   school.subscriptionStatus = subscriptionStatus;
+  if (planTier !== undefined) school.planTier = planTier;
 
   if (subscriptionStatus === SUBSCRIPTION_STATUSES.ACTIVE) {
     // Active subscription — trial expiry is no longer relevant

@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  'https://diraschool-api-production.up.railway.app';
+  'https://api.diraschool.com';
 
 export const api = axios.create({
   baseURL: `${API_URL}/api/v1`,
@@ -42,7 +42,11 @@ const normalizeSuccessPayload = (payload) => {
   };
 };
 
-// Redirect to login on 401
+// Auth endpoints that are allowed to return 401 without triggering a redirect.
+// (login/register return 401 for wrong credentials — that's expected, not a session expiry)
+const AUTH_NO_REDIRECT = ['/auth/login', '/auth/register', '/auth/verify-email', '/auth/reset-password'];
+
+// Redirect to login on 401 (session expired / not authenticated)
 api.interceptors.response.use(
   (res) => {
     res.data = normalizeSuccessPayload(res.data);
@@ -50,7 +54,11 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
-      window.location.href = '/login';
+      const url = error.config?.url ?? '';
+      const isAuthEndpoint = AUTH_NO_REDIRECT.some((path) => url.includes(path));
+      if (!isAuthEndpoint) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   },
@@ -87,6 +95,8 @@ export const usersApi = {
   get: (id) => api.get(`/users/${id}`),
   update: (id, data) => api.patch(`/users/${id}`, data),
   resendInvite: (id) => api.post(`/users/${id}/resend-invite`),
+  resetPassword: (id) => api.post(`/users/${id}/reset-password`),
+  toggleActive: (id, isActive) => api.patch(`/users/${id}`, { isActive }),
 };
 
 // ─── Schools (school-scoped) ──────────────────────────────────────────────────
@@ -111,6 +121,7 @@ export const adminApi = {
   listSchools: (params) => api.get('/admin/schools', { params }),
   getSchool: (id) => api.get(`/admin/schools/${id}`),
   updateSchoolStatus: (id, data) => api.patch(`/admin/schools/${id}/status`, data),
+  auditLogs: (params) => api.get('/admin/audit-logs', { params }),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────
@@ -209,9 +220,9 @@ export const reportCardsApi = {
 // ─── Parent Portal ────────────────────────────────────────────────────────────
 export const parentApi = {
   children: () => api.get('/parent/children'),
-  fees: (studentId) => api.get(`/parent/children/${studentId}/fees`),
-  attendance: (studentId) => api.get(`/parent/children/${studentId}/attendance`),
-  results: (studentId) => api.get(`/parent/children/${studentId}/results`),
+  fees: (studentId, params) => api.get(`/parent/children/${studentId}/fees`, { params }),
+  attendance: (studentId, params) => api.get(`/parent/children/${studentId}/attendance`, { params }),
+  results: (studentId, params) => api.get(`/parent/children/${studentId}/results`, { params }),
   reportCards: (studentId) => api.get(`/parent/children/${studentId}/report-cards`),
 };
 
