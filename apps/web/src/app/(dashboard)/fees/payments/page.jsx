@@ -133,7 +133,7 @@ export default function PaymentsPage() {
         columns={columns((payment) => setReverseTarget(payment))}
         data={data?.data}
         loading={isLoading}
-        pageCount={data?.pagination?.pages}
+        pageCount={data?.pagination?.totalPages}
         currentPage={page}
         onPageChange={setPage}
       />

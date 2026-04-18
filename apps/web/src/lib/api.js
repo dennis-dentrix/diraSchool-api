@@ -234,6 +234,11 @@ export const settingsApi = {
   deleteHoliday: (id) => api.delete(`/settings/holidays/${id}`),
 };
 
+// ─── Pricing (public) ─────────────────────────────────────────────────────────
+export const pricingApi = {
+  calculate: (params) => api.get('/pricing/calculate', { params }),
+};
+
 // ─── Audit ────────────────────────────────────────────────────────────────────
 export const auditApi = {
   list: (params) => api.get('/audit-logs', { params }),

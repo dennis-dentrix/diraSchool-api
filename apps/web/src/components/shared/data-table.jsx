@@ -37,12 +37,31 @@ export function DataTable({ columns, data, loading, pageCount, onPageChange, cur
 
   if (loading) {
     return (
-      <div className="rounded-md border">
-        <div className="p-4 space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
+      <div className="rounded-xl border overflow-hidden">
+        {/* Header row */}
+        <div className="flex items-center gap-4 px-4 py-3 bg-muted/50 border-b">
+          {Array.from({ length: Math.min(columns.length || 5, 6) }).map((_, i) => (
+            <Skeleton key={i} className="h-3.5 rounded-full" style={{ width: `${[80, 120, 100, 90, 70, 60][i] || 80}px` }} />
           ))}
         </div>
+        {/* Data rows */}
+        {Array.from({ length: 7 }).map((_, row) => (
+          <div key={row} className="flex items-center gap-4 px-4 py-3.5 border-b last:border-0">
+            {/* Avatar/icon placeholder */}
+            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            {/* Name + subtitle */}
+            <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+              <Skeleton className="h-3 rounded-full" style={{ width: `${100 + (row * 13) % 80}px` }} />
+              <Skeleton className="h-2.5 rounded-full" style={{ width: `${60 + (row * 17) % 60}px` }} />
+            </div>
+            {/* Badge placeholder */}
+            <Skeleton className="h-5 w-16 rounded-full shrink-0" />
+            {/* Value */}
+            <Skeleton className="h-3 rounded-full shrink-0" style={{ width: `${50 + (row * 11) % 40}px` }} />
+            {/* Action menu */}
+            <Skeleton className="h-7 w-7 rounded-md shrink-0" />
+          </div>
+        ))}
       </div>
     );
   }

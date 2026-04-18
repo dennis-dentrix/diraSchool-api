@@ -82,7 +82,7 @@ export default function AuditLogsPage() {
         </Select>
       </div>
 
-      <DataTable columns={columns} data={data?.data} loading={isLoading} pageCount={data?.pagination?.pages} currentPage={page} onPageChange={setPage} />
+      <DataTable columns={columns} data={data?.data} loading={isLoading} pageCount={data?.pagination?.totalPages} currentPage={page} onPageChange={setPage} />
     </div>
   );
 }

@@ -277,7 +277,7 @@ export default function StaffPage() {
         columns={columns(actionHandlers)}
         data={staffRows}
         loading={isLoading}
-        pageCount={pagination?.pages}
+        pageCount={pagination?.totalPages}
         currentPage={page}
         onPageChange={setPage}
       />

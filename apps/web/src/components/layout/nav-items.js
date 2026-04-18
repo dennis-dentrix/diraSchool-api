@@ -15,6 +15,7 @@ import {
   Building2,
   UserCog,
   Home,
+  Receipt,
 } from 'lucide-react';
 
 // Role groups
@@ -116,6 +117,12 @@ export const schoolNavItems = [
     href: '/audit-logs',
     icon: ShieldAlert,
     roles: AUDIT_ACCESS,
+  },
+  {
+    label: 'Billing',
+    href: '/billing',
+    icon: Receipt,
+    roles: ['school_admin', 'director', 'headteacher'],
   },
   {
     label: 'Settings',

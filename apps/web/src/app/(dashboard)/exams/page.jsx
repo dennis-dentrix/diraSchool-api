@@ -93,7 +93,7 @@ export default function ExamsPage() {
         <Button size="sm" onClick={() => setOpen(true)}><Plus className="h-4 w-4" /> Create Exam</Button>
       </PageHeader>
 
-      <DataTable columns={columns(deleteExam, (id) => router.push(`/exams/${id}`))} data={data?.data} loading={isLoading} pageCount={data?.pagination?.pages} currentPage={page} onPageChange={setPage} />
+      <DataTable columns={columns(deleteExam, (id) => router.push(`/exams/${id}`))} data={data?.data} loading={isLoading} pageCount={data?.pagination?.totalPages} currentPage={page} onPageChange={setPage} />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">

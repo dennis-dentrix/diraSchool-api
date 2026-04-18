@@ -108,7 +108,7 @@ export default function SuperadminUsersPage() {
         columns={columns}
         data={data?.data}
         loading={isLoading}
-        pageCount={data?.pagination?.pages}
+        pageCount={data?.pagination?.totalPages}
         currentPage={page}
         onPageChange={setPage}
       />

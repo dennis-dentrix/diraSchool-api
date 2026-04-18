@@ -1,12 +1,8 @@
 {
   "/pricing/page": "app/pricing/page.js",
   "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
-  "/(auth)/register/page": "app/(auth)/register/page.js",
-  "/(dashboard)/fees/payments/page": "app/(dashboard)/fees/payments/page.js",
-  "/(auth)/verify-email/page": "app/(auth)/verify-email/page.js",
-  "/(dashboard)/report-cards/page": "app/(dashboard)/report-cards/page.js",
-  "/(dashboard)/exams/page": "app/(dashboard)/exams/page.js",
-  "/(dashboard)/timetable/page": "app/(dashboard)/timetable/page.js",
-  "/(dashboard)/transport/page": "app/(dashboard)/transport/page.js",
-  "/(dashboard)/audit-logs/page": "app/(dashboard)/audit-logs/page.js"
+  "/(dashboard)/audit-logs/page": "app/(dashboard)/audit-logs/page.js",
+  "/(dashboard)/billing/page": "app/(dashboard)/billing/page.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/(dashboard)/students/page": "app/(dashboard)/students/page.js"
 }

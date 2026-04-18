@@ -142,7 +142,7 @@ export default function AuditLogsPage() {
         columns={columns}
         data={logs}
         loading={isLoading}
-        pageCount={pagination?.pages}
+        pageCount={pagination?.totalPages}
         currentPage={page}
         onPageChange={setPage}
       />

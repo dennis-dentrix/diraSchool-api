@@ -177,7 +177,7 @@ export default function SuperadminSchoolsPage() {
         columns={columns}
         data={schools}
         loading={isLoading}
-        pageCount={pagination?.pages}
+        pageCount={pagination?.totalPages}
         currentPage={page}
         onPageChange={setPage}
       />

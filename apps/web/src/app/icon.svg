@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="url(#g)"/>
+  <!-- Open book: left page -->
+  <rect x="7" y="9" width="8.5" height="14" rx="1.5" fill="rgba(255,255,255,0.92)"/>
+  <!-- Open book: right page -->
+  <rect x="16.5" y="9" width="8.5" height="14" rx="1.5" fill="rgba(255,255,255,0.92)"/>
+  <!-- Spine gap -->
+  <rect x="15" y="9" width="2" height="14" fill="url(#g)"/>
+  <!-- Lines on left page -->
+  <rect x="9" y="12.5" width="4.5" height="1" rx="0.5" fill="rgba(99,102,241,0.4)"/>
+  <rect x="9" y="15" width="4.5" height="1" rx="0.5" fill="rgba(99,102,241,0.4)"/>
+  <rect x="9" y="17.5" width="3" height="1" rx="0.5" fill="rgba(99,102,241,0.4)"/>
+  <!-- Lines on right page -->
+  <rect x="18.5" y="12.5" width="4.5" height="1" rx="0.5" fill="rgba(99,102,241,0.4)"/>
+  <rect x="18.5" y="15" width="4.5" height="1" rx="0.5" fill="rgba(99,102,241,0.4)"/>
+  <rect x="18.5" y="17.5" width="3" height="1" rx="0.5" fill="rgba(99,102,241,0.4)"/>
+</svg>
