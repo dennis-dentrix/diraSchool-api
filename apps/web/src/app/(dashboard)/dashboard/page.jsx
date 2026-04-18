@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar,
+  ResponsiveContainer,
 } from 'recharts';
 import { dashboardApi, feesApi, classesApi, subjectsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -48,13 +48,6 @@ function QuickActions({ isAdmin: admin, isFinance: finance }) {
   );
 }
 
-const weeklyAttendance = [
-  { day: 'Mon', present: 92, absent: 8 },
-  { day: 'Tue', present: 88, absent: 12 },
-  { day: 'Wed', present: 95, absent: 5 },
-  { day: 'Thu', present: 90, absent: 10 },
-  { day: 'Fri', present: 85, absent: 15 },
-];
 
 function TrialBanner({ daysLeft }) {
   if (daysLeft === null) return null;
@@ -179,11 +172,10 @@ function TeacherDashboard({ user }) {
         {/* Attendance stat */}
         <StatCard
           title="Class Attendance"
-          value="91%"
-          description="Average this week"
+          value="—"
+          description="No data yet"
           icon={ClipboardList}
           color="orange"
-          trend={3}
         />
       </div>
 
@@ -194,16 +186,12 @@ function TeacherDashboard({ user }) {
           <CardDescription>Present vs absent in your class this week</CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={weeklyAttendance} barSize={20}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip />
-              <Bar dataKey="present" fill="#22c55e" radius={[4, 4, 0, 0]} name="Present" />
-              <Bar dataKey="absent"  fill="#f87171" radius={[4, 4, 0, 0]} name="Absent" />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="flex flex-col items-center justify-center h-[200px] text-center gap-2">
+            <ClipboardList className="h-8 w-8 text-muted-foreground/40" />
+            <p className="text-sm font-medium text-muted-foreground">No attendance data yet</p>
+            <p className="text-xs text-muted-foreground">Start taking attendance to see your class report here</p>
+            <Link href="/attendance" className="text-xs text-blue-600 hover:underline mt-1">Take attendance →</Link>
+          </div>
         </CardContent>
       </Card>
 
@@ -326,7 +314,7 @@ export default function DashboardPage() {
             icon={CreditCard} color="green" loading={paymentsLoading}
           />
         )}
-        <StatCard title="Attendance" value="91%" description="This week" icon={ClipboardList} color="orange" trend={3} />
+        <StatCard title="Attendance" value="—" description="No data yet" icon={ClipboardList} color="orange" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -362,16 +350,12 @@ export default function DashboardPage() {
             <CardDescription>Present vs absent this week</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={weeklyAttendance} barSize={20}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="present" fill="#22c55e" radius={[4, 4, 0, 0]} name="Present" />
-                <Bar dataKey="absent"  fill="#f87171" radius={[4, 4, 0, 0]} name="Absent" />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="flex flex-col items-center justify-center h-[200px] text-center gap-2">
+              <ClipboardList className="h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm font-medium text-muted-foreground">No attendance data yet</p>
+              <p className="text-xs text-muted-foreground">Attendance records will appear here once teachers start taking registers</p>
+              <Link href="/attendance" className="text-xs text-blue-600 hover:underline mt-1">View attendance →</Link>
+            </div>
           </CardContent>
         </Card>
       </div>

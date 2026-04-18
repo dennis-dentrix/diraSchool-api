@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import {
   ArrowRight, Check, Users, GraduationCap, CreditCard,
-  ClipboardCheck, FileText, BookOpen, Bus, Library,
-  ShieldCheck, Smartphone, Zap, X, ChevronRight,
+  ClipboardCheck, FileText, BookOpen, Library,
+  Smartphone, Zap, X, ChevronRight,
 } from 'lucide-react';
 import LandingFAQ from './_components/LandingFAQ';
 
@@ -365,7 +365,7 @@ function PricingTeaser() {
               KES 7,500 base +<br className="hidden sm:block" /> KES 40 per student per term
             </h2>
             <p className="mt-3 text-slate-400 text-sm leading-relaxed max-w-md">
-              Less than a biro pen per student. Billed 3 times a year when you collect school fees.
+              Under 1% of what parents pay in school fees — to run your entire school digitally. Billed 3 times a year, when you collect fees.
               Annual billing saves 15%. No hidden costs, ever.
             </p>
             <div className="mt-5 flex flex-wrap gap-3 text-xs">

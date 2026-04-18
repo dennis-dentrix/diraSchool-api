@@ -3,11 +3,12 @@ import { env } from './env.js';
 const allowedOrigins = [
   env.CLIENT_URL,
   env.CLIENT_URL_STAGING,
+  // Local dev
   'http://localhost:3001',
   'http://localhost:5173',
+  // Production — browsers always include scheme, so both www and bare domain needed
+  'https://diraschool.com',
   'https://www.diraschool.com',
-  'www.diraschool.com',
-  'diraschool.com',
 ].filter(Boolean);
 
 export const corsOptions = {

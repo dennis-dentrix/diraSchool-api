@@ -6,7 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { authApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,8 @@ export default function AcceptInvitePage() {
   const token  = Array.isArray(params?.token) ? params.token[0] : params?.token;
   const router = useRouter();
   const { setUser } = useAuthStore();
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
@@ -59,24 +62,24 @@ export default function AcceptInvitePage() {
         <form onSubmit={handleSubmit(mutate)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="password">Create password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Min. 8 characters"
-              {...register('password')}
-            />
+            <div className="relative">
+              <Input id="password" type={showPwd ? 'text' : 'password'} placeholder="Min. 8 characters" {...register('password')} />
+              <button type="button" onClick={() => setShowPwd((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {errors.password && (
               <p className="text-xs text-destructive">{errors.password.message}</p>
             )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="••••••••"
-              {...register('confirmPassword')}
-            />
+            <div className="relative">
+              <Input id="confirmPassword" type={showConfirm ? 'text' : 'password'} placeholder="••••••••" {...register('confirmPassword')} />
+              <button type="button" onClick={() => setShowConfirm((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {errors.confirmPassword && (
               <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
             )}

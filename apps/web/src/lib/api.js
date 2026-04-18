@@ -244,6 +244,29 @@ export const auditApi = {
   list: (params) => api.get('/audit-logs', { params }),
 };
 
+// ─── Export (CSV downloads) ───────────────────────────────────────────────────
+export const exportApi = {
+  students: () => api.get('/export/students', { responseType: 'blob' }),
+  payments: (params) => api.get('/export/payments', { params, responseType: 'blob' }),
+  staff: () => api.get('/export/staff', { responseType: 'blob' }),
+};
+
+/**
+ * Trigger a CSV file download from a blob response.
+ * Usage: downloadBlob(await exportApi.students(), 'students.csv')
+ */
+export const downloadBlob = (response, fallbackFilename) => {
+  const disposition = response.headers?.['content-disposition'] ?? '';
+  const match = disposition.match(/filename="?([^";\r\n]+)"?/i);
+  const filename = match?.[1] ?? fallbackFilename;
+  const url = URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 // ─── Timetable ────────────────────────────────────────────────────────────────
 export const timetableApi = {
   list: (params) => api.get('/timetables', { params }),

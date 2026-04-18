@@ -164,7 +164,7 @@ function Hero() {
         {/* Value props */}
         <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           {[
-            ['Less than a biro pen', 'per student per term'],
+            ['Under 1% of a student\'s term fees', 'for the whole management system'],
             ['Billed at term start', 'when schools collect fees'],
             ['All features included', 'no premium tier required'],
           ].map(([bold, sub]) => (

@@ -2,14 +2,15 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import {
-  CreditCard, CalendarDays, Users, TrendingUp,
+  CalendarDays, TrendingUp,
   AlertTriangle, CheckCircle2, Clock, Ban,
-  ArrowRight, Mail, Calculator, ChevronDown,
+  ArrowRight, Mail, Calculator, Download,
 } from 'lucide-react';
-import { schoolsApi, studentsApi, getErrorMessage } from '@/lib/api';
-import { useAuthStore, isAdmin } from '@/store/auth.store';
+import { schoolsApi, studentsApi, exportApi, downloadBlob } from '@/lib/api';
+import { useAuthStore } from '@/store/auth.store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -365,6 +366,43 @@ export default function BillingPage() {
           </Card>
         </div>
       </div>
+
+      {/* ── Data Export ──────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Download className="h-4 w-4 text-blue-600" />
+            Export Your Data
+          </CardTitle>
+          <CardDescription>
+            Download full CSV exports at any time. Your data remains accessible for 30 days after cancellation.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { label: 'Students', desc: 'All enrolled students with admission numbers', fn: () => exportApi.students(), file: 'students.csv' },
+              { label: 'Payments', desc: 'Full payment history with references', fn: () => exportApi.payments(), file: 'payments.csv' },
+              { label: 'Staff', desc: 'All staff accounts and roles', fn: () => exportApi.staff(), file: 'staff.csv' },
+            ].map(({ label, desc, fn, file }) => (
+              <div key={label} className="flex flex-col gap-2 rounded-lg border p-4">
+                <div>
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                </div>
+                <Button variant="outline" size="sm" className="mt-auto w-full"
+                  onClick={async () => {
+                    try { downloadBlob(await fn(), file); }
+                    catch { toast.error('Export failed'); }
+                  }}
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" /> Download CSV
+                </Button>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ── Pricing formula callout ───────────────────────────────────────── */}
       <Card className="bg-muted/40">

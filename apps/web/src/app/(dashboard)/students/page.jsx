@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { studentsApi, classesApi, getErrorMessage } from '@/lib/api';
+import { studentsApi, classesApi, exportApi, downloadBlob, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { formatDate, getStatusColor, capitalize } from '@/lib/utils';
 import { STUDENT_STATUSES } from '@/lib/constants';
@@ -225,6 +225,14 @@ export default function StudentsPage() {
       >
         {!isTeacher && (
           <>
+            <Button variant="outline" size="sm"
+              onClick={async () => {
+                try { downloadBlob(await exportApi.students(), 'students.csv'); }
+                catch { toast.error('Export failed'); }
+              }}
+            >
+              <Download className="h-4 w-4 mr-1" /> Export CSV
+            </Button>
             <Button variant="outline" size="sm">
               <Upload className="h-4 w-4 mr-1" /> Import CSV
             </Button>

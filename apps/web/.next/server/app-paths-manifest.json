@@ -1,8 +1,7 @@
 {
-  "/pricing/page": "app/pricing/page.js",
-  "/(auth)/verify-email/page": "app/(auth)/verify-email/page.js",
-  "/(auth)/register/page": "app/(auth)/register/page.js",
+  "/page": "app/page.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
   "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
-  "/(dashboard)/report-cards/page": "app/(dashboard)/report-cards/page.js",
-  "/(dashboard)/students/page": "app/(dashboard)/students/page.js"
+  "/(dashboard)/attendance/page": "app/(dashboard)/attendance/page.js",
+  "/(dashboard)/attendance/[id]/page": "app/(dashboard)/attendance/[id]/page.js"
 }

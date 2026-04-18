@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Download } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { feesApi, studentsApi, classesApi, getErrorMessage } from '@/lib/api';
+import { feesApi, studentsApi, classesApi, exportApi, downloadBlob, getErrorMessage } from '@/lib/api';
 import { formatCurrency, formatDate, getStatusColor, capitalize } from '@/lib/utils';
 import { PAYMENT_METHODS, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { PageHeader } from '@/components/shared/page-header';
@@ -124,6 +124,14 @@ export default function PaymentsPage() {
   return (
     <div>
       <PageHeader title="Payments" description="Record and manage fee payments">
+        <Button variant="outline" size="sm"
+          onClick={async () => {
+            try { downloadBlob(await exportApi.payments(), 'payments.csv'); }
+            catch { toast.error('Export failed'); }
+          }}
+        >
+          <Download className="h-4 w-4 mr-1" /> Export CSV
+        </Button>
         <Button size="sm" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" /> Record Payment
         </Button>
