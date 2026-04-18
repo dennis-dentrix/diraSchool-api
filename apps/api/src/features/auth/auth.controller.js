@@ -20,13 +20,28 @@ import logger from '../../config/logger.js';
 const signToken = (userId) =>
   jwt.sign({ id: userId }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
 
+// Derive the shared cookie domain from CLIENT_URL so the cookie is visible to
+// both www.diraschool.com (Next.js) and api.diraschool.com (this API).
+// Example: CLIENT_URL = 'https://www.diraschool.com' → domain = '.diraschool.com'
+const getCookieDomain = () => {
+  if (!env.isProduction || !env.CLIENT_URL) return undefined;
+  try {
+    const hostname = new URL(env.CLIENT_URL).hostname; // 'www.diraschool.com'
+    const parts = hostname.split('.');
+    return parts.length >= 2 ? `.${parts.slice(-2).join('.')}` : undefined; // '.diraschool.com'
+  } catch {
+    return undefined;
+  }
+};
+
 const attachCookie = (res, token) => {
   const oneDay = 24 * 60 * 60 * 1000;
   res.cookie('token', token, {
-    httpOnly: true, // cannot be read by JS
-    secure: env.isProduction, // HTTPS only in production
+    httpOnly: true,
+    secure: env.isProduction,
     sameSite: env.isProduction ? 'strict' : 'lax',
     maxAge: oneDay,
+    domain: getCookieDomain(), // undefined in dev; '.diraschool.com' in prod
   });
 };
 
@@ -198,6 +213,7 @@ export const logout = asyncHandler(async (req, res) => {
   res.cookie('token', '', {
     httpOnly: true,
     expires: new Date(0),
+    domain: getCookieDomain(),
   });
   return sendSuccess(res, { message: 'Logged out successfully.' });
 });

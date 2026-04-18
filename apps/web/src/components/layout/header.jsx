@@ -35,17 +35,17 @@ export function Header({ onMenuClick, title }) {
   });
 
   return (
-    <header className="h-14 border-b bg-background flex items-center gap-4 px-4 shrink-0">
+    <header className="h-14 border-b border-border/60 bg-background/80 backdrop-blur-sm flex items-center gap-4 px-4 shrink-0 sticky top-0 z-40">
       {/* Mobile menu toggle */}
       <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuClick}>
         <Menu className="h-5 w-5" />
       </Button>
 
       {/* Page title + global fetch indicator */}
-      <div className="flex-1 hidden sm:flex items-center gap-2">
-        <h1 className="text-lg font-semibold">{title}</h1>
+      <div className="flex-1 hidden sm:flex items-center gap-2.5">
+        <h1 className="text-base font-semibold tracking-tight">{title}</h1>
         {isFetching > 0 && (
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         )}
       </div>
       <div className="flex-1 md:hidden" />

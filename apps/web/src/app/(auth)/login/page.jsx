@@ -89,23 +89,30 @@ export default function LoginPage() {
   }
 
   return (
-    <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur">
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold">Sign in</CardTitle>
-        <CardDescription>Enter your credentials to access your school</CardDescription>
+    <Card className="border border-white/10 shadow-2xl bg-white/[0.07] backdrop-blur-xl text-white">
+      <CardHeader className="space-y-1 pb-5">
+        <CardTitle className="text-2xl font-bold text-white">Welcome back</CardTitle>
+        <CardDescription className="text-slate-400">Sign in to access your school dashboard</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(mutate)} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email address</Label>
-            <Input id="email" type="email" autoComplete="email" placeholder="you@school.ac.ke" {...register('email')} />
-            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-slate-300 text-xs font-medium uppercase tracking-wide">Email address</Label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@school.ac.ke"
+              className="bg-white/10 border-white/15 text-white placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/60 h-11"
+              {...register('email')}
+            />
+            {errors.email && <p className="text-xs text-red-400">{errors.email.message}</p>}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <Link href="/forgot-password" className="text-xs text-blue-600 hover:underline">
+              <Label htmlFor="password" className="text-slate-300 text-xs font-medium uppercase tracking-wide">Password</Label>
+              <Link href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
                 Forgot password?
               </Link>
             </div>
@@ -115,28 +122,33 @@ export default function LoginPage() {
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"
+                className="bg-white/10 border-white/15 text-white placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/60 h-11 pr-10"
                 {...register('password')}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+            {errors.password && <p className="text-xs text-red-400">{errors.password.message}</p>}
           </div>
 
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <Button
+            type="submit"
+            className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-blue-500/25 transition-all duration-200 border-0 mt-2"
+            disabled={isPending}
+          >
             {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Sign in
           </Button>
         </form>
 
-        <div className="mt-4 text-center text-sm text-muted-foreground">
+        <div className="mt-5 text-center text-sm text-slate-500">
           New school?{' '}
-          <Link href="/register" className="text-blue-600 hover:underline font-medium">Register here</Link>
+          <Link href="/register" className="text-blue-400 hover:text-blue-300 transition-colors font-medium">Register here</Link>
         </div>
       </CardContent>
     </Card>

@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   '/reset-password',
   '/verify-email',
   '/accept-invite',
+  '/pricing',
 ];
 
 export function middleware(request) {
