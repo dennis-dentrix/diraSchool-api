@@ -6,9 +6,9 @@ export const metadata = {
     title: 'DiraSchool Pricing — Fair, Transparent & CBC-Aligned',
     description:
       'KES 7,500 base + KES 40 per student per term. Annual billing saves 15%. Calculate your exact price instantly.',
-    url: 'https://diraschool.ke/pricing',
+    url: 'https://diraSchool.com/pricing',
   },
-  alternates: { canonical: 'https://diraschool.ke/pricing' },
+  alternates: { canonical: 'https://diraSchool.com/pricing' },
 };
 
 export default function PricingLayout({ children }) {

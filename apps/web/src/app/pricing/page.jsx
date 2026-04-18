@@ -293,11 +293,11 @@ function PricingTable() {
                     plan.highlight
                       ? 'bg-white text-indigo-700 hover:bg-blue-50 font-bold'
                       : plan.custom
-                      ? 'bg-slate-900 text-white hover:bg-slate-700'
-                      : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-0',
+                        ? 'bg-slate-900 text-white hover:bg-slate-700'
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-0',
                   )}
                 >
-                  <Link href={plan.custom ? 'mailto:sales@diraschool.ke' : '/register'}>
+                  <Link href={plan.custom ? 'mailto:contact@diraschool.com' : '/register'}>
                     {plan.custom ? 'Contact Sales' : 'Get Started'}
                   </Link>
                 </Button>
@@ -578,7 +578,7 @@ function TrialCTA() {
             <Link href="/register">Start your 30-day free trial <ArrowRight className="h-4 w-4 ml-1.5" /></Link>
           </Button>
           <Button asChild variant="ghost" size="lg" className="text-slate-400 hover:text-white hover:bg-white/10">
-            <Link href="mailto:sales@diraschool.ke">Talk to sales</Link>
+            <Link href="mailto:contact@diraschool.com">Talk to sales</Link>
           </Button>
         </div>
 

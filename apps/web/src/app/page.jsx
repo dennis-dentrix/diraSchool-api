@@ -10,12 +10,12 @@ export const metadata = {
   title: 'DiraSchool — CBC School Management System for Kenyan Schools',
   description:
     'Run your CBC school without the paperwork. DiraSchool handles attendance, CBC report cards, fee management, and the parent portal — built for Kenyan schools.',
-  alternates: { canonical: 'https://diraschool.ke' },
+  alternates: { canonical: 'https://diraschool.com' },
   openGraph: {
     title: 'DiraSchool — Run Your School Without the Paperwork',
     description:
       'The complete CBC school management platform for Kenya. Digital attendance, automated fees, one-click report cards, and a parent portal. Start free for 30 days.',
-    url: 'https://diraschool.ke',
+    url: 'https://diraschool.com',
   },
 };
 
@@ -25,21 +25,21 @@ const jsonLd = {
   '@graph': [
     {
       '@type': 'Organization',
-      '@id': 'https://diraschool.ke/#org',
+      '@id': 'https://diraschool.com/#org',
       name: 'DiraSchool',
-      url: 'https://diraschool.ke',
-      logo: 'https://diraschool.ke/icon.svg',
+      url: 'https://diraschool.com',
+      logo: 'https://diraSchool.com/icon.svg',
       description: 'CBC school management system for Kenyan schools.',
       address: { '@type': 'PostalAddress', addressCountry: 'KE' },
     },
     {
       '@type': 'SoftwareApplication',
-      '@id': 'https://diraschool.ke/#app',
+      '@id': 'https://diraSchool.com/#app',
       name: 'DiraSchool',
       applicationCategory: 'EducationalApplication',
       operatingSystem: 'Web',
-      url: 'https://diraschool.ke',
-      publisher: { '@id': 'https://diraschool.ke/#org' },
+      url: 'https://diraSchool.com',
+      publisher: { '@id': 'https://diraSchool.com/#org' },
       description:
         'Complete CBC school management system for Kenyan schools including attendance, report cards, fee management, and parent portal.',
       offers: {
@@ -433,7 +433,7 @@ function FinalCTA() {
             Start your free trial <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href="mailto:hello@diraschool.ke"
+            href="mailto:hello@diraSchool.com"
             className="text-slate-400 hover:text-white transition-colors text-sm"
           >
             Questions? Email us →
@@ -494,7 +494,7 @@ function Footer() {
           <div>
             <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-4">Contact</p>
             <ul className="space-y-2.5 text-xs text-slate-500">
-              {[['hello@diraschool.ke', 'mailto:hello@diraschool.ke'], ['billing@diraschool.ke', 'mailto:billing@diraschool.ke']].map(([label, href]) => (
+              {[['hello@diraSchool.com', 'mailto:hello@diraSchool.com'], ['billing@diraSchool.com', 'mailto:billing@diraSchool.com']].map(([label, href]) => (
                 <li key={label}><a href={href} className="hover:text-white transition-colors">{label}</a></li>
               ))}
             </ul>
