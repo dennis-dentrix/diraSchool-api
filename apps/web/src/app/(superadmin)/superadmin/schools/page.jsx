@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Search, MoreHorizontal, GraduationCap, Users } from 'lucide-react';
+import { Search, MoreHorizontal, GraduationCap, Users, ShieldOff, ShieldCheck, AlertTriangle, CheckCircle2, Ban } from 'lucide-react';
 import { adminApi, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const planColors = {
   trial: 'bg-yellow-100 text-yellow-800',
@@ -36,17 +36,20 @@ export default function SuperadminSchoolsPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [activeFilter, setActiveFilter] = useState('');
   const [subOpen, setSubOpen] = useState(false);
+  const [disableTarget, setDisableTarget] = useState(null);
   const [selectedSchool, setSelectedSchool] = useState(null);
   const [subForm, setSubForm] = useState({ planTier: '', subscriptionStatus: '', trialExpiry: '' });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['sa-schools-list', page, search, statusFilter],
+    queryKey: ['sa-schools-list', page, search, statusFilter, activeFilter],
     queryFn: async () => {
       const res = await adminApi.listSchools({
         page, limit: 20,
         search: search || undefined,
         status: statusFilter || undefined,
+        active: activeFilter || undefined,
       });
       return res.data;
     },
@@ -55,9 +58,10 @@ export default function SuperadminSchoolsPage() {
   const { mutate: updateSub, isPending } = useMutation({
     mutationFn: ({ id, data }) => adminApi.updateSchoolStatus(id, data),
     onSuccess: () => {
-      toast.success('Subscription updated');
+      toast.success('Updated');
       queryClient.invalidateQueries({ queryKey: ['sa-schools-list'] });
       setSubOpen(false);
+      setDisableTarget(null);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -98,6 +102,13 @@ export default function SuperadminSchoolsPage() {
       ),
     },
     {
+      id: 'account',
+      header: 'Account',
+      cell: ({ row }) => row.original.isActive !== false
+        ? <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-medium"><CheckCircle2 className="h-3.5 w-3.5" /> Enabled</span>
+        : <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium"><Ban className="h-3.5 w-3.5" /> Disabled</span>,
+    },
+    {
       id: 'counts',
       header: 'Staff / Students',
       cell: ({ row }) => (
@@ -112,32 +123,37 @@ export default function SuperadminSchoolsPage() {
       ),
     },
     {
-      id: 'expiry',
-      header: 'Trial Expiry',
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">
-          {row.original.trialExpiry ? formatDate(row.original.trialExpiry) : '—'}
-        </span>
-      ),
-    },
-    {
       accessorKey: 'createdAt',
       header: 'Registered',
       cell: ({ row }) => <span className="text-sm text-muted-foreground">{formatDate(row.original.createdAt)}</span>,
     },
     {
       id: 'actions',
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => router.push(`/superadmin/schools/${row.original._id}`)}>View Details</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openSubDialog(row.original)}>Manage Subscription</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
+      cell: ({ row }) => {
+        const s = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => router.push(`/superadmin/schools/${s._id}`)}>View Details</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openSubDialog(s)}>Manage Subscription</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {s.isActive !== false ? (
+                <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDisableTarget(s)}>
+                  <ShieldOff className="h-4 w-4 mr-2" /> Disable School
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem className="text-emerald-700 focus:text-emerald-700"
+                  onClick={() => updateSub({ id: s._id, data: { isActive: true } })}>
+                  <ShieldCheck className="h-4 w-4 mr-2" /> Re-enable School
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
     },
   ];
 
@@ -171,6 +187,14 @@ export default function SuperadminSchoolsPage() {
             <SelectItem value="expired">Expired</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={activeFilter} onValueChange={(v) => { setActiveFilter(v === '__all__' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="w-36"><SelectValue placeholder="Account" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All accounts</SelectItem>
+            <SelectItem value="true">Enabled</SelectItem>
+            <SelectItem value="false">Disabled</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <DataTable
@@ -181,6 +205,32 @@ export default function SuperadminSchoolsPage() {
         currentPage={page}
         onPageChange={setPage}
       />
+
+      {/* ── Disable confirmation dialog ───────────────────────────────────── */}
+      <Dialog open={!!disableTarget} onOpenChange={() => setDisableTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" /> Disable School Account
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Disabling <span className="font-semibold text-foreground">{disableTarget?.name}</span> will immediately:
+          </p>
+          <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-4">
+            <li>Block all staff from logging in</li>
+            <li>Deactivate all staff user accounts</li>
+            <li>Preserve all school data intact</li>
+          </ul>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisableTarget(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={isPending}
+              onClick={() => updateSub({ id: disableTarget._id, data: { isActive: false } })}>
+              Disable School
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Subscription quick-edit dialog ────────────────────────────────── */}
       <Dialog open={subOpen} onOpenChange={setSubOpen}>

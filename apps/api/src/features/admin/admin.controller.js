@@ -97,9 +97,13 @@ export const getStats = asyncHandler(async (req, res) => {
  *   page, limit
  */
 export const listSchools = asyncHandler(async (req, res) => {
-  const { status, plan, county, search } = req.query;
+  const { status, plan, county, search, active } = req.query;
 
   const filter = {};
+
+  if (active !== undefined) {
+    filter.isActive = active !== 'false';
+  }
 
   if (status) {
     if (!Object.values(SUBSCRIPTION_STATUSES).includes(status)) {
@@ -228,7 +232,17 @@ export const updateSchoolStatus = asyncHandler(async (req, res) => {
   }
 
   if (isActive !== undefined) {
+    const wasActive = school.isActive;
     school.isActive = Boolean(isActive);
+
+    // Cascade: deactivating a school immediately blocks all its staff accounts.
+    // Re-enabling does NOT bulk-reactivate users (individual pauses are preserved).
+    if (!school.isActive && wasActive) {
+      await User.updateMany(
+        { schoolId: school._id, role: { $ne: 'superadmin' } },
+        { isActive: false }
+      );
+    }
   }
 
   await school.save();
