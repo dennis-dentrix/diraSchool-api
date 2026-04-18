@@ -1,8 +1,8 @@
 {
   "/pricing/page": "app/pricing/page.js",
+  "/(dashboard)/students/page": "app/(dashboard)/students/page.js",
+  "/(auth)/forgot-password/page": "app/(auth)/forgot-password/page.js",
+  "/(auth)/reset-password/[token]/page": "app/(auth)/reset-password/[token]/page.js",
   "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
-  "/(dashboard)/audit-logs/page": "app/(dashboard)/audit-logs/page.js",
-  "/(dashboard)/billing/page": "app/(dashboard)/billing/page.js",
-  "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/(dashboard)/students/page": "app/(dashboard)/students/page.js"
+  "/(auth)/login/page": "app/(auth)/login/page.js"
 }

@@ -32,3 +32,5 @@ docs/__pycache__/
 
 # ── One-off scripts (safe to delete after use) ───────────────
 apps/api/scripts/
+
+apps/web/.next
