@@ -275,6 +275,22 @@ export const sendInviteEmail = ({
     meta,
   });
 
+export const sendNewSchoolNotification = ({
+  schoolName,
+  schoolEmail,
+  schoolPhone,
+  county,
+  adminName,
+  meta = {},
+}) =>
+  sendEmail({
+    to: 'diraschadmin@diraschool.com',
+    subject: `New school registered — ${schoolName}`,
+    html: _newSchoolTemplate({ schoolName, schoolEmail, schoolPhone, county, adminName }),
+    template: 'new-school-notification',
+    meta,
+  });
+
 export const sendPasswordResetEmail = ({
   to,
   firstName,
@@ -400,6 +416,43 @@ const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
       <p style="margin:0;font-size:13px;color:#6b7280;">
         If you weren't expecting this invitation, contact your school administrator.
       </p>
+    `
+  );
+
+const _newSchoolTemplate = ({ schoolName, schoolEmail, schoolPhone, county, adminName }) =>
+  _shell(
+    `New school registered — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">New school registration</h2>
+      <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+        A new school has just signed up for a free trial on Diraschool.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;width:140px;border:1px solid #e5e7eb;">School name</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${schoolName}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Admin email</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${schoolEmail}</td>
+        </tr>
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Admin name</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${adminName}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Phone</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${schoolPhone || '—'}</td>
+        </tr>
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">County</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${county || '—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Registered at</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${new Date().toUTCString()}</td>
+        </tr>
+      </table>
     `
   );
 

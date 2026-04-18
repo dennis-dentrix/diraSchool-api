@@ -122,6 +122,8 @@ export const adminApi = {
   getSchool: (id) => api.get(`/admin/schools/${id}`),
   updateSchoolStatus: (id, data) => api.patch(`/admin/schools/${id}/status`, data),
   auditLogs: (params) => api.get('/admin/audit-logs', { params }),
+  listUsers: (params) => api.get('/admin/users', { params }),
+  toggleUser: (id) => api.patch(`/admin/users/${id}/toggle`),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────

@@ -249,7 +249,7 @@ export default function BillingPage() {
             <span className="ml-1 font-normal opacity-80">— contact us to activate your subscription and avoid interruption.</span>
           </div>
           <Button asChild size="sm" variant="outline" className="ml-auto shrink-0 border-amber-300 hover:bg-amber-100">
-            <a href="mailto:billing@diraSchool.com">Contact billing</a>
+            <a href="mailto:contact@diraschool.com">Contact billing</a>
           </Button>
         </div>
       )}
@@ -356,7 +356,7 @@ export default function BillingPage() {
               </p>
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-0">
-                  <a href="mailto:billing@diraSchool.com">Email billing team</a>
+                  <a href="mailto:contact@diraschool.com">Email billing team</a>
                 </Button>
                 <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 bg-transparent">
                   <Link href="/pricing" target="_blank">View pricing page</Link>

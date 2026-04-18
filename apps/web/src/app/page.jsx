@@ -28,18 +28,18 @@ const jsonLd = {
       '@id': 'https://diraschool.com/#org',
       name: 'DiraSchool',
       url: 'https://diraschool.com',
-      logo: 'https://diraSchool.com/icon.svg',
+      logo: 'https://diraschool.com/icon.svg',
       description: 'CBC school management system for Kenyan schools.',
       address: { '@type': 'PostalAddress', addressCountry: 'KE' },
     },
     {
       '@type': 'SoftwareApplication',
-      '@id': 'https://diraSchool.com/#app',
+      '@id': 'https://diraschool.com/#app',
       name: 'DiraSchool',
       applicationCategory: 'EducationalApplication',
       operatingSystem: 'Web',
-      url: 'https://diraSchool.com',
-      publisher: { '@id': 'https://diraSchool.com/#org' },
+      url: 'https://diraschool.com',
+      publisher: { '@id': 'https://diraschool.com/#org' },
       description:
         'Complete CBC school management system for Kenyan schools including attendance, report cards, fee management, and parent portal.',
       offers: {
@@ -433,7 +433,7 @@ function FinalCTA() {
             Start your free trial <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
-            href="mailto:hello@diraSchool.com"
+            href="mailto:contact@diraschool.com"
             className="text-slate-400 hover:text-white transition-colors text-sm"
           >
             Questions? Email us →
@@ -452,6 +452,51 @@ function FinalCTA() {
 }
 
 // ── Footer ─────────────────────────────────────────────────────────────────────
+function AboutSection() {
+  return (
+    <section className="bg-slate-900 py-20 px-4 sm:px-6 border-t border-white/8">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-12">
+          <p className="text-blue-400 text-xs font-semibold uppercase tracking-widest mb-3">About DiraSchool</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
+            Built in Kenya, for Kenyan schools
+          </h2>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-10 text-slate-400 text-sm leading-relaxed">
+          <div className="space-y-4">
+            <p>
+              DiraSchool was built by educators and engineers who saw firsthand how much time Kenyan school
+              administrators lose to manual registers, paper fee records, and end-of-term report card marathons.
+            </p>
+            <p>
+              We set out to build the simplest possible tool that handles the full admin loop — attendance,
+              fees, CBC report cards, and the parent portal — without requiring expensive hardware, IT staff,
+              or a steep learning curve.
+            </p>
+          </div>
+          <div className="space-y-4">
+            <p>
+              Our pricing is intentionally transparent: a flat base fee plus a small per-student charge, so
+              growing schools never face a sudden billing cliff. There are no hidden modules, no annual
+              lock-in, and no surprise upgrades.
+            </p>
+            <p>
+              We are a small, focused team headquartered in Nairobi. Every feature request, support email,
+              and bug report lands directly with the people who wrote the code.
+            </p>
+            <p className="text-slate-500 text-xs pt-1">
+              Questions?{' '}
+              <a href="mailto:contact@diraschool.com" className="text-blue-400 hover:text-blue-300 transition-colors underline underline-offset-2">
+                contact@diraschool.com
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Footer() {
   return (
     <footer className="bg-slate-950 border-t border-white/8 py-12 px-4 sm:px-6">
@@ -494,7 +539,7 @@ function Footer() {
           <div>
             <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-4">Contact</p>
             <ul className="space-y-2.5 text-xs text-slate-500">
-              {[['hello@diraSchool.com', 'mailto:hello@diraSchool.com'], ['billing@diraSchool.com', 'mailto:billing@diraSchool.com']].map(([label, href]) => (
+              {[['contact@diraschool.com', 'mailto:contact@diraschool.com']].map(([label, href]) => (
                 <li key={label}><a href={href} className="hover:text-white transition-colors">{label}</a></li>
               ))}
             </ul>
@@ -502,7 +547,10 @@ function Footer() {
         </div>
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
           <p>© {new Date().getFullYear()} DiraSchool. Built in Kenya 🇰🇪</p>
-          <p>CBC School Management System · Nairobi, Kenya</p>
+          <div className="flex gap-4">
+            <Link href="/privacy" className="hover:text-slate-400 transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-slate-400 transition-colors">Terms of Service</Link>
+          </div>
         </div>
       </div>
     </footer>
@@ -526,6 +574,7 @@ export default function LandingPage() {
         <HowItWorks />
         <PricingTeaser />
         <FAQSection />
+        <AboutSection />
         <FinalCTA />
         <Footer />
       </div>

@@ -8,7 +8,7 @@ const font = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
-const SITE_URL = 'https://diraSchool.com';
+const SITE_URL = 'https://diraschool.com';
 const SITE_NAME = 'DiraSchool';
 const DEFAULT_DESCRIPTION =
   'The complete CBC school management system for Kenyan schools. Digital attendance, automated fee tracking, CBC report cards, and a parent portal — all in one platform.';

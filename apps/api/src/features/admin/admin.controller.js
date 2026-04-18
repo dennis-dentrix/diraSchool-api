@@ -8,6 +8,8 @@
  *   GET  /api/v1/admin/schools               — paginated school list with filters
  *   GET  /api/v1/admin/schools/:id           — single school detail
  *   PATCH /api/v1/admin/schools/:id/status   — update subscription status / plan tier
+ *   GET  /api/v1/admin/users                 — platform-wide user list
+ *   PATCH /api/v1/admin/users/:id/toggle     — toggle user isActive
  */
 import School   from '../schools/School.model.js';
 import User     from '../users/User.model.js';
@@ -283,4 +285,69 @@ export const listSystemAuditLogs = asyncHandler(async (req, res) => {
     .populate('schoolId', 'name');
 
   return sendSuccess(res, { logs, meta });
+});
+
+// ── GET /api/v1/admin/users ───────────────────────────────────────────────────
+
+/**
+ * Platform-wide user list for the superadmin.
+ * Unlike /api/v1/users, this is NOT scoped to a single school.
+ *
+ * Query params:
+ *   search   — partial match on firstName, lastName, email
+ *   role     — filter by role
+ *   schoolId — filter by school
+ *   isActive — 'true' | 'false'
+ *   page, limit
+ */
+export const listAdminUsers = asyncHandler(async (req, res) => {
+  const { search, role, schoolId, isActive } = req.query;
+
+  const filter = { role: { $ne: ROLES.SUPERADMIN } };
+
+  if (role)     filter.role     = role;
+  if (schoolId) filter.schoolId = schoolId;
+
+  if (isActive !== undefined) {
+    filter.isActive = isActive !== 'false';
+  }
+
+  if (search) {
+    const r = new RegExp(search.trim(), 'i');
+    filter.$or = [{ firstName: r }, { lastName: r }, { email: r }];
+  }
+
+  const total = await User.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const users = await User.find(filter)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('schoolId', 'name county subscriptionStatus')
+    .lean();
+
+  return sendSuccess(res, { users, meta });
+});
+
+// ── PATCH /api/v1/admin/users/:id/toggle ─────────────────────────────────────
+
+/**
+ * Toggle a user's isActive flag.
+ * Superadmin cannot be toggled via this endpoint.
+ */
+export const toggleAdminUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) return sendError(res, 'User not found.', 404);
+  if (user.role === ROLES.SUPERADMIN) {
+    return sendError(res, 'Cannot modify a superadmin account.', 403);
+  }
+
+  user.isActive = !user.isActive;
+  await user.save();
+
+  return sendSuccess(res, {
+    message: `User ${user.isActive ? 'activated' : 'deactivated'}.`,
+    user: { _id: user._id, isActive: user.isActive },
+  });
 });

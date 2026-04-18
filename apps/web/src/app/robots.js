@@ -29,6 +29,6 @@ export default function robots() {
         ],
       },
     ],
-    sitemap: "https://diraSchool.com/sitemap.xml",
+    sitemap: "https://diraschool.com/sitemap.xml",
   };
 }

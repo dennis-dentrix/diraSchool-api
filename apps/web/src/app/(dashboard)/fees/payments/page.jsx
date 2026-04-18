@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, Download } from 'lucide-react';
+import { Plus, Search, Download, Receipt, Wallet } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -56,6 +56,17 @@ const columns = (onReverse) => [
   },
   { accessorKey: 'createdAt', header: 'Date', cell: ({ row }) => <span className="text-sm">{formatDate(row.original.createdAt)}</span> },
   {
+    id: 'receipt',
+    header: 'Receipt',
+    cell: ({ row }) => row.original.receiptUrl ? (
+      <a href={row.original.receiptUrl} target="_blank" rel="noopener noreferrer">
+        <Button variant="ghost" size="sm" className="gap-1">
+          <Receipt className="h-3.5 w-3.5" /> Download
+        </Button>
+      </a>
+    ) : <span className="text-xs text-muted-foreground">Generating…</span>,
+  },
+  {
     id: 'actions',
     cell: ({ row }) => row.original.status === 'completed' ? (
       <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
@@ -70,6 +81,10 @@ export default function PaymentsPage() {
   const [open, setOpen] = useState(false);
   const [reverseTarget, setReverseTarget] = useState(null);
   const [reverseReason, setReverseReason] = useState('');
+  const [balanceOpen, setBalanceOpen] = useState(false);
+  const [balanceStudentId, setBalanceStudentId] = useState('');
+  const [balanceYear, setBalanceYear] = useState(String(new Date().getFullYear()));
+  const [balanceTerm, setBalanceTerm] = useState('Term 1');
   const [search, setSearch] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -113,6 +128,15 @@ export default function PaymentsPage() {
     },
   });
 
+  const { data: balanceData, isFetching: balanceFetching, refetch: fetchBalance } = useQuery({
+    queryKey: ['balance', balanceStudentId, balanceYear, balanceTerm],
+    queryFn: async () => {
+      const res = await feesApi.getBalance({ studentId: balanceStudentId, academicYear: balanceYear, term: balanceTerm });
+      return res.data.data;
+    },
+    enabled: false,
+  });
+
   const { mutate: createPayment, isPending } = useMutation({
     mutationFn: (data) => feesApi.createPayment(data),
     onSuccess: () => {
@@ -137,6 +161,9 @@ export default function PaymentsPage() {
   return (
     <div>
       <PageHeader title="Payments" description="Record and manage fee payments">
+        <Button variant="outline" size="sm" onClick={() => setBalanceOpen(true)}>
+          <Wallet className="h-4 w-4 mr-1" /> Check Balance
+        </Button>
         <Button variant="outline" size="sm"
           onClick={async () => {
             try { downloadBlob(await exportApi.payments(), 'payments.csv'); }
@@ -284,6 +311,79 @@ export default function PaymentsPage() {
               <Button type="submit" disabled={isPending}>Record Payment</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Balance lookup dialog */}
+      <Dialog open={balanceOpen} onOpenChange={(v) => { setBalanceOpen(v); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Check Fee Balance</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Student</Label>
+              <Select value={balanceStudentId} onValueChange={setBalanceStudentId}>
+                <SelectTrigger><SelectValue placeholder="Select student" /></SelectTrigger>
+                <SelectContent>
+                  {studentsData?.data?.map((s) => (
+                    <SelectItem key={s._id} value={s._id}>
+                      {s.firstName} {s.lastName} — {s.admissionNumber}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Year</Label>
+                <Select value={balanceYear} onValueChange={setBalanceYear}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Term</Label>
+                <Select value={balanceTerm} onValueChange={setBalanceTerm}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button className="w-full" disabled={!balanceStudentId || balanceFetching}
+              onClick={() => fetchBalance()}>
+              {balanceFetching ? 'Loading…' : 'Fetch Balance'}
+            </Button>
+            {balanceData && (
+              <div className="rounded-lg border p-3 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Expected fee</span>
+                  <span className="font-medium">{formatCurrency(balanceData.feeStructure?.totalAmount ?? 0)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total paid</span>
+                  <span className="font-medium text-green-600">{formatCurrency(balanceData.totalPaid)}</span>
+                </div>
+                <div className="flex justify-between border-t pt-1.5">
+                  <span className="font-semibold">Outstanding</span>
+                  <span className={`font-bold ${balanceData.outstanding > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                    {balanceData.outstanding > 0 ? formatCurrency(balanceData.outstanding) : 'Fully paid'}
+                  </span>
+                </div>
+                {balanceData.overpaid > 0 && (
+                  <div className="flex justify-between text-blue-600">
+                    <span>Overpaid</span>
+                    <span className="font-medium">{formatCurrency(balanceData.overpaid)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBalanceOpen(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -11,6 +11,7 @@ import { normalisePhone } from '../../utils/phone.js';
 import {
   sendVerificationEmail,
   sendPasswordResetEmail as sendResetEmail,
+  sendNewSchoolNotification,
 } from '../../services/email.service.js';
 import { emailQueue } from '../../jobs/queues.js';
 import logger from '../../config/logger.js';
@@ -134,6 +135,18 @@ export const registerSchool = asyncHandler(async (req, res) => {
       logger.error('[Auth] Verification email failed:', sendErr.message)
     );
     enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, verificationPayload).catch(() => {});
+
+    // Notify the DiraSchool admin of the new registration (fire-and-forget)
+    sendNewSchoolNotification({
+      schoolName: school.name,
+      schoolEmail: user.email,
+      schoolPhone: school.phone,
+      county: school.county,
+      adminName: `${user.firstName} ${user.lastName}`,
+      meta: { schoolId: school._id, userId: user._id },
+    }).catch((err) =>
+      logger.error('[Auth] Admin new-school notification failed:', err.message)
+    );
 
     // Do NOT set a cookie — user must verify email before logging in
     return sendSuccess(

@@ -3,20 +3,18 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { FileText, Zap, MoreHorizontal } from 'lucide-react';
+import { Zap, MoreHorizontal } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { reportCardsApi, classesApi, studentsApi, getErrorMessage } from '@/lib/api';
-import { formatDate, getStatusColor, capitalize } from '@/lib/utils';
+import { getStatusColor, capitalize } from '@/lib/utils';
 import { ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
 
 const columns = (onPublish, onView, onPrint) => [
   {
@@ -74,16 +72,36 @@ export default function ReportCardsPage() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
-  const [genType, setGenType] = useState('student'); // 'student' or 'class'
+  const [genType, setGenType] = useState('student');
   const [genData, setGenData] = useState({ academicYear: String(new Date().getFullYear()), term: 'Term 1' });
 
-  const { data: classesData } = useQuery({ queryKey: ['classes'], queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; } });
-  const { data: studentsData } = useQuery({ queryKey: ['students', 'all'], queryFn: async () => { const res = await studentsApi.list({ limit: 200, status: 'active' }); return res.data; } });
+  // Filter state
+  const [classFilter, setClassFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [termFilter, setTermFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+
+  const hasFilters = classFilter || statusFilter || termFilter || yearFilter;
+
+  const { data: classesData } = useQuery({
+    queryKey: ['classes'],
+    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; },
+  });
+  const { data: studentsData } = useQuery({
+    queryKey: ['students', 'all'],
+    queryFn: async () => { const res = await studentsApi.list({ limit: 200, status: 'active' }); return res.data; },
+  });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['report-cards', page],
+    queryKey: ['report-cards', page, classFilter, statusFilter, termFilter, yearFilter],
     queryFn: async () => {
-      const res = await reportCardsApi.list({ page, limit: 20 });
+      const res = await reportCardsApi.list({
+        page, limit: 20,
+        classId: classFilter || undefined,
+        status: statusFilter || undefined,
+        term: termFilter || undefined,
+        academicYear: yearFilter || undefined,
+      });
       return res.data;
     },
   });
@@ -109,6 +127,14 @@ export default function ReportCardsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  function clearFilters() {
+    setClassFilter('');
+    setStatusFilter('');
+    setTermFilter('');
+    setYearFilter('');
+    setPage(1);
+  }
+
   return (
     <div>
       <PageHeader title="Report Cards" description="Generate and publish CBC report cards">
@@ -116,6 +142,50 @@ export default function ReportCardsPage() {
           <Zap className="h-4 w-4" /> Generate
         </Button>
       </PageHeader>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <Select value={classFilter} onValueChange={(v) => { setClassFilter(v === 'all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="All classes" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All classes</SelectItem>
+            {classesData?.data?.map((c) => (
+              <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="h-9 w-[130px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="published">Published</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={termFilter} onValueChange={(v) => { setTermFilter(v === 'all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="h-9 w-[110px]"><SelectValue placeholder="All terms" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All terms</SelectItem>
+            {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v === 'all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="h-9 w-[110px]"><SelectValue placeholder="All years" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All years</SelectItem>
+            {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        {hasFilters && (
+          <Button variant="ghost" size="sm" className="h-9" onClick={clearFilters}>
+            Clear
+          </Button>
+        )}
+      </div>
 
       <DataTable
         columns={columns(
