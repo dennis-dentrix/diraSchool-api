@@ -9,6 +9,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'https://diraschool.com',
   'https://www.diraschool.com',
+  'diraschool.com',
 ].filter(Boolean);
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
