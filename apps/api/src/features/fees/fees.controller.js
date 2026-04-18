@@ -193,6 +193,9 @@ export const listPayments = asyncHandler(async (req, res) => {
   if (req.query.term) filter.term = req.query.term;
   if (req.query.method) filter.method = req.query.method;
   if (req.query.status) filter.status = req.query.status;
+  if (req.query.search) {
+    filter.reference = new RegExp(req.query.search.trim(), 'i');
+  }
 
   const total = await Payment.countDocuments(filter);
   const { skip, limit, meta } = paginate(req.query, total);

@@ -1,4 +1,5 @@
 import School from './School.model.js';
+import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
@@ -140,7 +141,20 @@ export const updateSchool = asyncHandler(async (req, res) => {
   if (county !== undefined) school.county = county;
   if (registrationNumber !== undefined) school.registrationNumber = registrationNumber;
   if (address !== undefined) school.address = address;
-  if (isActive !== undefined) school.isActive = isActive;
+  if (isActive !== undefined) {
+    const wasActive = school.isActive;
+    school.isActive = isActive;
+
+    // Cascade: disable all school staff when the school is deactivated.
+    // Re-activation intentionally does NOT bulk-reactivate users — an admin
+    // may have individually paused some accounts for other reasons.
+    if (!isActive && wasActive) {
+      await User.updateMany(
+        { schoolId: school._id, role: { $ne: 'superadmin' } },
+        { isActive: false }
+      );
+    }
+  }
 
   await school.save();
   await bustSubCache(school._id);

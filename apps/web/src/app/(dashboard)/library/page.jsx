@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, BookOpen, MoreHorizontal } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { libraryApi, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
@@ -13,8 +13,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const bookColumns = (onLoan) => [
   { accessorKey: 'title', header: 'Title', cell: ({ row }) => <span className="font-medium">{row.original.title}</span> },
@@ -46,10 +47,31 @@ export default function LibraryPage() {
   const [loanOpen, setLoanOpen] = useState(false);
   const [loanTarget, setLoanTarget] = useState(null);
   const [loanForm, setLoanForm] = useState({ borrowerType: 'student', borrowerName: '', dueDate: '' });
+  const [bookSearch, setBookSearch] = useState('');
+  const [loanStatusFilter, setLoanStatusFilter] = useState('');
+  const [loanSearch, setLoanSearch] = useState('');
+  const debouncedBookSearch = useDebounce(bookSearch, 400);
+  const debouncedLoanSearch = useDebounce(loanSearch, 400);
   const { register, handleSubmit, reset } = useForm();
 
-  const { data: books, isLoading: booksLoading } = useQuery({ queryKey: ['books'], queryFn: async () => { const res = await libraryApi.listBooks({ limit: 50 }); return res.data; } });
-  const { data: loans, isLoading: loansLoading } = useQuery({ queryKey: ['loans'], queryFn: async () => { const res = await libraryApi.listLoans({ limit: 50 }); return res.data; } });
+  const { data: books, isLoading: booksLoading } = useQuery({
+    queryKey: ['books', debouncedBookSearch],
+    queryFn: async () => {
+      const res = await libraryApi.listBooks({ limit: 50, search: debouncedBookSearch || undefined });
+      return res.data;
+    },
+  });
+  const { data: loans, isLoading: loansLoading } = useQuery({
+    queryKey: ['loans', loanStatusFilter, debouncedLoanSearch],
+    queryFn: async () => {
+      const res = await libraryApi.listLoans({
+        limit: 50,
+        status: loanStatusFilter || undefined,
+        search: debouncedLoanSearch || undefined,
+      });
+      return res.data;
+    },
+  });
 
   const { mutate: addBook, isPending } = useMutation({
     mutationFn: (data) => libraryApi.createBook(data),
@@ -82,10 +104,29 @@ export default function LibraryPage() {
         </TabsList>
 
         <TabsContent value="books">
+          <div className="relative mb-3 max-w-sm">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search by title or author…" value={bookSearch} onChange={(e) => setBookSearch(e.target.value)} className="pl-8 h-9" />
+          </div>
           <DataTable columns={bookColumns((book) => { setLoanTarget(book); setLoanOpen(true); })} data={books?.data} loading={booksLoading} />
         </TabsContent>
 
         <TabsContent value="loans">
+          <div className="flex gap-2 mb-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search borrower name…" value={loanSearch} onChange={(e) => setLoanSearch(e.target.value)} className="pl-8 h-9" />
+            </div>
+            <Select value={loanStatusFilter} onValueChange={(v) => setLoanStatusFilter(v === 'all' ? '' : v)}>
+              <SelectTrigger className="h-9 w-[130px]"><SelectValue placeholder="All statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="returned">Returned</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <DataTable columns={loanColumns((id) => { if (confirm('Mark as returned?')) returnBook(id); })} data={loans?.data} loading={loansLoading} />
         </TabsContent>
       </Tabs>

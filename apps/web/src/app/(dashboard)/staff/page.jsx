@@ -138,19 +138,27 @@ export default function StaffPage() {
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const debouncedSearch = useDebounce(search, 400);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
   });
 
+  const statusParams = {
+    active:   { isActive: 'true',  invitePending: 'false' },
+    invite:   { isActive: 'true',  invitePending: 'true'  },
+    paused:   { isActive: 'false'                         },
+  }[statusFilter] ?? {};
+
   const { data: rawData, isLoading } = useQuery({
-    queryKey: ['users', page, debouncedSearch, roleFilter],
+    queryKey: ['users', page, debouncedSearch, roleFilter, statusFilter],
     queryFn: async () => {
       const res = await usersApi.list({
         page, limit: 20,
         search: debouncedSearch || undefined,
         role: roleFilter || undefined,
+        ...statusParams,
       });
       // normalizer puts the array in res.data.data AND res.data.users
       return res.data;
@@ -269,6 +277,15 @@ export default function StaffPage() {
             {STAFF_ROLES.map((r) => (
               <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === '__all__' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="All statuses" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="invite">Invite Pending</SelectItem>
+            <SelectItem value="paused">Paused</SelectItem>
           </SelectContent>
         </Select>
       </div>

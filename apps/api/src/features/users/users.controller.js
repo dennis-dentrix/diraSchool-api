@@ -102,6 +102,12 @@ export const createUser = asyncHandler(async (req, res) => {
 export const listUsers = asyncHandler(async (req, res) => {
   const filter = { schoolId: req.user.schoolId };
   if (req.query.role) filter.role = req.query.role;
+  if (req.query.isActive !== undefined) filter.isActive = req.query.isActive !== 'false';
+  if (req.query.invitePending !== undefined) filter.invitePending = req.query.invitePending !== 'false';
+  if (req.query.search) {
+    const r = new RegExp(req.query.search.trim(), 'i');
+    filter.$or = [{ firstName: r }, { lastName: r }, { email: r }, { staffId: r }];
+  }
 
   const total = await User.countDocuments(filter);
   const { skip, limit, meta } = paginate(req.query, total);

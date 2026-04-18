@@ -70,6 +70,12 @@ export default function PaymentsPage() {
   const [open, setOpen] = useState(false);
   const [reverseTarget, setReverseTarget] = useState(null);
   const [reverseReason, setReverseReason] = useState('');
+  const [search, setSearch] = useState('');
+  const [methodFilter, setMethodFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('');
+  const [termFilter, setTermFilter] = useState('');
+  const debouncedSearch = useDebounce(search, 400);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
@@ -77,9 +83,16 @@ export default function PaymentsPage() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['payments', page],
+    queryKey: ['payments', page, debouncedSearch, methodFilter, statusFilter, yearFilter, termFilter],
     queryFn: async () => {
-      const res = await feesApi.listPayments({ page, limit: 20 });
+      const res = await feesApi.listPayments({
+        page, limit: 20,
+        search: debouncedSearch || undefined,
+        method: methodFilter || undefined,
+        status: statusFilter || undefined,
+        academicYear: yearFilter || undefined,
+        term: termFilter || undefined,
+      });
       return res.data;
     },
   });
@@ -136,6 +149,54 @@ export default function PaymentsPage() {
           <Plus className="h-4 w-4" /> Record Payment
         </Button>
       </PageHeader>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <div className="relative flex-1 min-w-[160px] max-w-xs">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search reference…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="pl-8 h-9"
+          />
+        </div>
+        <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v === 'all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="h-9 w-[130px]"><SelectValue placeholder="Method" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All methods</SelectItem>
+            {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{capitalize(m)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="h-9 w-[130px]"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="reversed">Reversed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v === 'all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="h-9 w-[120px]"><SelectValue placeholder="Year" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All years</SelectItem>
+            {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={termFilter} onValueChange={(v) => { setTermFilter(v === 'all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="h-9 w-[110px]"><SelectValue placeholder="Term" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All terms</SelectItem>
+            {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {(search || methodFilter || statusFilter || yearFilter || termFilter) && (
+          <Button variant="ghost" size="sm" className="h-9"
+            onClick={() => { setSearch(''); setMethodFilter(''); setStatusFilter(''); setYearFilter(''); setTermFilter(''); setPage(1); }}>
+            Clear
+          </Button>
+        )}
+      </div>
 
       <DataTable
         columns={columns((payment) => setReverseTarget(payment))}

@@ -128,14 +128,12 @@ export const registerSchool = asyncHandler(async (req, res) => {
         flow: 'register',
       },
     };
-    enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, verificationPayload).catch((err) => {
-      logger.error('[Auth] Failed to enqueue verification email, falling back to direct send', {
-        err: err.message,
-      });
-      sendVerificationEmail(verificationPayload).catch((sendErr) =>
-        logger.error('[Auth] Verification email fallback failed:', sendErr.message)
-      );
-    });
+    // Send directly — do not depend on the worker process being up.
+    // Also enqueue for audit logging (fire-and-forget).
+    sendVerificationEmail(verificationPayload).catch((sendErr) =>
+      logger.error('[Auth] Verification email failed:', sendErr.message)
+    );
+    enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, verificationPayload).catch(() => {});
 
     // Do NOT set a cookie — user must verify email before logging in
     return sendSuccess(
@@ -272,14 +270,12 @@ export const forgotPassword = asyncHandler(async (req, res) => {
       flow: 'forgot-password',
     },
   };
-  enqueueEmail(JOB_NAMES.SEND_RESET_EMAIL, resetPayload).catch((err) => {
-    logger.error('[Auth] Failed to enqueue reset email, falling back to direct send', {
-      err: err.message,
-    });
-    sendResetEmail(resetPayload).catch((sendErr) =>
-      logger.error('[Auth] Reset email fallback failed:', sendErr.message)
-    );
-  });
+  // Send directly — do not depend on the worker process being up.
+  // Also enqueue for audit logging (fire-and-forget).
+  sendResetEmail(resetPayload).catch((sendErr) =>
+    logger.error('[Auth] Reset email failed:', sendErr.message)
+  );
+  enqueueEmail(JOB_NAMES.SEND_RESET_EMAIL, resetPayload).catch(() => {});
 
   return sendSuccess(res, {
     message: 'If an account with that email exists, a password reset link has been sent.',
@@ -408,6 +404,22 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   user.emailVerificationExpiry = undefined;
   await user.save({ validateBeforeSave: false });
 
+  // Ensure the school is active before auto-logging in. This guards against an
+  // edge case where the school was manually deactivated between registration and
+  // email verification (e.g. duplicate registration flagged by superadmin).
+  if (user.schoolId) {
+    const school = await School.findById(user.schoolId).select('isActive').lean();
+    if (school && school.isActive === false) {
+      return sendError(
+        res,
+        'Your school account is currently inactive. Please contact support to activate it.',
+        403
+      );
+    }
+    // School not found at all — auto-activate so the account is usable while
+    // support investigates (the protect middleware will catch it on next request)
+  }
+
   // Auto-log the user in — submitting the correct OTP proves email ownership
   const jwtToken = signToken(user._id);
   attachCookie(res, jwtToken);
@@ -503,14 +515,10 @@ export const resendVerification = asyncHandler(async (req, res) => {
       flow: 'resend-verification',
     },
   };
-  enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, resendPayload).catch((err) => {
-    logger.error('[Auth] Failed to enqueue resend-verification email, falling back to direct send', {
-      err: err.message,
-    });
-    sendVerificationEmail(resendPayload).catch((sendErr) =>
-      logger.error('[Auth] Resend verification email fallback failed:', sendErr.message)
-    );
-  });
+  sendVerificationEmail(resendPayload).catch((sendErr) =>
+    logger.error('[Auth] Resend verification email failed:', sendErr.message)
+  );
+  enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, resendPayload).catch(() => {});
 
   return sendSuccess(res, {
     message:

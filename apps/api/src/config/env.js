@@ -46,6 +46,19 @@ export const validateEnv = () => {
     writeStderr('\n[ENV ERROR] EMAIL_PRIMARY_PROVIDER must be either "zeptomail" or "resend".\n');
     process.exit(1);
   }
+
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.CLIENT_URL &&
+    process.env.CLIENT_URL.includes('localhost')
+  ) {
+    writeStderr(
+      '\n[ENV WARNING] CLIENT_URL contains "localhost" in production — email links will point to localhost!\n' +
+      `  Current value: ${process.env.CLIENT_URL}\n` +
+      '  Set CLIENT_URL=https://diraschool.com in your .env file.\n'
+    );
+    // Non-fatal — warn but don't exit, so the server can still start
+  }
 };
 
 export const env = {

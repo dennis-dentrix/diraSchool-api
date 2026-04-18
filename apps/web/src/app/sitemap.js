@@ -1,4 +1,4 @@
-const BASE = 'https://diraschool.ke';
+const BASE = 'https://diraschool.com';
 
 export default function sitemap() {
   return [

@@ -101,7 +101,7 @@ export const protect = async (req, res, next) => {
       }
     }
 
-    if (!schoolData || !schoolData.isActive) {
+    if (!schoolData || schoolData.isActive === false) {
       return sendForbidden(res, 'School account is inactive. Contact support.');
     }
 
