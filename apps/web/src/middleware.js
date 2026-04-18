@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
 
 const PUBLIC_PATHS = [
+  '/',
+  '/pricing',
   '/login',
   '/register',
   '/forgot-password',
   '/reset-password',
   '/verify-email',
   '/accept-invite',
-  '/pricing',
 ];
 
 export function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  // Root is exact-matched; all other public paths are prefix-matched
+  if (pathname === '/' || PUBLIC_PATHS.slice(1).some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
