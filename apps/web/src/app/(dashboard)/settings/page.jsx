@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Save, Plus, Trash2, Pencil, X, CalendarDays, School, Info } from 'lucide-react';
 import { useState } from 'react';
-import { settingsApi, getErrorMessage } from '@/lib/api';
+import { settingsApi, schoolsApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { ACADEMIC_YEARS } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
@@ -35,6 +35,8 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing]       = useState(false);
   const [form, setForm]             = useState(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState(null);
   const [newHoliday, setNewHoliday] = useState({ name: '', date: '', description: '' });
   const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
 
@@ -45,6 +47,25 @@ export default function SettingsPage() {
       const s = res.data?.settings ?? res.data?.data ?? res.data;
       return s;
     },
+  });
+
+  const { data: schoolData } = useQuery({
+    queryKey: ['school-me'],
+    queryFn: async () => {
+      const res = await schoolsApi.me();
+      return res.data?.school ?? res.data;
+    },
+  });
+
+  const { mutate: saveProfile, isPending: savingProfile } = useMutation({
+    mutationFn: (data) => schoolsApi.updateMe(data),
+    onSuccess: () => {
+      toast.success('School profile saved');
+      queryClient.invalidateQueries({ queryKey: ['school-me'] });
+      setEditingProfile(false);
+      setProfileForm(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   const { mutate: saveSettings, isPending } = useMutation({
@@ -113,6 +134,68 @@ export default function SettingsPage() {
           <Button size="sm" variant="outline" onClick={startEditing}><Pencil className="h-4 w-4" /> Edit Settings</Button>
         )}
       </PageHeader>
+
+      {/* ── School Profile (county, constituency, address) ───────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <School className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">School Profile</CardTitle>
+            </div>
+            {!editingProfile ? (
+              <Button size="sm" variant="outline" onClick={() => { setProfileForm({ name: schoolData?.name ?? '', phone: schoolData?.phone ?? '', county: schoolData?.county ?? '', constituency: schoolData?.constituency ?? '', registrationNumber: schoolData?.registrationNumber ?? '', address: schoolData?.address ?? '' }); setEditingProfile(true); }}>
+                <Pencil className="h-4 w-4" /> Edit
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => { setEditingProfile(false); setProfileForm(null); }}><X className="h-4 w-4" /> Cancel</Button>
+                <Button size="sm" onClick={() => saveProfile(Object.fromEntries(Object.entries(profileForm).filter(([, v]) => v !== '')))} disabled={savingProfile}><Save className="h-4 w-4" /> Save</Button>
+              </div>
+            )}
+          </div>
+          <CardDescription>Location, contact, and registration details.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {editingProfile && profileForm ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>School Name</Label>
+                <Input value={profileForm.name} onChange={(e) => setProfileForm((p) => ({ ...p, name: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={profileForm.phone} onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>County</Label>
+                <Input value={profileForm.county} onChange={(e) => setProfileForm((p) => ({ ...p, county: e.target.value }))} placeholder="e.g. Nairobi" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Constituency</Label>
+                <Input value={profileForm.constituency} onChange={(e) => setProfileForm((p) => ({ ...p, constituency: e.target.value }))} placeholder="e.g. Westlands" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>MOE Registration No.</Label>
+                <Input value={profileForm.registrationNumber} onChange={(e) => setProfileForm((p) => ({ ...p, registrationNumber: e.target.value }))} placeholder="e.g. NRB/001/2024" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Physical Address</Label>
+                <Input value={profileForm.address} onChange={(e) => setProfileForm((p) => ({ ...p, address: e.target.value }))} placeholder="P.O Box 123, Nairobi" />
+              </div>
+            </div>
+          ) : (
+            <div>
+              <InfoRow label="Name" value={schoolData?.name} />
+              <InfoRow label="Phone" value={schoolData?.phone} />
+              <InfoRow label="County" value={schoolData?.county} />
+              <InfoRow label="Constituency" value={schoolData?.constituency} />
+              <InfoRow label="Reg. Number" value={schoolData?.registrationNumber} />
+              <InfoRow label="Address" value={schoolData?.address} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── School Information ────────────────────────────────────────────────── */}
       <Card>

@@ -15,6 +15,7 @@ import {
   deleteSubject,
   assignTeachers,
   mySubjects,
+  selfAssignSubject,
 } from './subjects.controller.js';
 
 const router = express.Router();
@@ -41,7 +42,10 @@ router.route('/:id')
   .patch(adminOnly, validateUpdateSubject, updateSubject)
   .delete(adminOnly, deleteSubject);
 
-// Assign teachers + HOD for a subject
+// Assign teachers + HOD for a subject (admin only)
 router.patch('/:id/teachers', adminOnly, validateAssignTeachers, assignTeachers);
+
+// Teacher self-assigns or removes themselves from a subject
+router.patch('/:id/self-assign', authorize(ROLES.TEACHER), selfAssignSubject);
 
 export default router;

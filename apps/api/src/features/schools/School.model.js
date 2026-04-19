@@ -23,6 +23,10 @@ const schoolSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    constituency: {
+      type: String,
+      trim: true,
+    },
     // Kenya Ministry of Education registration number
     registrationNumber: {
       type: String,

@@ -36,11 +36,12 @@ export const updateMySchool = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId);
   if (!school) return sendError(res, 'School not found.', 404);
 
-  const { name, phone, county, registrationNumber, address } = req.body;
+  const { name, phone, county, constituency, registrationNumber, address } = req.body;
 
   if (name !== undefined) school.name = name;
   if (phone !== undefined) school.phone = phone;
   if (county !== undefined) school.county = county;
+  if (constituency !== undefined) school.constituency = constituency;
   if (registrationNumber !== undefined) school.registrationNumber = registrationNumber;
   if (address !== undefined) school.address = address;
 
@@ -58,7 +59,7 @@ export const updateMySchool = asyncHandler(async (req, res) => {
  * Default subscription: trial (30 days) — set by the model.
  */
 export const createSchool = asyncHandler(async (req, res) => {
-  const { name, email, phone, county, registrationNumber, address } = req.body;
+  const { name, email, phone, county, constituency, registrationNumber, address } = req.body;
 
   // Duplicate email check — give a cleaner message than the Mongo 11000 error
   const existing = await School.findOne({ email });
@@ -69,6 +70,7 @@ export const createSchool = asyncHandler(async (req, res) => {
     email,
     phone,
     county,
+    constituency,
     registrationNumber,
     address,
   });
@@ -127,7 +129,7 @@ export const updateSchool = asyncHandler(async (req, res) => {
   const school = await School.findById(req.params.id);
   if (!school) return sendError(res, 'School not found.', 404);
 
-  const { name, email, phone, county, registrationNumber, address, isActive } = req.body;
+  const { name, email, phone, county, constituency, registrationNumber, address, isActive } = req.body;
 
   // Guard against duplicate email if email is being changed
   if (email && email !== school.email) {
@@ -139,6 +141,7 @@ export const updateSchool = asyncHandler(async (req, res) => {
   if (email !== undefined) school.email = email;
   if (phone !== undefined) school.phone = phone;
   if (county !== undefined) school.county = county;
+  if (constituency !== undefined) school.constituency = constituency;
   if (registrationNumber !== undefined) school.registrationNumber = registrationNumber;
   if (address !== undefined) school.address = address;
   if (isActive !== undefined) {

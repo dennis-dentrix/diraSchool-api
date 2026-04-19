@@ -5,7 +5,8 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
-import { JOB_NAMES } from '../../constants/index.js';
+import { JOB_NAMES, AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
+import { logAction } from '../../utils/auditLogger.js';
 import { sendInviteEmail } from '../../services/email.service.js';
 import { emailQueue } from '../../jobs/queues.js';
 import { env } from '../../config/env.js';
@@ -62,6 +63,8 @@ export const createUser = asyncHandler(async (req, res) => {
   });
 
   // Fire-and-forget — a mail failure must never fail the 201 response.
+  // Send directly first so the email goes out even if the worker process is down.
+  // Fall back to the queue only when the direct send itself fails (worker will retry).
   const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
   const invitePayload = {
     to:           user.email,
@@ -76,12 +79,12 @@ export const createUser = asyncHandler(async (req, res) => {
       initiatedBy: req.user._id,
     },
   };
-  enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invitePayload).catch((err) => {
-    logger.error('[Users] Failed to enqueue invite email, falling back to direct send', {
+  sendInviteEmail(invitePayload).catch((err) => {
+    logger.error('[Users] Invite email direct send failed, falling back to queue', {
       err: err.message,
     });
-    sendInviteEmail(invitePayload).catch((sendErr) =>
-      logger.error('[Users] Invite email fallback failed:', sendErr.message)
+    enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invitePayload).catch((qErr) =>
+      logger.error('[Users] Invite email queue fallback also failed:', qErr.message)
     );
   });
 
@@ -140,7 +143,8 @@ export const updateUser = asyncHandler(async (req, res) => {
     return sendError(res, 'Use /auth/change-password to update your own account.', 400);
   }
 
-  const { firstName, lastName, phone, role, isActive, staffId, tscNumber } = req.body;
+  const { firstName, lastName, phone, role, isActive, staffId, tscNumber, reason } = req.body;
+  const previousIsActive = user.isActive;
   if (firstName  !== undefined) user.firstName  = firstName;
   if (lastName   !== undefined) user.lastName   = lastName;
   if (phone      !== undefined) user.phone      = normalisePhone(phone);
@@ -150,6 +154,20 @@ export const updateUser = asyncHandler(async (req, res) => {
   if (tscNumber  !== undefined) user.tscNumber  = tscNumber;
 
   await user.save();
+
+  if (isActive !== undefined && isActive !== previousIsActive) {
+    logAction(req, {
+      action: isActive ? AUDIT_ACTIONS.ACTIVATE : AUDIT_ACTIONS.SUSPEND,
+      resource: AUDIT_RESOURCES.USER,
+      resourceId: user._id,
+      meta: {
+        targetName: `${user.firstName} ${user.lastName}`,
+        role: user.role,
+        ...(reason ? { reason } : {}),
+      },
+    });
+  }
+
   return sendSuccess(res, { user: user.toSafeObject() });
 });
 

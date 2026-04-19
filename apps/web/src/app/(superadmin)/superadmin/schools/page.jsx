@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Search, MoreHorizontal, GraduationCap, Users, ShieldOff, ShieldCheck, AlertTriangle, CheckCircle2, Ban } from 'lucide-react';
+import { Search, MoreHorizontal, GraduationCap, Users, ShieldOff, ShieldCheck, AlertTriangle, CheckCircle2, Ban, Plus } from 'lucide-react';
 import { adminApi, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
@@ -41,6 +41,8 @@ export default function SuperadminSchoolsPage() {
   const [disableTarget, setDisableTarget] = useState(null);
   const [selectedSchool, setSelectedSchool] = useState(null);
   const [subForm, setSubForm] = useState({ planTier: '', subscriptionStatus: '', trialExpiry: '' });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: '', email: '', phone: '', county: '', constituency: '', registrationNumber: '', address: '' });
 
   const { data, isLoading } = useQuery({
     queryKey: ['sa-schools-list', page, search, statusFilter, activeFilter],
@@ -62,6 +64,17 @@ export default function SuperadminSchoolsPage() {
       queryClient.invalidateQueries({ queryKey: ['sa-schools-list'] });
       setSubOpen(false);
       setDisableTarget(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: createSchool, isPending: isCreating } = useMutation({
+    mutationFn: (data) => adminApi.createSchool(data),
+    onSuccess: () => {
+      toast.success('School registered successfully');
+      queryClient.invalidateQueries({ queryKey: ['sa-schools-list'] });
+      setCreateOpen(false);
+      setCreateForm({ name: '', email: '', phone: '', county: '', constituency: '', registrationNumber: '', address: '' });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -165,7 +178,11 @@ export default function SuperadminSchoolsPage() {
       <PageHeader
         title={`Schools ${pagination?.total ? `(${pagination.total})` : ''}`}
         description="All registered schools on the platform"
-      />
+      >
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Register School
+        </Button>
+      </PageHeader>
 
       <div className="flex gap-3 mb-4 flex-wrap">
         <div className="relative flex-1 max-w-xs">
@@ -205,6 +222,62 @@ export default function SuperadminSchoolsPage() {
         currentPage={page}
         onPageChange={setPage}
       />
+
+      {/* ── Register school dialog ───────────────────────────────────────── */}
+      <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreateForm({ name: '', email: '', phone: '', county: '', constituency: '', registrationNumber: '', address: '' }); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Register New School</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1.5">
+                <Label>School Name *</Label>
+                <Input value={createForm.name} onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Nairobi Academy" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email Address *</Label>
+                <Input type="email" value={createForm.email} onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))} placeholder="info@school.ac.ke" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone *</Label>
+                <Input value={createForm.phone} onChange={(e) => setCreateForm((p) => ({ ...p, phone: e.target.value }))} placeholder="+254 700 000000" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>County</Label>
+                <Input value={createForm.county} onChange={(e) => setCreateForm((p) => ({ ...p, county: e.target.value }))} placeholder="e.g. Nairobi" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Constituency</Label>
+                <Input value={createForm.constituency} onChange={(e) => setCreateForm((p) => ({ ...p, constituency: e.target.value }))} placeholder="e.g. Westlands" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>MOE Registration No.</Label>
+                <Input value={createForm.registrationNumber} onChange={(e) => setCreateForm((p) => ({ ...p, registrationNumber: e.target.value }))} placeholder="e.g. NRB/001/2024" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Physical Address</Label>
+                <Input value={createForm.address} onChange={(e) => setCreateForm((p) => ({ ...p, address: e.target.value }))} placeholder="P.O Box 123, Nairobi" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button
+              disabled={isCreating || !createForm.name || !createForm.email || !createForm.phone}
+              onClick={() => createSchool({
+                name: createForm.name,
+                email: createForm.email,
+                phone: createForm.phone,
+                county: createForm.county || undefined,
+                constituency: createForm.constituency || undefined,
+                registrationNumber: createForm.registrationNumber || undefined,
+                address: createForm.address || undefined,
+              })}
+            >
+              {isCreating ? 'Registering…' : 'Register School'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Disable confirmation dialog ───────────────────────────────────── */}
       <Dialog open={!!disableTarget} onOpenChange={() => setDisableTarget(null)}>

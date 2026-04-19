@@ -48,6 +48,7 @@ const createPaymentSchema = z.object({
   }),
   reference: z.string().trim().optional(),
   notes: z.string().trim().optional(),
+  paymentDate: z.string().optional(),
 }).strict();
 
 const reversePaymentSchema = z.object({

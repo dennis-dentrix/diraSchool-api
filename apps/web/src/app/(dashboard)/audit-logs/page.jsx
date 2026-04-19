@@ -8,17 +8,22 @@ import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const ACTIONS = ['create', 'update', 'delete', 'publish', 'reverse', 'suspend', 'activate', 'transfer', 'withdraw', 'promote'];
+const ACTIONS = ['create', 'update', 'delete', 'publish', 'reverse', 'suspend', 'activate', 'transfer', 'withdraw', 'promote', 'issue', 'return'];
 const RESOURCES = ['Payment', 'Student', 'ReportCard', 'School', 'User', 'Book', 'BookLoan'];
 
 const actionColors = {
-  create: 'bg-green-100 text-green-800',
-  update: 'bg-blue-100 text-blue-800',
-  delete: 'bg-red-100 text-red-800',
-  publish: 'bg-purple-100 text-purple-800',
-  reverse: 'bg-orange-100 text-orange-800',
-  suspend: 'bg-red-100 text-red-800',
-  activate: 'bg-green-100 text-green-800',
+  create:   'bg-green-100 text-green-800',
+  update:   'bg-blue-100 text-blue-800',
+  delete:   'bg-red-100 text-red-800',
+  publish:  'bg-purple-100 text-purple-800',
+  reverse:  'bg-orange-100 text-orange-800',
+  suspend:  'bg-red-50 text-red-700',
+  activate: 'bg-teal-100 text-teal-800',
+  transfer: 'bg-indigo-100 text-indigo-800',
+  withdraw: 'bg-gray-100 text-gray-700',
+  promote:  'bg-yellow-100 text-yellow-800',
+  issue:    'bg-sky-100 text-sky-800',
+  return:   'bg-slate-100 text-slate-700',
 };
 
 const columns = [
@@ -37,7 +42,13 @@ const columns = [
     header: 'By',
     cell: ({ row }) => {
       const u = row.original.userId;
-      return <span className="text-sm">{typeof u === 'object' ? `${u.firstName} ${u.lastName}` : '—'}</span>;
+      if (!u) return <span className="text-sm text-muted-foreground">System</span>;
+      return (
+        <div>
+          <p className="text-sm font-medium">{typeof u === 'object' ? `${u.firstName} ${u.lastName}` : '—'}</p>
+          {typeof u === 'object' && <p className="text-xs text-muted-foreground capitalize">{u.role?.replace(/_/g, ' ')}</p>}
+        </div>
+      );
     },
   },
   { accessorKey: 'ip', header: 'IP', cell: ({ row }) => <span className="text-xs font-mono text-muted-foreground">{row.original.ip ?? '—'}</span> },

@@ -18,6 +18,7 @@ const createSchoolSchema = z.object({
   email: emailField,
   phone: phoneField,
   county: z.string().trim().min(1).optional(),
+  constituency: z.string().trim().min(1).optional(),
   registrationNumber: z.string().trim().min(1).optional(),
   address: z.string().trim().min(1).optional(),
 });
@@ -30,6 +31,7 @@ const updateMySchoolSchema = z
     name: nameField.optional(),
     phone: phoneField.optional(),
     county: z.string().trim().min(1).optional(),
+    constituency: z.string().trim().min(1).optional(),
     registrationNumber: z.string().trim().min(1).optional(),
     address: z.string().trim().min(1).optional(),
   })
@@ -44,6 +46,7 @@ const superadminUpdateSchoolSchema = z
     email: emailField.optional(),
     phone: phoneField.optional(),
     county: z.string().trim().min(1).optional(),
+    constituency: z.string().trim().min(1).optional(),
     registrationNumber: z.string().trim().min(1).optional(),
     address: z.string().trim().min(1).optional(),
     isActive: z.boolean().optional(),

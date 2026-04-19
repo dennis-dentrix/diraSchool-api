@@ -36,7 +36,7 @@ const columns = [
     header: 'School',
     cell: ({ row }) => {
       const s = row.original.schoolId;
-      return <span className="text-sm">{typeof s === 'object' ? s.name : (s ?? '—')}</span>;
+      return <span className="text-sm">{s && typeof s === 'object' ? s.name : (s ?? '—')}</span>;
     },
   },
   {
@@ -93,14 +93,26 @@ export default function AuditLogsPage() {
   const [page, setPage] = useState(1);
   const [resource, setResource] = useState('');
   const [action, setAction] = useState('');
+  const [schoolId, setSchoolId] = useState('');
+
+  const { data: schoolsData } = useQuery({
+    queryKey: ['admin-schools-list'],
+    queryFn: async () => {
+      const res = await adminApi.listSchools({ limit: 200 });
+      return res.data;
+    },
+  });
+
+  const schools = schoolsData?.schools ?? schoolsData?.data ?? [];
 
   const { data, isLoading } = useQuery({
-    queryKey: ['system-audit-logs', page, resource, action],
+    queryKey: ['system-audit-logs', page, resource, action, schoolId],
     queryFn: async () => {
       const res = await adminApi.auditLogs({
         page, limit: 30,
-        resource: resource || undefined,
-        action:   action   || undefined,
+        resource:  resource  || undefined,
+        action:    action    || undefined,
+        schoolId:  schoolId  || undefined,
       });
       return res.data;
     },
@@ -122,6 +134,13 @@ export default function AuditLogsPage() {
       </PageHeader>
 
       <div className="flex gap-3 mb-4 flex-wrap">
+        <Select value={schoolId} onValueChange={(v) => { setSchoolId(v === '__all__' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="w-44"><SelectValue placeholder="All schools" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All schools</SelectItem>
+            {schools.map((s) => <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Select value={resource} onValueChange={(v) => { setResource(v === '__all__' ? '' : v); setPage(1); }}>
           <SelectTrigger className="w-36"><SelectValue placeholder="All resources" /></SelectTrigger>
           <SelectContent>

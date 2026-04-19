@@ -36,8 +36,9 @@ const renderReceiptPdf = (payment, schoolName) =>
       .text(schoolName, 40, 14, { width: W, align: 'center' });
     doc.font('Helvetica').fontSize(10)
       .text('FEE PAYMENT RECEIPT', 40, 36, { width: W, align: 'center' });
+    const receiptDate = new Date(payment.paymentDate ?? payment.createdAt);
     doc.fontSize(8).text(
-      `Receipt Date: ${new Date(payment.createdAt).toLocaleDateString('en-KE', { dateStyle: 'long' })}`,
+      `Payment Date: ${receiptDate.toLocaleDateString('en-KE', { dateStyle: 'long' })}`,
       40, 54, { width: W, align: 'center' }
     );
 

@@ -110,8 +110,8 @@ export const listSubjects = asyncHandler(async (req, res) => {
   if (req.query.department)           filter.department = req.query.department;
   if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
 
-  // Teachers can see only subjects assigned to them
-  if (req.user.role === ROLES.TEACHER) {
+  // Teachers see only their own subjects unless ?all=true is requested (for self-assignment browsing)
+  if (req.user.role === ROLES.TEACHER && req.query.all !== 'true') {
     filter.teacherIds = req.user._id;
   }
 
@@ -246,4 +246,37 @@ export const mySubjects = asyncHandler(async (req, res) => {
   );
 
   return sendSuccess(res, { subjects });
+});
+
+/**
+ * PATCH /api/v1/subjects/:id/self-assign
+ * Teachers add or remove themselves from a subject's teacherIds.
+ * Body: { action: 'join' | 'leave' }
+ */
+export const selfAssignSubject = asyncHandler(async (req, res) => {
+  const subject = await Subject.findOne({
+    _id: req.params.id,
+    schoolId: req.user.schoolId,
+    isActive: true,
+  });
+
+  if (!subject) return sendError(res, 'Subject not found.', 404);
+
+  const { action } = req.body;
+  const teacherId = req.user._id;
+
+  if (action === 'join') {
+    if (!subject.teacherIds.some((id) => id.equals(teacherId))) {
+      subject.teacherIds.push(teacherId);
+    }
+  } else if (action === 'leave') {
+    subject.teacherIds = subject.teacherIds.filter((id) => !id.equals(teacherId));
+  } else {
+    return sendError(res, 'action must be "join" or "leave".', 400);
+  }
+
+  await subject.save();
+
+  const populated = await populateSubject(Subject.findById(subject._id));
+  return sendSuccess(res, { subject: populated });
 });

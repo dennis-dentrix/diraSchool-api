@@ -74,6 +74,11 @@ const paymentSchema = new mongoose.Schema(
     reversedAt: {
       type: Date,
     },
+    // Actual date the payment was made (may differ from createdAt if recorded later)
+    paymentDate: {
+      type: Date,
+      default: Date.now,
+    },
     // Cloudinary URL of the generated PDF receipt (populated asynchronously by receipt worker)
     receiptUrl: {
       type: String,

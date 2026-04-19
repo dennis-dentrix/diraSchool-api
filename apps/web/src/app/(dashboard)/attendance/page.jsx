@@ -1,20 +1,262 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ClipboardCheck, ChevronRight, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { ClipboardCheck, ChevronRight, CheckCircle2, Clock, AlertCircle, BarChart3, Users } from 'lucide-react';
 import { attendanceApi, classesApi, getErrorMessage } from '@/lib/api';
 import { formatDate, capitalize } from '@/lib/utils';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
+import { TERMS, ACADEMIC_YEARS, CURRENT_YEAR } from '@/lib/constants';
 
 const TODAY = new Date().toISOString().split('T')[0];
+
+// ── Period helpers ─────────────────────────────────────────────────────────────
+function getWeekRange() {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sun
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const mon = new Date(now);
+  mon.setDate(now.getDate() + diffToMon);
+  return {
+    from: mon.toISOString().split('T')[0],
+    to: TODAY,
+  };
+}
+
+function getMonthRange() {
+  const now = new Date();
+  const first = new Date(now.getFullYear(), now.getMonth(), 1);
+  return {
+    from: first.toISOString().split('T')[0],
+    to: TODAY,
+  };
+}
+
+function getPeriodParams(period, term, academicYear) {
+  if (period === 'daily')   return { from: TODAY, to: TODAY };
+  if (period === 'weekly')  return getWeekRange();
+  if (period === 'monthly') return getMonthRange();
+  if (period === 'termly')  return { term, academicYear };
+  return null;
+}
+
+// ── Aggregate registers → totals ───────────────────────────────────────────────
+function aggregateRegisters(registers) {
+  const totals = { present: 0, absent: 0, late: 0, excused: 0, total: 0 };
+  for (const reg of registers) {
+    for (const entry of reg.entries ?? []) {
+      totals[entry.status] = (totals[entry.status] ?? 0) + 1;
+      totals.total += 1;
+    }
+  }
+  return totals;
+}
+
+function aggregateByClass(registers) {
+  const map = {};
+  for (const reg of registers) {
+    const cls = reg.classId;
+    const key = typeof cls === 'object' ? cls._id : cls;
+    const label = typeof cls === 'object' ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—';
+    if (!map[key]) map[key] = { label, present: 0, absent: 0, late: 0, excused: 0, total: 0 };
+    for (const entry of reg.entries ?? []) {
+      map[key][entry.status] = (map[key][entry.status] ?? 0) + 1;
+      map[key].total += 1;
+    }
+  }
+  return Object.values(map).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+// ── Summary stat card ──────────────────────────────────────────────────────────
+function StatPill({ label, value, color }) {
+  return (
+    <div className={`flex flex-col items-center justify-center rounded-xl px-4 py-3 ${color}`}>
+      <span className="text-xl font-bold tabular-nums">{value}</span>
+      <span className="text-xs font-medium mt-0.5 opacity-80">{label}</span>
+    </div>
+  );
+}
+
+// ── Attendance Summary section ─────────────────────────────────────────────────
+function AttendanceSummary({ classes }) {
+  const [period, setPeriod] = useState('weekly');
+  const [summaryClass, setSummaryClass] = useState('');
+  const [term, setTerm] = useState(TERMS[0]);
+  const [academicYear, setAcademicYear] = useState(String(CURRENT_YEAR));
+
+  const periodParams = useMemo(() => getPeriodParams(period, term, academicYear), [period, term, academicYear]);
+
+  const queryParams = useMemo(() => {
+    const p = { limit: 500, status: 'submitted' };
+    if (summaryClass) p.classId = summaryClass;
+    if (periodParams?.from) p.from = periodParams.from;
+    if (periodParams?.to)   p.to   = periodParams.to;
+    if (periodParams?.term) p.term = periodParams.term;
+    if (periodParams?.academicYear) p.academicYear = periodParams.academicYear;
+    return p;
+  }, [periodParams, summaryClass]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['attendance-summary', queryParams],
+    queryFn: async () => {
+      const res = await attendanceApi.listRegisters(queryParams);
+      return res.data;
+    },
+    enabled: !!periodParams,
+  });
+
+  const registers = data?.data ?? data?.registers ?? [];
+  const totals = useMemo(() => aggregateRegisters(registers), [registers]);
+  const byClass = useMemo(() => aggregateByClass(registers), [registers]);
+  const attendanceRate = totals.total > 0 ? Math.round((totals.present / totals.total) * 100) : null;
+
+  const periodLabel = {
+    daily: 'Today',
+    weekly: 'This Week',
+    monthly: 'This Month',
+    termly: `${term} ${academicYear}`,
+  }[period] ?? '';
+
+  return (
+    <section>
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart3 className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Attendance Summary
+        </h2>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <Select value={period} onValueChange={setPeriod}>
+          <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="daily">Today</SelectItem>
+            <SelectItem value="weekly">This Week</SelectItem>
+            <SelectItem value="monthly">This Month</SelectItem>
+            <SelectItem value="termly">By Term</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {period === 'termly' && (
+          <>
+            <Select value={term} onValueChange={setTerm}>
+              <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={academicYear} onValueChange={setAcademicYear}>
+              <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
+        {classes.length > 1 && (
+          <Select value={summaryClass} onValueChange={(v) => setSummaryClass(v === '__all__' ? '' : v)}>
+            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="All classes" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All classes</SelectItem>
+              {classes.map((c) => (
+                <SelectItem key={c._id} value={c._id}>
+                  {c.name}{c.stream ? ` ${c.stream}` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
+        </div>
+      ) : registers.length === 0 ? (
+        <div className="flex items-center gap-3 p-4 rounded-xl border border-dashed text-muted-foreground text-sm">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          No submitted attendance records for {periodLabel}.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Stat pills */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <StatPill label="Present" value={totals.present} color="bg-green-50 text-green-700" />
+            <StatPill label="Absent"  value={totals.absent}  color="bg-red-50 text-red-700" />
+            <StatPill label="Late"    value={totals.late}    color="bg-amber-50 text-amber-700" />
+            <StatPill label="Excused" value={totals.excused} color="bg-blue-50 text-blue-700" />
+          </div>
+
+          {/* Attendance rate bar */}
+          {attendanceRate !== null && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Overall attendance rate</span>
+                <span className="font-semibold text-foreground">{attendanceRate}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-2 rounded-full transition-all ${attendanceRate >= 80 ? 'bg-green-500' : attendanceRate >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${attendanceRate}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Per-class breakdown (only when showing all classes) */}
+          {!summaryClass && byClass.length > 1 && (
+            <Card>
+              <CardHeader className="py-3 px-4 border-b">
+                <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <Users className="h-3.5 w-3.5" /> Per Class Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {byClass.map((row) => {
+                    const rate = row.total > 0 ? Math.round((row.present / row.total) * 100) : 0;
+                    return (
+                      <div key={row.label} className="flex items-center justify-between px-4 py-2.5">
+                        <p className="text-sm font-medium">{row.label}</p>
+                        <div className="flex items-center gap-3">
+                          <div className="hidden sm:flex gap-2 text-xs text-muted-foreground">
+                            <span className="text-green-700">{row.present}P</span>
+                            <span className="text-red-700">{row.absent}A</span>
+                            {row.late > 0 && <span className="text-amber-700">{row.late}L</span>}
+                          </div>
+                          <Badge
+                            className={`text-xs font-semibold min-w-[3rem] justify-center ${
+                              rate >= 80 ? 'bg-green-100 text-green-800' :
+                              rate >= 60 ? 'bg-amber-100 text-amber-800' :
+                              'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {rate}%
+                          </Badge>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
 
 // ── Today's class register card ───────────────────────────────────────────────
 function ClassRegisterCard({ cls, today, onOpen, onTake, isCreating }) {
@@ -125,7 +367,6 @@ export default function AttendancePage() {
 
   const [classFilter, setClassFilter] = useState('');
 
-  // All classes for this school (admin) or just own class (teacher - handled by API)
   const { data: classesData } = useQuery({
     queryKey: ['classes'],
     queryFn: async () => {
@@ -134,7 +375,6 @@ export default function AttendancePage() {
     },
   });
 
-  // Today's registers — used to show status per class
   const { data: todayData, isLoading: todayLoading } = useQuery({
     queryKey: ['attendance-today'],
     queryFn: async () => {
@@ -143,7 +383,6 @@ export default function AttendancePage() {
     },
   });
 
-  // Recent past registers (paginated)
   const { data: pastData, isLoading: pastLoading } = useQuery({
     queryKey: ['attendance-past', classFilter],
     queryFn: async () => {
@@ -170,7 +409,6 @@ export default function AttendancePage() {
   const todayRegisters = todayData?.data ?? todayData?.registers ?? [];
   const pastRegisters = (pastData?.data ?? pastData?.registers ?? []).filter(
     (r) => {
-      // exclude today's from the "past" list to avoid duplicates
       const d = typeof r.date === 'string' ? r.date.slice(0, 10) : new Date(r.date).toISOString().slice(0, 10);
       return d !== TODAY;
     }
@@ -215,6 +453,9 @@ export default function AttendancePage() {
           </div>
         )}
       </section>
+
+      {/* ── Attendance Summary ─────────────────────────────────────────────── */}
+      {classes.length > 0 && <AttendanceSummary classes={classes} />}
 
       {/* ── Past registers ─────────────────────────────────────────────────── */}
       <section>

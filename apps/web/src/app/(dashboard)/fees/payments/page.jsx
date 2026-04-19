@@ -1,35 +1,126 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, Download, Receipt, Wallet } from 'lucide-react';
+import { Plus, Search, Download, Receipt, Wallet, Printer } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { feesApi, studentsApi, classesApi, exportApi, downloadBlob, getErrorMessage } from '@/lib/api';
+import {
+  feesApi, studentsApi, classesApi, exportApi, settingsApi, schoolsApi,
+  downloadBlob, getErrorMessage,
+} from '@/lib/api';
 import { formatCurrency, formatDate, getStatusColor, capitalize } from '@/lib/utils';
 import { PAYMENT_METHODS, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
+import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebounce } from '@/hooks/use-debounce';
 
 const schema = z.object({
-  studentId: z.string().min(1, 'Required'),
-  classId: z.string().min(1, 'Required'),
-  amount: z.coerce.number().positive('Must be positive'),
+  studentId: z.string().min(1, 'Please select a student'),
+  amount: z.coerce.number().positive('Amount must be positive'),
   method: z.enum(['cash', 'mpesa', 'bank']),
   reference: z.string().optional(),
-  academicYear: z.string().min(1, 'Required'),
+  paymentDate: z.string().optional(),
+  academicYear: z.string().min(4, 'Required'),
   term: z.string().min(1, 'Required'),
+  notes: z.string().optional(),
 });
 
-const columns = (onReverse) => [
+function getCurrentTerm(terms) {
+  if (!terms?.length) return 'Term 1';
+  const today = new Date();
+  const active = terms.find((t) => {
+    if (!t.startDate || !t.endDate) return false;
+    return today >= new Date(t.startDate) && today <= new Date(t.endDate);
+  });
+  return active?.name ?? terms[0]?.name ?? 'Term 1';
+}
+
+function ReceiptPreview({ data }) {
+  const receiptRef = useRef(null);
+
+  const handlePrint = () => {
+    const content = receiptRef.current?.innerHTML;
+    if (!content) return;
+    const win = window.open('', '', 'width=700,height=950');
+    win.document.write(`<!DOCTYPE html><html><head><title>Fee Receipt</title><style>
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{font-family:Arial,sans-serif;padding:24px;color:#111;}
+      .header{background:#1e3a5f;color:white;padding:20px;text-align:center;border-radius:6px 6px 0 0;}
+      .header h1{font-size:20px;font-weight:700;margin-bottom:4px;}
+      .header p{font-size:13px;opacity:.85;}
+      .title-bar{background:#eef2f7;text-align:center;padding:10px;border:1px solid #ccd6e0;border-top:none;font-size:13px;font-weight:700;letter-spacing:1.5px;}
+      .body{border:1px solid #ccd6e0;border-top:none;padding:20px;}
+      .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;}
+      .row:last-child{border-bottom:none;}
+      .lbl{color:#555;}
+      .val{font-weight:500;}
+      .total{background:#fff7ed;padding:12px;border-radius:4px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;}
+      .total .t-label{font-size:14px;font-weight:700;}
+      .total .t-amount{font-size:18px;font-weight:800;color:#d97706;}
+      .footer{border:1px solid #ccd6e0;border-top:1px solid #eee;border-radius:0 0 6px 6px;padding:12px;text-align:center;font-size:11px;color:#888;}
+    </style></head><body>${content}</body></html>`);
+    win.document.close();
+    win.print();
+    win.close();
+  };
+
+  return (
+    <div>
+      <div ref={receiptRef}>
+        <div className="bg-[#1e3a5f] text-white p-5 text-center rounded-t-md">
+          <h1 className="text-lg font-bold">{data.schoolName || 'School'}</h1>
+          <p className="text-sm opacity-85">Official Fee Payment Receipt</p>
+        </div>
+        <div className="bg-blue-50 text-center py-2 text-xs font-bold tracking-widest border border-t-0 border-blue-200 uppercase">
+          Fee Payment Receipt
+        </div>
+        <div className="border border-t-0 px-4 py-3">
+          {[
+            ['Student', data.studentName],
+            ['Admission No.', data.admissionNumber],
+            ['Class', data.className],
+            ['Academic Year', data.academicYear],
+            ['Term', data.term],
+            ['Payment Date', data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())],
+            ['Payment Method', capitalize(data.method)],
+            data.reference ? ['Reference / Code', data.reference] : null,
+            data.notes ? ['Notes', data.notes] : null,
+            ['Recorded By', data.recordedBy],
+          ].filter(Boolean).map(([label, value]) => (
+            <div key={label} className="flex justify-between py-2 border-b last:border-0 text-sm">
+              <span className="text-muted-foreground">{label}</span>
+              <span className="font-medium text-right max-w-[60%]">{value}</span>
+            </div>
+          ))}
+          <div className="bg-amber-50 rounded p-3 mt-3 flex justify-between items-center">
+            <span className="font-bold text-sm">TOTAL PAID</span>
+            <span className="font-bold text-amber-600 text-xl">{formatCurrency(data.amount)}</span>
+          </div>
+        </div>
+        <div className="border border-t-0 rounded-b-md p-3 text-center text-xs text-muted-foreground">
+          This is an official receipt. Please retain for your records. Powered by Diraschool
+        </div>
+      </div>
+      <div className="flex justify-end mt-4">
+        <Button onClick={handlePrint} className="gap-2">
+          <Printer className="h-4 w-4" /> Print Receipt
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const buildColumns = (onViewReceipt) => [
   {
     id: 'student',
     header: 'Student',
@@ -38,13 +129,27 @@ const columns = (onReverse) => [
         <p className="font-medium text-sm">
           {row.original.studentId?.firstName ?? '—'} {row.original.studentId?.lastName ?? ''}
         </p>
-        <p className="text-xs text-muted-foreground">{row.original.term} · {row.original.academicYear}</p>
+        <p className="text-xs text-muted-foreground">
+          {row.original.studentId?.admissionNumber ?? ''} · {row.original.term} · {row.original.academicYear}
+        </p>
       </div>
     ),
   },
-  { accessorKey: 'amount', header: 'Amount', cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amount)}</span> },
-  { accessorKey: 'method', header: 'Method', cell: ({ row }) => <span className="capitalize text-sm">{row.original.method}</span> },
-  { accessorKey: 'reference', header: 'Reference', cell: ({ row }) => <span className="text-sm font-mono">{row.original.reference ?? '—'}</span> },
+  {
+    accessorKey: 'amount',
+    header: 'Amount',
+    cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amount)}</span>,
+  },
+  {
+    accessorKey: 'method',
+    header: 'Method',
+    cell: ({ row }) => <span className="capitalize text-sm">{row.original.method}</span>,
+  },
+  {
+    accessorKey: 'reference',
+    header: 'Reference',
+    cell: ({ row }) => <span className="text-sm font-mono">{row.original.reference ?? '—'}</span>,
+  },
   {
     accessorKey: 'status',
     header: 'Status',
@@ -54,33 +159,42 @@ const columns = (onReverse) => [
       </span>
     ),
   },
-  { accessorKey: 'createdAt', header: 'Date', cell: ({ row }) => <span className="text-sm">{formatDate(row.original.createdAt)}</span> },
+  {
+    accessorKey: 'createdAt',
+    header: 'Date',
+    cell: ({ row }) => <span className="text-sm">{formatDate(row.original.paymentDate ?? row.original.createdAt)}</span>,
+  },
   {
     id: 'receipt',
     header: 'Receipt',
-    cell: ({ row }) => row.original.receiptUrl ? (
-      <a href={row.original.receiptUrl} target="_blank" rel="noopener noreferrer">
-        <Button variant="ghost" size="sm" className="gap-1">
-          <Receipt className="h-3.5 w-3.5" /> Download
+    cell: ({ row }) =>
+      row.original.receiptUrl ? (
+        <a href={row.original.receiptUrl} target="_blank" rel="noopener noreferrer">
+          <Button variant="ghost" size="sm" className="gap-1">
+            <Receipt className="h-3.5 w-3.5" /> Download PDF
+          </Button>
+        </a>
+      ) : (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1 text-blue-600 hover:text-blue-700"
+          onClick={() => onViewReceipt(row.original)}
+        >
+          <Receipt className="h-3.5 w-3.5" /> View Receipt
         </Button>
-      </a>
-    ) : <span className="text-xs text-muted-foreground">Generating…</span>,
-  },
-  {
-    id: 'actions',
-    cell: ({ row }) => row.original.status === 'completed' ? (
-      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive"
-        onClick={() => onReverse(row.original)}>Reverse</Button>
-    ) : null,
+      ),
   },
 ];
 
 export default function PaymentsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
-  const [reverseTarget, setReverseTarget] = useState(null);
-  const [reverseReason, setReverseReason] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [pendingPayload, setPendingPayload] = useState(null);
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [balanceStudentId, setBalanceStudentId] = useState('');
   const [balanceYear, setBalanceYear] = useState(String(new Date().getFullYear()));
@@ -90,18 +204,53 @@ export default function PaymentsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [yearFilter, setYearFilter] = useState('');
   const [termFilter, setTermFilter] = useState('');
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [studentSearch, setStudentSearch] = useState('');
   const debouncedSearch = useDebounce(search, 400);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
-    resolver: zodResolver(schema),
-    defaultValues: { academicYear: String(new Date().getFullYear()), term: 'Term 1' },
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await settingsApi.get();
+      return res.data.data ?? res.data;
+    },
   });
+
+  const { data: schoolData } = useQuery({
+    queryKey: ['school', 'me'],
+    queryFn: async () => {
+      const res = await schoolsApi.me();
+      return res.data.data ?? res.data;
+    },
+  });
+
+  const defaultYear = settingsData?.currentAcademicYear ?? String(new Date().getFullYear());
+  const defaultTerm = getCurrentTerm(settingsData?.terms);
+  const todayIso = new Date().toISOString().split('T')[0];
+
+  const { register, handleSubmit, reset, setValue, formState: { errors }, trigger, getValues } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { academicYear: String(new Date().getFullYear()), term: 'Term 1', paymentDate: todayIso },
+  });
+
+  // Sync defaults when settings load
+  useEffect(() => {
+    if (settingsData) {
+      const year = settingsData.currentAcademicYear ?? String(new Date().getFullYear());
+      const term = getCurrentTerm(settingsData.terms);
+      reset({ academicYear: year, term, paymentDate: todayIso });
+      setBalanceYear(year);
+      setBalanceTerm(term);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsData]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['payments', page, debouncedSearch, methodFilter, statusFilter, yearFilter, termFilter],
     queryFn: async () => {
       const res = await feesApi.listPayments({
-        page, limit: 20,
+        page,
+        limit: 20,
         search: debouncedSearch || undefined,
         method: methodFilter || undefined,
         status: statusFilter || undefined,
@@ -115,7 +264,7 @@ export default function PaymentsPage() {
   const { data: studentsData } = useQuery({
     queryKey: ['students', 'all'],
     queryFn: async () => {
-      const res = await studentsApi.list({ limit: 200, status: 'active' });
+      const res = await studentsApi.list({ limit: 500, status: 'active' });
       return res.data;
     },
   });
@@ -140,23 +289,103 @@ export default function PaymentsPage() {
   const { mutate: createPayment, isPending } = useMutation({
     mutationFn: (data) => feesApi.createPayment(data),
     onSuccess: () => {
-      toast.success('Payment recorded');
+      toast.success('Payment recorded successfully');
       queryClient.invalidateQueries({ queryKey: ['payments'] });
       setOpen(false);
-      reset();
+      setPreviewOpen(false);
+      setPendingPayload(null);
+      setSelectedClassId('');
+      setStudentSearch('');
+      reset({ academicYear: defaultYear, term: defaultTerm, paymentDate: todayIso });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const { mutate: reversePayment } = useMutation({
-    mutationFn: ({ id, reason }) => feesApi.reversePayment(id, { reason }),
-    onSuccess: () => {
-      toast.success('Payment reversed');
-      queryClient.invalidateQueries({ queryKey: ['payments'] });
-      setReverseTarget(null);
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
+  const filteredStudents = useMemo(() => {
+    const all = studentsData?.data ?? [];
+    const byClass = selectedClassId
+      ? all.filter((s) => (s.classId?._id ?? s.classId) === selectedClassId)
+      : all;
+    if (!studentSearch.trim()) return byClass;
+    const q = studentSearch.toLowerCase();
+    return byClass.filter(
+      (s) =>
+        `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) ||
+        s.admissionNumber?.toLowerCase().includes(q)
+    );
+  }, [studentsData, selectedClassId, studentSearch]);
+
+  const buildReceiptData = (values, fromTable = null) => {
+    if (fromTable) {
+      return {
+        studentName: `${fromTable.studentId?.firstName ?? ''} ${fromTable.studentId?.lastName ?? ''}`.trim() || '—',
+        admissionNumber: fromTable.studentId?.admissionNumber ?? '—',
+        className: fromTable.classId
+          ? `${fromTable.classId.name}${fromTable.classId.stream ? ` ${fromTable.classId.stream}` : ''}`
+          : '—',
+        academicYear: fromTable.academicYear,
+        term: fromTable.term,
+        amount: fromTable.amount,
+        method: fromTable.method,
+        reference: fromTable.reference ?? '',
+        paymentDate: fromTable.paymentDate ?? fromTable.createdAt,
+        notes: fromTable.notes ?? '',
+        recordedBy: fromTable.recordedByUserId
+          ? `${fromTable.recordedByUserId.firstName} ${fromTable.recordedByUserId.lastName}`
+          : '—',
+        schoolName: schoolData?.name ?? '',
+      };
+    }
+    const student = (studentsData?.data ?? []).find((s) => s._id === values.studentId);
+    const cls = (classesData?.data ?? []).find((c) => c._id === selectedClassId);
+    return {
+      studentName: student ? `${student.firstName} ${student.lastName}` : '—',
+      admissionNumber: student?.admissionNumber ?? '—',
+      className: cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—',
+      academicYear: values.academicYear,
+      term: values.term,
+      amount: values.amount,
+      method: values.method,
+      reference: values.reference ?? '',
+      paymentDate: values.paymentDate ?? todayIso,
+      notes: values.notes ?? '',
+      recordedBy: user ? `${user.firstName} ${user.lastName}` : '—',
+      schoolName: schoolData?.name ?? '',
+    };
+  };
+
+  const handlePreview = async () => {
+    const valid = await trigger();
+    if (!valid) return;
+    const values = getValues();
+    const preview = buildReceiptData(values);
+    const payload = {
+      studentId: values.studentId,
+      amount: values.amount,
+      method: values.method,
+      reference: values.reference || undefined,
+      paymentDate: values.paymentDate || undefined,
+      academicYear: values.academicYear,
+      term: values.term,
+      notes: values.notes || undefined,
+    };
+    setPendingPayload(payload);
+    setPreviewData(preview);
+    setPreviewOpen(true);
+  };
+
+  const handleViewFromTable = (payment) => {
+    setPreviewData(buildReceiptData(null, payment));
+    setPendingPayload(null);
+    setPreviewOpen(true);
+  };
+
+  const handleCloseForm = () => {
+    setOpen(false);
+    setSelectedClassId('');
+    setStudentSearch('');
+    reset({ academicYear: defaultYear, term: defaultTerm, paymentDate: todayIso });
+  };
 
   return (
     <div>
@@ -164,7 +393,9 @@ export default function PaymentsPage() {
         <Button variant="outline" size="sm" onClick={() => setBalanceOpen(true)}>
           <Wallet className="h-4 w-4 mr-1" /> Check Balance
         </Button>
-        <Button variant="outline" size="sm"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={async () => {
             try { downloadBlob(await exportApi.payments(), 'payments.csv'); }
             catch { toast.error('Export failed'); }
@@ -177,7 +408,7 @@ export default function PaymentsPage() {
         </Button>
       </PageHeader>
 
-      {/* Filter bar */}
+      {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4">
         <div className="relative flex-1 min-w-[160px] max-w-xs">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -195,14 +426,6 @@ export default function PaymentsPage() {
             {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{capitalize(m)}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === 'all' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="h-9 w-[130px]"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="reversed">Reversed</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v === 'all' ? '' : v); setPage(1); }}>
           <SelectTrigger className="h-9 w-[120px]"><SelectValue placeholder="Year" /></SelectTrigger>
           <SelectContent>
@@ -217,16 +440,16 @@ export default function PaymentsPage() {
             {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
-        {(search || methodFilter || statusFilter || yearFilter || termFilter) && (
+        {(search || methodFilter || yearFilter || termFilter) && (
           <Button variant="ghost" size="sm" className="h-9"
-            onClick={() => { setSearch(''); setMethodFilter(''); setStatusFilter(''); setYearFilter(''); setTermFilter(''); setPage(1); }}>
+            onClick={() => { setSearch(''); setMethodFilter(''); setYearFilter(''); setTermFilter(''); setPage(1); }}>
             Clear
           </Button>
         )}
       </div>
 
       <DataTable
-        columns={columns((payment) => setReverseTarget(payment))}
+        columns={buildColumns(handleViewFromTable)}
         data={data?.data}
         loading={isLoading}
         pageCount={data?.pagination?.totalPages}
@@ -234,62 +457,118 @@ export default function PaymentsPage() {
         onPageChange={setPage}
       />
 
-      {/* Record payment dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+      {/* Record Payment Dialog */}
+      <Dialog open={open} onOpenChange={(v) => { if (!v) handleCloseForm(); else setOpen(true); }}>
+        <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit(createPayment)} className="space-y-4">
+          <form
+            onSubmit={handleSubmit((values) =>
+              createPayment({
+                studentId: values.studentId,
+                amount: values.amount,
+                method: values.method,
+                reference: values.reference || undefined,
+                paymentDate: values.paymentDate || undefined,
+                academicYear: values.academicYear,
+                term: values.term,
+                notes: values.notes || undefined,
+              })
+            )}
+            className="space-y-4"
+          >
+            {/* 1. Class */}
             <div className="space-y-1.5">
-              <Label>Student</Label>
-              <Select onValueChange={(v) => setValue('studentId', v)}>
-                <SelectTrigger><SelectValue placeholder="Select student" /></SelectTrigger>
+              <Label>Class</Label>
+              <Select
+                value={selectedClassId}
+                onValueChange={(v) => {
+                  setSelectedClassId(v);
+                  setValue('studentId', '');
+                  setStudentSearch('');
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select class to filter students" /></SelectTrigger>
                 <SelectContent>
-                  {studentsData?.data?.map((s) => (
-                    <SelectItem key={s._id} value={s._id}>
-                      {s.firstName} {s.lastName} — {s.admissionNumber}
+                  {classesData?.data?.map((c) => (
+                    <SelectItem key={c._id} value={c._id}>
+                      {c.name}{c.stream ? ` ${c.stream}` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {errors.studentId && <p className="text-xs text-destructive">{errors.studentId.message}</p>}
             </div>
+
+            {/* 2. Student with search */}
             <div className="space-y-1.5">
-              <Label>Class</Label>
-              <Select onValueChange={(v) => setValue('classId', v)}>
-                <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+              <Label>Student</Label>
+              <Input
+                placeholder="Search by name or admission number…"
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+              />
+              <Select onValueChange={(v) => setValue('studentId', v)} disabled={!selectedClassId}>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      selectedClassId
+                        ? filteredStudents.length
+                          ? `${filteredStudents.length} student(s) — select one`
+                          : 'No matching students'
+                        : 'Select a class first'
+                    }
+                  />
+                </SelectTrigger>
                 <SelectContent>
-                  {classesData?.data?.map((c) => (
-                    <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>
-                  ))}
+                  {filteredStudents.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">No students found</div>
+                  ) : (
+                    filteredStudents.map((s) => (
+                      <SelectItem key={s._id} value={s._id}>
+                        {s.firstName} {s.lastName} — {s.admissionNumber}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
-              {errors.classId && <p className="text-xs text-destructive">{errors.classId.message}</p>}
+              {errors.studentId && <p className="text-xs text-destructive">{errors.studentId.message}</p>}
             </div>
+
+            {/* 3. Method + Amount */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Amount (KES)</Label>
-                <Input {...register('amount')} type="number" placeholder="5000" />
-                {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Method</Label>
+                <Label>Payment Method</Label>
                 <Select onValueChange={(v) => setValue('method', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
                   <SelectContent>
                     {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{capitalize(m)}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 {errors.method && <p className="text-xs text-destructive">{errors.method.message}</p>}
               </div>
+              <div className="space-y-1.5">
+                <Label>Amount (KES)</Label>
+                <Input {...register('amount')} type="number" placeholder="5000" />
+                {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Reference / M-Pesa Code (optional)</Label>
-              <Input {...register('reference')} placeholder="QAB1234XY" />
+
+            {/* 4. Reference + Date */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Transaction Reference</Label>
+                <Input {...register('reference')} placeholder="M-Pesa code, slip no." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Payment Date</Label>
+                <Input {...register('paymentDate')} type="date" />
+              </div>
             </div>
+
+            {/* 5. Year + Term */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Academic Year</Label>
-                <Select defaultValue={String(new Date().getFullYear())} onValueChange={(v) => setValue('academicYear', v)}>
+                <Select defaultValue={defaultYear} onValueChange={(v) => setValue('academicYear', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
@@ -298,7 +577,7 @@ export default function PaymentsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Term</Label>
-                <Select defaultValue="Term 1" onValueChange={(v) => setValue('term', v)}>
+                <Select defaultValue={defaultTerm} onValueChange={(v) => setValue('term', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
@@ -306,16 +585,44 @@ export default function PaymentsPage() {
                 </Select>
               </div>
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isPending}>Record Payment</Button>
+
+            {/* 6. Notes */}
+            <div className="space-y-1.5">
+              <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Textarea {...register('notes')} placeholder="Any additional information…" rows={2} />
+            </div>
+
+            <DialogFooter className="gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={handleCloseForm}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={handlePreview} disabled={isPending}>
+                <Receipt className="h-4 w-4 mr-1" /> Preview Receipt
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? 'Saving…' : 'Save Payment'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Balance lookup dialog */}
-      <Dialog open={balanceOpen} onOpenChange={(v) => { setBalanceOpen(v); }}>
+      {/* Receipt Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-md max-h-[92vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Receipt Preview</DialogTitle></DialogHeader>
+          {previewData && <ReceiptPreview data={previewData} />}
+          {pendingPayload && (
+            <DialogFooter className="mt-2">
+              <Button variant="outline" onClick={() => setPreviewOpen(false)}>Back to Form</Button>
+              <Button onClick={() => createPayment(pendingPayload)} disabled={isPending}>
+                {isPending ? 'Saving…' : 'Save Payment'}
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Check Balance Dialog */}
+      <Dialog open={balanceOpen} onOpenChange={setBalanceOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Check Fee Balance</DialogTitle></DialogHeader>
           <div className="space-y-3">
@@ -352,8 +659,11 @@ export default function PaymentsPage() {
                 </Select>
               </div>
             </div>
-            <Button className="w-full" disabled={!balanceStudentId || balanceFetching}
-              onClick={() => fetchBalance()}>
+            <Button
+              className="w-full"
+              disabled={!balanceStudentId || balanceFetching}
+              onClick={() => fetchBalance()}
+            >
               {balanceFetching ? 'Loading…' : 'Fetch Balance'}
             </Button>
             {balanceData && (
@@ -383,28 +693,6 @@ export default function PaymentsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBalanceOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Reverse dialog */}
-      <Dialog open={!!reverseTarget} onOpenChange={() => setReverseTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Reverse Payment</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Reversing {formatCurrency(reverseTarget?.amount ?? 0)} for{' '}
-            {reverseTarget?.studentId?.firstName} {reverseTarget?.studentId?.lastName}.
-          </p>
-          <div className="space-y-1.5">
-            <Label>Reason</Label>
-            <Input value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} placeholder="Entered in error…" />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReverseTarget(null)}>Cancel</Button>
-            <Button variant="destructive" disabled={!reverseReason}
-              onClick={() => reversePayment({ id: reverseTarget._id, reason: reverseReason })}>
-              Confirm Reversal
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

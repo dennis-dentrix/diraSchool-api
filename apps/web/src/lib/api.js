@@ -96,7 +96,7 @@ export const usersApi = {
   update: (id, data) => api.patch(`/users/${id}`, data),
   resendInvite: (id) => api.post(`/users/${id}/resend-invite`),
   resetPassword: (id) => api.post(`/users/${id}/reset-password`),
-  toggleActive: (id, isActive) => api.patch(`/users/${id}`, { isActive }),
+  toggleActive: (id, isActive, reason) => api.patch(`/users/${id}`, { isActive, ...(reason ? { reason } : {}) }),
 };
 
 // ─── Schools (school-scoped) ──────────────────────────────────────────────────
@@ -121,6 +121,7 @@ export const adminApi = {
   listSchools: (params) => api.get('/admin/schools', { params }),
   getSchool: (id) => api.get(`/admin/schools/${id}`),
   updateSchoolStatus: (id, data) => api.patch(`/admin/schools/${id}/status`, data),
+  createSchool: (data) => api.post('/schools', data),
   auditLogs: (params) => api.get('/admin/audit-logs', { params }),
   listUsers: (params) => api.get('/admin/users', { params }),
   toggleUser: (id) => api.patch(`/admin/users/${id}/toggle`),
@@ -173,6 +174,8 @@ export const subjectsApi = {
   assignTeachers: (id, data) => api.patch(`/subjects/${id}/teachers`, data),
   /** Teacher shortcut — my subjects */
   mySubjects: () => api.get('/subjects/my-subjects'),
+  /** Teacher self-assigns or removes themselves */
+  selfAssign: (id, action) => api.patch(`/subjects/${id}/self-assign`, { action }),
 };
 
 // ─── Exams ────────────────────────────────────────────────────────────────────

@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }) {
     return (
       <div className="flex h-screen overflow-hidden bg-background">
         {/* Sidebar skeleton */}
-        <div className="hidden md:flex flex-col h-full w-64 shrink-0 border-r bg-sidebar p-4 gap-4">
+        <div className="hidden lg:flex flex-col h-full w-64 shrink-0 border-r bg-sidebar p-4 gap-4">
           <div className="flex items-center gap-3 px-1 py-3 border-b border-sidebar-border mb-1">
             <Skeleton className="h-9 w-9 rounded-xl bg-white/10" />
             <div className="space-y-1.5">
@@ -104,7 +104,7 @@ export default function DashboardLayout({ children }) {
     <div className="flex h-screen overflow-hidden bg-background">
       <NavigationProgress />
       {/* Desktop sidebar */}
-      <div className="hidden md:flex">
+      <div className="hidden lg:flex">
         <Sidebar user={user} />
       </div>
 

@@ -37,7 +37,7 @@ export function Header({ onMenuClick, title }) {
   return (
     <header className="h-14 border-b border-border/60 bg-background/80 backdrop-blur-sm flex items-center gap-4 px-4 shrink-0 sticky top-0 z-40">
       {/* Mobile menu toggle */}
-      <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuClick}>
+      <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>
         <Menu className="h-5 w-5" />
       </Button>
 

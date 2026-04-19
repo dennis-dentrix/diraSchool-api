@@ -133,7 +133,7 @@ export const deleteFeeStructure = asyncHandler(async (req, res) => {
  * Records a payment for a student in a specific term.
  */
 export const createPayment = asyncHandler(async (req, res) => {
-  const { studentId, academicYear, term, amount, method, reference, notes } = req.body;
+  const { studentId, academicYear, term, amount, method, reference, notes, paymentDate } = req.body;
 
   // Verify the student belongs to this school and is active
   const student = await Student.findOne({
@@ -153,6 +153,7 @@ export const createPayment = asyncHandler(async (req, res) => {
     method,
     reference: reference || undefined,
     notes: notes || undefined,
+    paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
     status: PAYMENT_STATUSES.COMPLETED,
     recordedByUserId: req.user._id,
   });

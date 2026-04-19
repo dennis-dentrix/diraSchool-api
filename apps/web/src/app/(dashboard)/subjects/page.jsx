@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, MoreHorizontal, Users } from 'lucide-react';
+import { Plus, MoreHorizontal, Users, BookOpen, UserPlus, UserMinus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,6 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 const schema = z.object({
   name:       z.string().min(1, 'Required'),
@@ -179,8 +180,37 @@ export default function SubjectsPage() {
   const openConfirm = (title, description, onConfirm) =>
     setConfirmDialog({ open: true, title, description, onConfirm });
 
-  const subjects = data?.subjects ?? data?.data ?? [];
-  const meta     = data?.meta ?? data?.pagination;
+  const { mutate: selfAssign } = useMutation({
+    mutationFn: ({ id, action }) => subjectsApi.selfAssign(id, action),
+    onSuccess: (_, { action }) => {
+      toast.success(action === 'join' ? 'You have joined this subject' : 'You have left this subject');
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      queryClient.invalidateQueries({ queryKey: ['subjects-all'] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { data: allSubjectsData, isLoading: allLoading } = useQuery({
+    queryKey: ['subjects-all'],
+    queryFn: async () => { const res = await subjectsApi.list({ limit: 200, all: 'true' }); return res.data; },
+    enabled: !adminUser,
+  });
+
+  const subjects    = data?.subjects ?? data?.data ?? [];
+  const allSubjects = allSubjectsData?.subjects ?? allSubjectsData?.data ?? [];
+  const meta        = data?.meta ?? data?.pagination;
+
+  // Group subjects by department for the teacher browse view
+  const subjectsByDept = allSubjects.reduce((acc, s) => {
+    const dept = s.department || 'General';
+    if (!acc[dept]) acc[dept] = [];
+    acc[dept].push(s);
+    return acc;
+  }, {});
+
+  const mySubjectIds = new Set(
+    subjects.map((s) => (typeof s === 'object' ? s._id : s))
+  );
 
   return (
     <div>
@@ -192,18 +222,86 @@ export default function SubjectsPage() {
         )}
       </PageHeader>
 
-      <DataTable
-        columns={columns(
-          (id) => openConfirm('Delete subject?', 'This action cannot be undone.', () => deleteSubject(id)),
-          openAssign,
-          adminUser,
-        )}
-        data={subjects}
-        loading={isLoading}
-        pageCount={meta?.totalPages ?? meta?.pages}
-        currentPage={page}
-        onPageChange={setPage}
-      />
+      {/* ── Teacher view: tabs for My Subjects + Browse All ─────────────── */}
+      {!adminUser ? (
+        <Tabs defaultValue="mine">
+          <TabsList className="mb-4">
+            <TabsTrigger value="mine">My Subjects</TabsTrigger>
+            <TabsTrigger value="browse">Browse All</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="mine">
+            <DataTable
+              columns={columns(() => {}, () => {}, false)}
+              data={subjects}
+              loading={isLoading}
+              pageCount={meta?.totalPages ?? meta?.pages}
+              currentPage={page}
+              onPageChange={setPage}
+            />
+          </TabsContent>
+
+          <TabsContent value="browse">
+            {allLoading ? (
+              <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />)}</div>
+            ) : (
+              <div className="space-y-6">
+                {Object.entries(subjectsByDept).sort(([a], [b]) => a.localeCompare(b)).map(([dept, subs]) => (
+                  <div key={dept}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <BookOpen className="h-4 w-4 text-muted-foreground" />
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{dept}</h3>
+                    </div>
+                    <div className="space-y-1">
+                      {subs.map((s) => {
+                        const isMine = mySubjectIds.has(s._id);
+                        const cls = s.classId;
+                        return (
+                          <div key={s._id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div>
+                                <p className="text-sm font-medium">{s.name}{s.code ? ` (${s.code})` : ''}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {typeof cls === 'object' ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : ''}
+                                  {s.teacherIds?.length ? ` · ${s.teacherIds.length} teacher${s.teacherIds.length !== 1 ? 's' : ''}` : ''}
+                                </p>
+                              </div>
+                              {isMine && <Badge variant="secondary" className="text-xs ml-2">Teaching</Badge>}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant={isMine ? 'outline' : 'default'}
+                              className={isMine ? 'text-red-600 border-red-200 hover:bg-red-50' : ''}
+                              onClick={() => selfAssign({ id: s._id, action: isMine ? 'leave' : 'join' })}
+                            >
+                              {isMine
+                                ? <><UserMinus className="h-3.5 w-3.5 mr-1" /> Leave</>
+                                : <><UserPlus className="h-3.5 w-3.5 mr-1" /> Join</>}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <DataTable
+          columns={columns(
+            (id) => openConfirm('Delete subject?', 'This action cannot be undone.', () => deleteSubject(id)),
+            openAssign,
+            adminUser,
+          )}
+          data={subjects}
+          loading={isLoading}
+          pageCount={meta?.totalPages ?? meta?.pages}
+          currentPage={page}
+          onPageChange={setPage}
+        />
+      )}
 
       {/* ── Create subject dialog (admin only) ───────────────────────────── */}
       {adminUser && (

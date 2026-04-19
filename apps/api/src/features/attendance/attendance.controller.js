@@ -128,6 +128,11 @@ export const listAttendanceRegisters = asyncHandler(async (req, res) => {
   if (req.query.status) filter.status = req.query.status;
   if (req.query.term) filter.term = req.query.term;
   if (req.query.academicYear) filter.academicYear = req.query.academicYear;
+  if (req.query.from || req.query.to) {
+    filter.date = {};
+    if (req.query.from) filter.date.$gte = normaliseDate(req.query.from);
+    if (req.query.to)   filter.date.$lte = normaliseDate(req.query.to);
+  }
 
   const total = await Attendance.countDocuments(filter);
   const { skip, limit, meta } = paginate(req.query, total);

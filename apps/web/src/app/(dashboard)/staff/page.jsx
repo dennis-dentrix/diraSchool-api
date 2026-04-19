@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, MoreHorizontal, Mail, KeyRound, PauseCircle, PlayCircle, UserCheck, UserX } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Mail, KeyRound, PauseCircle, PlayCircle, UserCheck, UserX, AlertTriangle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useDebounce } from '@/hooks/use-debounce';
@@ -35,7 +36,7 @@ const schema = z.object({
   tscNumber: z.string().optional(),
 });
 
-const columns = ({ onResendInvite, onResetPassword, onToggleActive }) => [
+const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseRequest }) => [
   {
     id: 'name',
     header: 'Staff Member',
@@ -110,10 +111,7 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive }) => [
             {u.isActive ? (
               <DropdownMenuItem
                 className="text-red-600 focus:text-red-600"
-                onClick={() => {
-                  if (confirm(`Pause account for ${u.firstName} ${u.lastName}? They will not be able to log in.`))
-                    onToggleActive(u._id, false);
-                }}
+                onClick={() => onPauseRequest(u)}
               >
                 <PauseCircle className="h-4 w-4 mr-2" /> Pause Account
               </DropdownMenuItem>
@@ -139,6 +137,8 @@ export default function StaffPage() {
   const [open, setOpen] = useState(false);
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [pauseTarget, setPauseTarget] = useState(null);
+  const [pauseReason, setPauseReason] = useState('');
   const debouncedSearch = useDebounce(search, 400);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
@@ -197,7 +197,7 @@ export default function StaffPage() {
   });
 
   const { mutate: toggleActive } = useMutation({
-    mutationFn: ({ id, isActive }) => usersApi.toggleActive(id, isActive),
+    mutationFn: ({ id, isActive, reason }) => usersApi.toggleActive(id, isActive, reason),
     onSuccess: (_, { isActive }) => {
       toast.success(isActive ? 'Account reactivated' : 'Account paused');
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -205,10 +205,18 @@ export default function StaffPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const handleConfirmPause = () => {
+    if (!pauseTarget) return;
+    toggleActive({ id: pauseTarget._id, isActive: false, reason: pauseReason || undefined });
+    setPauseTarget(null);
+    setPauseReason('');
+  };
+
   const actionHandlers = {
     onResendInvite: (id) => resendInvite(id),
     onResetPassword: (id) => resetPassword(id),
     onToggleActive: (id, isActive) => toggleActive({ id, isActive }),
+    onPauseRequest: (user) => { setPauseTarget(user); setPauseReason(''); },
   };
 
   return (
@@ -298,6 +306,49 @@ export default function StaffPage() {
         currentPage={page}
         onPageChange={setPage}
       />
+
+      {/* ── Pause confirmation dialog ─────────────────────────────────────────── */}
+      <Dialog open={!!pauseTarget} onOpenChange={(v) => { if (!v) { setPauseTarget(null); setPauseReason(''); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <DialogTitle>Pause Account</DialogTitle>
+                <DialogDescription className="text-sm text-muted-foreground mt-0.5">
+                  {pauseTarget?.firstName} {pauseTarget?.lastName}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4 pt-1">
+            <p className="text-sm text-muted-foreground">
+              This staff member will immediately lose access to the system and will not be able to log in until their account is reactivated.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="pause-reason">Reason <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Textarea
+                id="pause-reason"
+                placeholder="e.g. On leave, disciplinary action…"
+                rows={3}
+                value={pauseReason}
+                onChange={(e) => setPauseReason(e.target.value)}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-2">
+            <Button variant="outline" onClick={() => { setPauseTarget(null); setPauseReason(''); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmPause}>
+              <PauseCircle className="h-4 w-4 mr-1.5" /> Pause Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Invite dialog ─────────────────────────────────────────────────────── */}
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
