@@ -51,6 +51,11 @@ const normalizeDay = (value) => {
   const day = String(value ?? '').toLowerCase();
   return DAYS.includes(day) ? day : DAYS[0];
 };
+const toIdString = (value) => {
+  if (!value) return '';
+  if (typeof value === 'object') return String(value._id ?? value.id ?? '');
+  return String(value);
+};
 const dayLabel = (value) => {
   const day = normalizeDay(value);
   return `${day[0].toUpperCase()}${day.slice(1)}`;
@@ -483,8 +488,8 @@ function ClassTimetableTab({ canWrite }) {
       timetable?.slots?.map((s) => ({
         ...s,
         day: normalizeDay(s.day),
-        subjectId: typeof s.subjectId === 'object' ? (s.subjectId?._id ?? '') : (s.subjectId ?? ''),
-        teacherId: typeof s.teacherId === 'object' ? (s.teacherId?._id ?? '') : (s.teacherId ?? ''),
+        subjectId: toIdString(s.subjectId),
+        teacherId: toIdString(s.teacherId),
       })) ?? []
     );
     setEditMode(true);
@@ -514,8 +519,8 @@ function ClassTimetableTab({ canWrite }) {
     ? localSlots.map((s, i) => ({
       ...s,
       _editIdx: i,
-      subjectId: subjects?.find((sub) => sub._id === s.subjectId) ?? s.subjectId,
-      teacherId: teachers?.find((t) => t._id === s.teacherId) ?? s.teacherId,
+      subjectId: subjects?.find((sub) => toIdString(sub._id) === toIdString(s.subjectId)) ?? s.subjectId,
+      teacherId: teachers?.find((t) => toIdString(t._id) === toIdString(s.teacherId)) ?? s.teacherId,
     }))
     : (timetable?.slots ?? []);
 
@@ -527,8 +532,8 @@ function ClassTimetableTab({ canWrite }) {
     initial: {
       ...slot,
       day: normalizeDay(slot.day),
-      subjectId: typeof slot.subjectId === 'object' ? (slot.subjectId?._id ?? '') : (slot.subjectId ?? ''),
-      teacherId: typeof slot.teacherId === 'object' ? (slot.teacherId?._id ?? '') : (slot.teacherId ?? ''),
+      subjectId: toIdString(slot.subjectId),
+      teacherId: toIdString(slot.teacherId),
       room: slot.room === BREAK_MARKER ? '' : (slot.room ?? ''),
       isBreak: slot.room === BREAK_MARKER,
       _isEdit: true,

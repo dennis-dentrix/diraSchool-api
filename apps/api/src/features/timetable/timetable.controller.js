@@ -55,7 +55,9 @@ export const listTimetables = asyncHandler(async (req, res) => {
     .sort({ academicYear: -1, createdAt: -1 })
     .skip(skip)
     .limit(limit)
-    .populate('classId', 'name stream levelCategory');
+    .populate('classId', 'name stream levelCategory')
+    .populate('slots.subjectId', 'name code')
+    .populate('slots.teacherId', 'firstName lastName');
 
   return sendSuccess(res, { timetables, meta });
 });
