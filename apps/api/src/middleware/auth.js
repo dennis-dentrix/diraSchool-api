@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import { SUBSCRIPTION_STATUSES, CACHE_TTL } from '../constants/index.js';
 import { sendUnauthorized, sendForbidden } from '../utils/response.js';
 import { getRedis } from '../config/redis.js';
+import { attachAutoAudit } from '../utils/auditLogger.js';
 
 // ── Per-school rate limit ─────────────────────────────────────────────────────
 // Limits each school tenant to SCHOOL_RATE_LIMIT requests per 60-second window.
@@ -131,6 +132,7 @@ export const protect = async (req, res, next) => {
   }
 
   req.user = user;
+  attachAutoAudit(req, res);
 
   // Per-school rate limiting — only for school-scoped users (not superadmin)
   if (user.schoolId) {

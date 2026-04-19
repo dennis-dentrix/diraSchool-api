@@ -16,6 +16,7 @@ import {
 } from '../../services/email.service.js';
 import { emailQueue } from '../../jobs/queues.js';
 import logger from '../../config/logger.js';
+import { logAction } from '../../utils/auditLogger.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -240,6 +241,11 @@ export const login = asyncHandler(async (req, res) => {
 
   const authUser = await buildAuthUser(user);
 
+  logAction(
+    { user, ip: req.ip, headers: req.headers },
+    { action: 'login', resource: 'Auth', meta: { method: 'password' } }
+  );
+
   return sendSuccess(res, {
     user: authUser,
     mustChangePassword: user.mustChangePassword,
@@ -257,6 +263,9 @@ export const logout = asyncHandler(async (req, res) => {
     expires: new Date(0),
     domain: getCookieDomain(),
   });
+  if (req.user) {
+    logAction(req, { action: 'logout', resource: 'Auth' });
+  }
   return sendSuccess(res, { message: 'Logged out successfully.' });
 });
 

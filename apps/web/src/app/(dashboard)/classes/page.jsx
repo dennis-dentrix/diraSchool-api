@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, BookOpen, Users, MoreHorizontal, ChevronRight, GraduationCap, Pencil, UserPlus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { classesApi, usersApi, studentsApi, getErrorMessage } from '@/lib/api';
+import { classesApi, usersApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { LEVEL_CATEGORIES, ACADEMIC_YEARS } from '@/lib/constants';
 import { capitalize } from '@/lib/utils';
@@ -24,6 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRouter } from 'next/navigation';
 
 const schema = z.object({
@@ -50,6 +51,8 @@ export default function ClassesPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const adminUser = isAdmin(user);
+  const canManageEnrollmentPromotion =
+    adminUser || ['secretary', 'accountant'].includes(user?.role);
 
   const [open, setOpen] = useState(false);
   const [selectedClass, setSelectedClass] = useState(null);
@@ -84,16 +87,38 @@ export default function ClassesPage() {
     enabled: adminUser,
   });
 
-  const { data: classStudentsData, isLoading: studentsLoading } = useQuery({
-    queryKey: ['class-students', selectedClass?._id],
+  const { data: classDetailData, isLoading: studentsLoading } = useQuery({
+    queryKey: ['class-detail', selectedClass?._id],
     queryFn: async () => {
-      const res = await studentsApi.list({ classId: selectedClass._id, limit: 200 });
+      const res = await classesApi.get(selectedClass._id);
       return res.data;
     },
     enabled: !!selectedClass?._id,
   });
 
-  const classStudents = classStudentsData?.students ?? classStudentsData?.data ?? [];
+  const classStudents = classDetailData?.students ?? classDetailData?.data?.students ?? [];
+  const parentRows = useMemo(
+    () => classStudents.map((student) => {
+      const linkedParents = Array.isArray(student.parentIds) ? student.parentIds : [];
+      const guardians = Array.isArray(student.guardians) ? student.guardians : [];
+      const contacts = linkedParents.length > 0
+        ? linkedParents.map((p) => ({
+          name: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || '—',
+          phone: p.phone ?? '—',
+        }))
+        : guardians.map((g) => ({
+          name: `${g.firstName ?? ''} ${g.lastName ?? ''}`.trim() || '—',
+          phone: g.phone ?? '—',
+        }));
+      return {
+        studentId: student._id,
+        studentName: `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || '—',
+        admissionNumber: student.admissionNumber ?? '—',
+        contacts: contacts.length > 0 ? contacts : [{ name: '—', phone: '—' }],
+      };
+    }),
+    [classStudents]
+  );
 
   const { mutate: createClass, isPending } = useMutation({
     mutationFn: (data) => classesApi.create(data),
@@ -227,7 +252,7 @@ export default function ClassesPage() {
                     <p className="text-xs text-muted-foreground mt-1">{cls.term} · {cls.academicYear}</p>
                   </div>
                   <div className="flex items-center gap-1 -mt-1 -mr-1">
-                    {adminUser && (
+                    {(adminUser || canManageEnrollmentPromotion) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -240,12 +265,16 @@ export default function ClassesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={(e) => openEdit(cls, e)}
-                          >
-                            <Pencil className="h-3.5 w-3.5 mr-2" /> Edit class
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
+                          {adminUser && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={(e) => openEdit(cls, e)}
+                              >
+                                <Pencil className="h-3.5 w-3.5 mr-2" /> Edit class
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           <DropdownMenuItem
                             onClick={(e) => {
                               e.stopPropagation();
@@ -254,20 +283,24 @@ export default function ClassesPage() {
                           >
                             <GraduationCap className="h-3.5 w-3.5 mr-2" /> Promote students
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openConfirm(
-                                'Delete class?',
-                                'This will permanently remove the class and cannot be undone.',
-                                () => deleteClass(cls._id),
-                              );
-                            }}
-                          >
-                            Delete class
-                          </DropdownMenuItem>
+                          {adminUser && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openConfirm(
+                                    'Delete class?',
+                                    'This will permanently remove the class and cannot be undone.',
+                                    () => deleteClass(cls._id),
+                                  );
+                                }}
+                              >
+                                Delete class
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
@@ -325,7 +358,7 @@ export default function ClassesPage() {
               </div>
 
               {/* Action buttons */}
-              {adminUser && (
+              {canManageEnrollmentPromotion && (
                 <div className="flex gap-2 mb-5">
                   <Button
                     size="sm"
@@ -351,36 +384,81 @@ export default function ClassesPage() {
 
               {/* Student list */}
               <div>
-                <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <GraduationCap className="h-4 w-4" /> Students
-                </h4>
-                {studentsLoading ? (
-                  <div className="space-y-2">
-                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
-                  </div>
-                ) : classStudents.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No students enrolled in this class</p>
-                ) : (
-                  <div className="divide-y rounded-md border overflow-hidden">
-                    {classStudents.map((s, idx) => (
-                      <div key={s._id} className="flex items-center justify-between px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}</span>
-                          <div>
-                            <p className="text-sm font-medium">{s.firstName} {s.lastName}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{s.admissionNumber}</p>
-                          </div>
-                        </div>
-                        <Badge
-                          variant={s.status === 'active' ? 'default' : 'secondary'}
-                          className="text-xs capitalize"
-                        >
-                          {capitalize(s.status ?? 'active')}
-                        </Badge>
+                <Tabs defaultValue="students" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="students">Students</TabsTrigger>
+                    <TabsTrigger value="parents">Parents</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="students" className="mt-3">
+                    <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4" /> Students
+                    </h4>
+                    {studentsLoading ? (
+                      <div className="space-y-2">
+                        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
                       </div>
-                    ))}
-                  </div>
-                )}
+                    ) : classStudents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">No students enrolled in this class</p>
+                    ) : (
+                      <div className="divide-y rounded-md border overflow-hidden">
+                        {classStudents.map((s, idx) => (
+                          <div key={s._id} className="flex items-center justify-between px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}</span>
+                              <div>
+                                <p className="text-sm font-medium">{s.firstName} {s.lastName}</p>
+                                <p className="text-xs text-muted-foreground font-mono">{s.admissionNumber}</p>
+                              </div>
+                            </div>
+                            <Badge
+                              variant={s.status === 'active' ? 'default' : 'secondary'}
+                              className="text-xs capitalize"
+                            >
+                              {capitalize(s.status ?? 'active')}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="parents" className="mt-3">
+                    <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                      <Users className="h-4 w-4" /> Parent Contacts
+                    </h4>
+                    {studentsLoading ? (
+                      <div className="space-y-2">
+                        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
+                      </div>
+                    ) : parentRows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">No parent contacts found for this class</p>
+                    ) : (
+                      <div className="divide-y rounded-md border overflow-hidden">
+                        {parentRows.map((row, idx) => (
+                          <div key={row.studentId} className="px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5">
+                                <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}</span>
+                                <div>
+                                  <p className="text-sm font-medium">{row.studentName}</p>
+                                  <p className="text-xs text-muted-foreground font-mono">{row.admissionNumber}</p>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-1.5 space-y-1 pl-7">
+                              {row.contacts.map((c, i) => (
+                                <p key={`${row.studentId}-${i}`} className="text-xs text-muted-foreground">
+                                  {c.name} · {c.phone || '—'}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </div>
             </>
           )}

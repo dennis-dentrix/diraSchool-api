@@ -33,8 +33,16 @@ router.get('/', canRead, listStudents);
 router.get('/import/:jobId/status', canRead, getImportStatus);
 router.get('/:id', canRead, getStudent);
 
-// Write operations: admin roles only
-router.post('/', adminOnly, validateEnrollStudent, enrollStudent);
+// Enroll permissions: admins + secretary + accountant
+router.post(
+  '/',
+  authorize(
+    ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
+    ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT
+  ),
+  validateEnrollStudent,
+  enrollStudent
+);
 router.post('/import', adminOnly, requireFeature(PLAN_FEATURES.BULK_IMPORT), uploadCsv, importStudents);
 router.patch('/:id', adminOnly, validateUpdateStudent, updateStudent);
 router.post('/:id/transfer', adminOnly, validateTransferStudent, transferStudent);

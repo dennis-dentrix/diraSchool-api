@@ -1,6 +1,7 @@
 {
-  "/(dashboard)/timetable/page": "app/(dashboard)/timetable/page.js",
-  "/(dashboard)/transport/page": "app/(dashboard)/transport/page.js",
+  "/(dashboard)/audit-logs/page": "app/(dashboard)/audit-logs/page.js",
   "/(dashboard)/settings/page": "app/(dashboard)/settings/page.js",
-  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js"
+  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/classes/page": "app/(dashboard)/classes/page.js",
+  "/(dashboard)/students/page": "app/(dashboard)/students/page.js"
 }

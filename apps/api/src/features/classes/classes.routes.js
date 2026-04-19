@@ -22,7 +22,7 @@ router.get('/my-class', authorize(ROLES.TEACHER), myClass);
 // Read access: admins + teachers can see class list (teacher sees their own in practice)
 const canRead = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.TEACHER
+  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT, ROLES.TEACHER
 );
 
 router.get('/', canRead, listClasses);
@@ -32,6 +32,14 @@ router.get('/:id', canRead, getClass);
 router.post('/', adminOnly, validateCreateClass, createClass);
 router.patch('/:id', adminOnly, validateUpdateClass, updateClass);
 router.delete('/:id', adminOnly, deleteClass);
-router.post('/:id/promote', adminOnly, validatePromoteClass, promoteClass);
+router.post(
+  '/:id/promote',
+  authorize(
+    ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
+    ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT
+  ),
+  validatePromoteClass,
+  promoteClass
+);
 
 export default router;

@@ -105,7 +105,7 @@ async function fetchClassDetails(cls) {
     schoolId: cls.schoolId,
     status:   STUDENT_STATUSES.ACTIVE,
   })
-    .select('admissionNumber firstName lastName gender dateOfBirth status parentIds')
+    .select('admissionNumber firstName lastName gender dateOfBirth status parentIds guardians')
     .populate('parentIds', 'firstName lastName phone email')
     .lean();
 

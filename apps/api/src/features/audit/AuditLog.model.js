@@ -1,6 +1,4 @@
 import mongoose from 'mongoose';
-import { AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
-
 const auditLogSchema = new mongoose.Schema(
   {
     schoolId: {
@@ -18,13 +16,11 @@ const auditLogSchema = new mongoose.Schema(
     userRole: { type: String, trim: true },
     action: {
       type: String,
-      enum: Object.values(AUDIT_ACTIONS),
       required: true,
       index: true,
     },
     resource: {
       type: String,
-      enum: Object.values(AUDIT_RESOURCES),
       required: true,
       index: true,
     },
