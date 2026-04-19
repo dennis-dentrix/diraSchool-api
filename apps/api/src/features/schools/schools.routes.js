@@ -2,9 +2,10 @@ import { Router } from 'express';
 import {
   protect,
   blockIfMustChangePassword,
-  adminOnly,
+  authorize,
   superadminOnly,
 } from '../../middleware/auth.js';
+import { ROLES } from '../../constants/index.js';
 import {
   validateCreateSchool,
   validateUpdateMySchool,
@@ -31,8 +32,12 @@ router.use(protect, blockIfMustChangePassword);
 
 router
   .route('/me')
-  .get(adminOnly, getMySchool)
-  .patch(adminOnly, validateUpdateMySchool, updateMySchool);
+  .get(getMySchool)
+  .patch(
+    authorize(ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER),
+    validateUpdateMySchool,
+    updateMySchool
+  );
 
 // ── Superadmin routes (/api/v1/schools) ──────────────────────────────────────
 

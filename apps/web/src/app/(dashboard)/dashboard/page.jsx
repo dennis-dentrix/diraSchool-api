@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   GraduationCap, Users, CreditCard, ClipboardList,
@@ -10,14 +11,16 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { dashboardApi, feesApi, classesApi, subjectsApi, attendanceApi } from '@/lib/api';
+import { dashboardApi, feesApi, classesApi, subjectsApi, attendanceApi, timetableApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useRouter } from 'next/navigation';
 import { StatCard } from '@/components/shared/stat-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { TERMS, CURRENT_YEAR, ACADEMIC_YEARS } from '@/lib/constants';
 import Link from 'next/link';
 
 const ADMIN_ROLES   = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
@@ -79,6 +82,7 @@ function PendingStaffBanner({ count }) {
 
 // ── Teacher Dashboard ──────────────────────────────────────────────────────────
 const TODAY_ISO = new Date().toISOString().split('T')[0];
+const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
 function getWeekStart() {
   const now = new Date();
@@ -87,8 +91,25 @@ function getWeekStart() {
   mon.setDate(now.getDate() + diff);
   return mon.toISOString().split('T')[0];
 }
+const normalizeDay = (value) => {
+  const day = String(value ?? '').toLowerCase();
+  return DAYS.includes(day) ? day : DAYS[0];
+};
+const dayLabel = (value) => {
+  const day = normalizeDay(value);
+  return `${day[0].toUpperCase()}${day.slice(1)}`;
+};
+const firstArray = (...candidates) => {
+  for (const value of candidates) {
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+};
 
 function TeacherDashboard({ user }) {
+  const [selectedTerm, setSelectedTerm] = useState(TERMS[0]);
+  const [selectedYear, setSelectedYear] = useState(String(CURRENT_YEAR));
+
   const { data: myClassData, isLoading: classLoading } = useQuery({
     queryKey: ['my-class'],
     queryFn: async () => { const res = await classesApi.myClass(); return res.data; },
@@ -102,6 +123,41 @@ function TeacherDashboard({ user }) {
 
   const myClass    = myClassData?.data ?? myClassData;
   const mySubjects = mySubjectsData?.data ?? mySubjectsData ?? [];
+
+  const { data: myTimetableData, isLoading: timetableLoading } = useQuery({
+    queryKey: ['teacher-dashboard-timetable', user?._id, selectedTerm, selectedYear],
+    queryFn: async () => {
+      const res = await timetableApi.list({
+        teacherId: user?._id,
+        term: selectedTerm,
+        academicYear: selectedYear,
+        limit: 50,
+      });
+      return firstArray(
+        res.data?.data,
+        res.data?.timetables,
+        res.data?.data?.timetables,
+      );
+    },
+    enabled: !!user?._id,
+  });
+
+  const mySlots = useMemo(() => {
+    if (!myTimetableData) return [];
+    const slots = [];
+    for (const tt of myTimetableData) {
+      const className = typeof tt.classId === 'object'
+        ? `${tt.classId.name}${tt.classId.stream ? ` ${tt.classId.stream}` : ''}`
+        : '—';
+      for (const slot of tt.slots ?? []) {
+        const tid = typeof slot.teacherId === 'object' ? slot.teacherId?._id : slot.teacherId;
+        if (String(tid) === String(user?._id)) slots.push({ ...slot, className });
+      }
+    }
+    return slots.sort(
+      (a, b) => DAYS.indexOf(normalizeDay(a.day)) - DAYS.indexOf(normalizeDay(b.day)) || a.period - b.period
+    );
+  }, [myTimetableData, user?._id]);
 
   // Fetch weekly attendance for teacher's own class
   const { data: weekAttData, isLoading: attendanceLoading } = useQuery({
@@ -163,13 +219,11 @@ function TeacherDashboard({ user }) {
       {/* Stat row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="rounded-xl border p-4 space-y-1 bg-card hover:shadow-sm transition-shadow">
-          <p className="text-xs text-muted-foreground font-medium">My Class</p>
-          {classLoading ? <Skeleton className="h-7 w-20" /> : (
-            <p className="text-xl font-bold">
-              {myClass ? `${myClass.name}${myClass.stream ? ` ${myClass.stream}` : ''}` : '—'}
-            </p>
+          <p className="text-xs text-muted-foreground font-medium">My Timetable</p>
+          {timetableLoading ? <Skeleton className="h-7 w-20" /> : (
+            <p className="text-xl font-bold">{mySlots.length}</p>
           )}
-          <p className="text-xs text-muted-foreground">{myClass ? `${myClass.studentCount ?? 0} students` : 'Not assigned'}</p>
+          <p className="text-xs text-muted-foreground">lesson{mySlots.length !== 1 ? 's' : ''} in selected term</p>
         </div>
 
         <div className="rounded-xl border p-4 space-y-1 bg-card hover:shadow-sm transition-shadow">
@@ -211,59 +265,64 @@ function TeacherDashboard({ user }) {
 
       {/* Main content row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* My Class detail */}
+        {/* My Timetable detail */}
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-blue-600" /> My Class
+              <BookOpen className="h-4 w-4 text-blue-600" /> My Timetable
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {classLoading ? (
-              <Skeleton className="h-20" />
-            ) : myClass ? (
+            <div className="flex flex-wrap gap-2 pb-3">
+              <Select value={selectedTerm} onValueChange={setSelectedTerm}>
+                <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+
+            {timetableLoading ? (
+              <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+            ) : mySlots.length ? (
               <div className="space-y-3">
-                <div>
-                  <p className="text-xl font-bold">{myClass.name}{myClass.stream ? ` ${myClass.stream}` : ''}</p>
-                  <p className="text-sm text-muted-foreground">{myClass.levelCategory} · {myClass.term} {myClass.academicYear}</p>
+                <div className="divide-y">
+                  {mySlots.slice(0, 8).map((slot, i) => {
+                    const subject = typeof slot.subjectId === 'object' ? slot.subjectId : null;
+                    return (
+                      <div key={`${slot.day}-${slot.period}-${i}`} className="flex items-center justify-between py-2.5">
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className="text-xs w-24 justify-center shrink-0">
+                            {dayLabel(slot.day).slice(0, 3)} P{slot.period}
+                          </Badge>
+                          <div>
+                            <p className="text-sm font-medium">{subject?.name ?? '—'}</p>
+                            <p className="text-xs text-muted-foreground">{slot.className}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {slot.startTime} – {slot.endTime}
+                          {slot.room ? ` · ${slot.room}` : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="flex items-center justify-between pt-1 border-t">
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    <span>{myClass.studentCount ?? 0} enrolled students</span>
-                  </div>
-                  <Link href="/classes" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
-                    View class <ChevronRight className="h-3 w-3" />
+                  <p className="text-xs text-muted-foreground">
+                    {mySlots.length} lesson{mySlots.length !== 1 ? 's' : ''} total
+                  </p>
+                  <Link href="/timetable" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+                    Open full schedule <ChevronRight className="h-3 w-3" />
                   </Link>
                 </div>
-                {/* Weekly attendance bar */}
-                {attendanceRate !== null && (
-                  <div className="space-y-1 pt-1">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>This week&apos;s attendance</span>
-                      <span className="font-semibold text-foreground">{attendanceRate}%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={`h-2 rounded-full transition-all ${attendanceRate >= 80 ? 'bg-green-500' : attendanceRate >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
-                        style={{ width: `${attendanceRate}%` }}
-                      />
-                    </div>
-                    <div className="flex gap-3 text-xs text-muted-foreground pt-0.5">
-                      <span className="text-green-700">{weekStats.present} present</span>
-                      <span className="text-red-700">{weekStats.absent} absent</span>
-                      {weekStats.late > 0 && <span className="text-amber-700">{weekStats.late} late</span>}
-                    </div>
-                  </div>
-                )}
-                {attendanceRate === null && !attendanceLoading && myClass && (
-                  <p className="text-xs text-muted-foreground pt-1">No attendance taken this week yet.</p>
-                )}
               </div>
             ) : (
               <div className="py-2">
-                <p className="text-sm text-muted-foreground">No class assigned yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Contact your administrator to be assigned a class</p>
+                <p className="text-sm text-muted-foreground">No lessons assigned for {selectedTerm} {selectedYear}</p>
+                <p className="text-xs text-muted-foreground mt-1">Use Timetable → My Schedule to view your full calendar</p>
               </div>
             )}
           </CardContent>

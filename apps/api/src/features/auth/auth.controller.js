@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { URL } from 'node:url';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import School from '../schools/School.model.js';
@@ -48,6 +49,34 @@ const attachCookie = (res, token) => {
 
 const enqueueEmail = async (type, payload) =>
   emailQueue.add(type, { type, payload });
+
+const SCHOOL_SAFE_FIELDS =
+  'name email phone county constituency registrationNumber address isActive subscriptionStatus planTier trialExpiry';
+
+const buildAuthUser = async (userDoc) => {
+  if (!userDoc) return null;
+
+  const user = typeof userDoc.toSafeObject === 'function'
+    ? userDoc.toSafeObject()
+    : (typeof userDoc.toObject === 'function' ? userDoc.toObject() : { ...userDoc });
+
+  delete user.password;
+
+  if (!user.schoolId || user.role === ROLES.SUPERADMIN) {
+    user.school = null;
+    return user;
+  }
+
+  if (typeof user.schoolId === 'object' && user.schoolId !== null && user.schoolId.name) {
+    user.school = user.schoolId;
+    user.schoolId = user.schoolId._id ?? user.schoolId;
+    return user;
+  }
+
+  const school = await School.findById(user.schoolId).select(SCHOOL_SAFE_FIELDS).lean();
+  user.school = school ?? null;
+  return user;
+};
 
 // ── Controllers ───────────────────────────────────────────────────────────────
 
@@ -209,8 +238,10 @@ export const login = asyncHandler(async (req, res) => {
   const token = signToken(user._id);
   attachCookie(res, token);
 
+  const authUser = await buildAuthUser(user);
+
   return sendSuccess(res, {
-    user: user.toSafeObject(),
+    user: authUser,
     mustChangePassword: user.mustChangePassword,
   });
 });
@@ -236,7 +267,8 @@ export const logout = asyncHandler(async (req, res) => {
  */
 export const getMe = asyncHandler(async (req, res) => {
   // req.user is already loaded by the protect middleware
-  return sendSuccess(res, { user: req.user });
+  const authUser = await buildAuthUser(req.user);
+  return sendSuccess(res, { user: authUser });
 });
 
 /**
@@ -328,9 +360,11 @@ export const resetPassword = asyncHandler(async (req, res) => {
   const jwtToken = signToken(user._id);
   attachCookie(res, jwtToken);
 
+  const authUser = await buildAuthUser(user);
+
   return sendSuccess(res, {
     message: 'Password reset successfully. You are now logged in.',
-    user: user.toSafeObject(),
+    user: authUser,
   });
 });
 
@@ -379,9 +413,11 @@ export const acceptInvite = asyncHandler(async (req, res) => {
   const jwtToken = signToken(user._id);
   attachCookie(res, jwtToken);
 
+  const authUser = await buildAuthUser(user);
+
   return sendSuccess(res, {
     message: 'Your account is set up. Welcome!',
-    user: user.toSafeObject(),
+    user: authUser,
   });
 });
 
@@ -437,9 +473,11 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   const jwtToken = signToken(user._id);
   attachCookie(res, jwtToken);
 
+  const authUser = await buildAuthUser(user);
+
   return sendSuccess(res, {
     message: 'Email verified! Welcome to Diraschool.',
-    user: user.toSafeObject(),
+    user: authUser,
   });
 });
 
@@ -473,9 +511,11 @@ export const verifyEmailByToken = asyncHandler(async (req, res) => {
   const jwtToken = signToken(user._id);
   attachCookie(res, jwtToken);
 
+  const authUser = await buildAuthUser(user);
+
   return sendSuccess(res, {
     message: 'Email verified! Welcome to Diraschool.',
-    user: user.toSafeObject(),
+    user: authUser,
   });
 });
 

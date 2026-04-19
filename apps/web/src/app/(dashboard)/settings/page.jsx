@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Save, Plus, Trash2, Pencil, X, CalendarDays, School, Info } from 'lucide-react';
 import { useState } from 'react';
 import { settingsApi, schoolsApi, getErrorMessage } from '@/lib/api';
-import { useAuthStore, isAdmin } from '@/store/auth.store';
+import { useAuthStore } from '@/store/auth.store';
 import { ACADEMIC_YEARS } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
@@ -32,6 +32,7 @@ function InfoRow({ label, value }) {
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
+  const canEditSchoolDetails = ['school_admin', 'director', 'headteacher'].includes(user?.role);
   const queryClient = useQueryClient();
   const [editing, setEditing]       = useState(false);
   const [form, setForm]             = useState(null);
@@ -106,15 +107,6 @@ export default function SettingsPage() {
 
   const cancelEditing = () => { setEditing(false); setForm(null); };
 
-  if (!isAdmin(user)) {
-    return (
-      <div className="text-center py-16 text-muted-foreground">
-        <p className="font-medium">Access denied</p>
-        <p className="text-sm mt-1">Only school administrators can manage settings.</p>
-      </div>
-    );
-  }
-
   if (isLoading) {
     return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-36" />)}</div>;
   }
@@ -125,13 +117,15 @@ export default function SettingsPage() {
         title="School Settings"
         description="Academic year, school information, and holidays"
       >
-        {editing ? (
+        {canEditSchoolDetails && editing ? (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={cancelEditing}><X className="h-4 w-4" /> Cancel</Button>
             <Button size="sm" onClick={() => saveSettings()} disabled={isPending}><Save className="h-4 w-4" /> Save Changes</Button>
           </div>
-        ) : (
+        ) : canEditSchoolDetails ? (
           <Button size="sm" variant="outline" onClick={startEditing}><Pencil className="h-4 w-4" /> Edit Settings</Button>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">View only</Badge>
         )}
       </PageHeader>
 
@@ -143,15 +137,17 @@ export default function SettingsPage() {
               <School className="h-4 w-4 text-muted-foreground" />
               <CardTitle className="text-base">School Profile</CardTitle>
             </div>
-            {!editingProfile ? (
+            {!editingProfile && canEditSchoolDetails ? (
               <Button size="sm" variant="outline" onClick={() => { setProfileForm({ name: schoolData?.name ?? '', phone: schoolData?.phone ?? '', county: schoolData?.county ?? '', constituency: schoolData?.constituency ?? '', registrationNumber: schoolData?.registrationNumber ?? '', address: schoolData?.address ?? '' }); setEditingProfile(true); }}>
                 <Pencil className="h-4 w-4" /> Edit
               </Button>
-            ) : (
+            ) : editingProfile && canEditSchoolDetails ? (
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => { setEditingProfile(false); setProfileForm(null); }}><X className="h-4 w-4" /> Cancel</Button>
                 <Button size="sm" onClick={() => saveProfile(Object.fromEntries(Object.entries(profileForm).filter(([, v]) => v !== '')))} disabled={savingProfile}><Save className="h-4 w-4" /> Save</Button>
               </div>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground">View only</Badge>
             )}
           </div>
           <CardDescription>Location, contact, and registration details.</CardDescription>
@@ -295,6 +291,7 @@ export default function SettingsPage() {
                   variant="ghost" size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
                   onClick={() => setConfirmDialog({ open: true, holidayId: h._id })}
+                  disabled={!canEditSchoolDetails}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -309,18 +306,21 @@ export default function SettingsPage() {
           {/* Add new */}
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Add Holiday</p>
+            {!canEditSchoolDetails && (
+              <p className="text-xs text-muted-foreground mb-2">Only school admin, director, or headteacher can edit holidays.</p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label>Name</Label>
-                <Input value={newHoliday.name} onChange={(e) => setNewHoliday((p) => ({ ...p, name: e.target.value }))} placeholder="Madaraka Day" />
+                <Input value={newHoliday.name} onChange={(e) => setNewHoliday((p) => ({ ...p, name: e.target.value }))} placeholder="Madaraka Day" disabled={!canEditSchoolDetails} />
               </div>
               <div className="space-y-1.5">
                 <Label>Date</Label>
-                <Input type="date" value={newHoliday.date} onChange={(e) => setNewHoliday((p) => ({ ...p, date: e.target.value }))} />
+                <Input type="date" value={newHoliday.date} onChange={(e) => setNewHoliday((p) => ({ ...p, date: e.target.value }))} disabled={!canEditSchoolDetails} />
               </div>
               <div className="space-y-1.5">
                 <Label>&nbsp;</Label>
-                <Button className="w-full" variant="outline" onClick={() => addHoliday()} disabled={!newHoliday.name || !newHoliday.date || addingHoliday}>
+                <Button className="w-full" variant="outline" onClick={() => addHoliday()} disabled={!canEditSchoolDetails || !newHoliday.name || !newHoliday.date || addingHoliday}>
                   <Plus className="h-4 w-4" /> Add
                 </Button>
               </div>
@@ -330,7 +330,7 @@ export default function SettingsPage() {
       </Card>
 
       {/* ── Confirm delete ────────────────────────────────────────────────────── */}
-      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}>
+      <AlertDialog open={confirmDialog.open && canEditSchoolDetails} onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove holiday?</AlertDialogTitle>

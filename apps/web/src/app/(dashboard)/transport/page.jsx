@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Bus, MoreHorizontal, Pencil, Users, Trash2, UserPlus, X, GripVertical, Search, Printer, Eye } from 'lucide-react';
-import { transportApi, studentsApi, getErrorMessage } from '@/lib/api';
+import { transportApi, studentsApi, schoolsApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -294,6 +294,15 @@ function AssignStudentsDialog({ open, onClose, route }) {
 }
 
 function ViewStudentsDialog({ open, onClose, route }) {
+  const { data: schoolData } = useQuery({
+    queryKey: ['school-me'],
+    queryFn: async () => {
+      const res = await schoolsApi.me();
+      return res.data?.school ?? res.data?.data ?? res.data;
+    },
+    enabled: open,
+  });
+
   const { data: routeDetail, isLoading } = useQuery({
     queryKey: ['transport-route-students', route?._id],
     queryFn: async () => {
@@ -313,6 +322,22 @@ function ViewStudentsDialog({ open, onClose, route }) {
     [routeDetail]
   );
 
+  const routeMeta = routeDetail?.route ?? route ?? {};
+  const driverName = routeMeta?.driverName || '—';
+  const driverPhone = routeMeta?.driverPhone || '—';
+  const schoolName = schoolData?.name || 'School';
+  const schoolPhone = schoolData?.phone || '';
+  const schoolAddress = schoolData?.address || '';
+  const reportDate = new Date().toLocaleString();
+
+  const escapeHtml = (value) =>
+    String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+
   const printList = () => {
     if (!route) return;
     const rows = students.map((s, i) => {
@@ -324,37 +349,51 @@ function ViewStudentsDialog({ open, onClose, route }) {
       const assignedAt = s.transportAssignment?.assignedAt
         ? new Date(s.transportAssignment.assignedAt).toLocaleDateString()
         : '—';
-      const driver = s.transportAssignment?.driverName || route.driverName || '—';
-      const driverPhone = s.transportAssignment?.driverPhone || route.driverPhone || '—';
       return `
         <tr>
           <td>${i + 1}</td>
-          <td>${`${s.firstName ?? ''} ${s.lastName ?? ''}`.trim() || '—'}</td>
-          <td>${cls || '—'}</td>
-          <td>${s.admissionNumber ?? '—'}</td>
-          <td>${parentName}</td>
-          <td>${parentPhone}</td>
-          <td>${dropOff}</td>
-          <td>${driver}</td>
-          <td>${driverPhone}</td>
-          <td>${assignedAt}</td>
+          <td>${escapeHtml(`${s.firstName ?? ''} ${s.lastName ?? ''}`.trim() || '—')}</td>
+          <td>${escapeHtml(cls || '—')}</td>
+          <td>${escapeHtml(s.admissionNumber ?? '—')}</td>
+          <td>${escapeHtml(parentName)}</td>
+          <td>${escapeHtml(parentPhone)}</td>
+          <td>${escapeHtml(dropOff)}</td>
+          <td>${escapeHtml(assignedAt)}</td>
         </tr>
       `;
     }).join('');
 
     const win = window.open('', '', 'width=1100,height=800');
     if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><title>Transport Students - ${route.name}</title><style>
+    win.document.write(`<!DOCTYPE html><html><head><title>Transport Students - ${escapeHtml(routeMeta?.name ?? route?.name ?? 'Route')}</title><style>
       body{font-family:Arial,sans-serif;padding:20px;color:#111}
-      h1{font-size:20px;margin:0 0 6px}
-      p{margin:0 0 14px;color:#555;font-size:12px}
+      h1{font-size:20px;margin:0}
+      .meta{color:#555;font-size:12px;margin:2px 0}
+      .header{border:1px solid #dfe3e8;border-radius:8px;padding:12px 14px;margin:0 0 14px;display:grid;grid-template-columns:1.3fr 1fr;gap:12px}
+      .box-title{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:0 0 4px}
+      .box-val{font-size:13px;margin:0 0 2px}
       table{width:100%;border-collapse:collapse;font-size:12px}
       th,td{border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top}
       th{background:#f3f4f6;font-weight:700}
       @media print { body{padding:0} }
     </style></head><body>
-      <h1>Transport Students List - ${route.name}</h1>
-      <p>Generated on ${new Date().toLocaleString()}</p>
+      <h1>Transport Students List</h1>
+      <p class="meta">Generated on ${escapeHtml(reportDate)}</p>
+      <div class="header">
+        <div>
+          <p class="box-title">School Details</p>
+          <p class="box-val"><strong>${escapeHtml(schoolName)}</strong></p>
+          ${schoolPhone ? `<p class="box-val">Phone: ${escapeHtml(schoolPhone)}</p>` : ''}
+          ${schoolAddress ? `<p class="box-val">Address: ${escapeHtml(schoolAddress)}</p>` : ''}
+        </div>
+        <div>
+          <p class="box-title">Route & Driver</p>
+          <p class="box-val"><strong>Route:</strong> ${escapeHtml(routeMeta?.name ?? '—')}</p>
+          <p class="box-val"><strong>Driver:</strong> ${escapeHtml(driverName)}</p>
+          <p class="box-val"><strong>Contact:</strong> ${escapeHtml(driverPhone)}</p>
+          ${routeMeta?.vehicleReg ? `<p class="box-val"><strong>Vehicle:</strong> ${escapeHtml(routeMeta.vehicleReg)}</p>` : ''}
+        </div>
+      </div>
       <table>
         <thead>
           <tr>
@@ -365,12 +404,10 @@ function ViewStudentsDialog({ open, onClose, route }) {
             <th>Parent Name</th>
             <th>Parent Phone</th>
             <th>Drop-off Point</th>
-            <th>Driver</th>
-            <th>Driver Contact</th>
             <th>Assigned Date</th>
           </tr>
         </thead>
-        <tbody>${rows || '<tr><td colspan="10">No students assigned</td></tr>'}</tbody>
+        <tbody>${rows || '<tr><td colspan="8">No students assigned</td></tr>'}</tbody>
       </table>
     </body></html>`);
     win.document.close();
@@ -384,6 +421,21 @@ function ViewStudentsDialog({ open, onClose, route }) {
         <DialogHeader>
           <DialogTitle>Students on Route — {route?.name}</DialogTitle>
         </DialogHeader>
+        <div className="rounded-md border bg-muted/20 p-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 font-semibold">School Details</p>
+            <p className="font-semibold">{schoolName}</p>
+            {schoolPhone && <p className="text-muted-foreground">Phone: {schoolPhone}</p>}
+            {schoolAddress && <p className="text-muted-foreground">{schoolAddress}</p>}
+          </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 font-semibold">Route & Driver</p>
+            <p><span className="text-muted-foreground">Route:</span> <span className="font-medium">{routeMeta?.name ?? '—'}</span></p>
+            <p><span className="text-muted-foreground">Driver:</span> <span className="font-medium">{driverName}</span></p>
+            <p><span className="text-muted-foreground">Contact:</span> <span className="font-medium">{driverPhone}</span></p>
+            {routeMeta?.vehicleReg && <p><span className="text-muted-foreground">Vehicle:</span> <span className="font-mono">{routeMeta.vehicleReg}</span></p>}
+          </div>
+        </div>
         <div className="flex-1 overflow-auto border rounded-md">
           {isLoading ? (
             <div className="p-4 space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
@@ -400,8 +452,6 @@ function ViewStudentsDialog({ open, onClose, route }) {
                   <th className="text-left px-3 py-2 border-b">Parent Name</th>
                   <th className="text-left px-3 py-2 border-b">Parent Phone</th>
                   <th className="text-left px-3 py-2 border-b">Drop-off Point</th>
-                  <th className="text-left px-3 py-2 border-b">Driver</th>
-                  <th className="text-left px-3 py-2 border-b">Driver Contact</th>
                   <th className="text-left px-3 py-2 border-b">Assigned Date</th>
                 </tr>
               </thead>
@@ -412,8 +462,6 @@ function ViewStudentsDialog({ open, onClose, route }) {
                     : '—';
                   const { parentName, parentPhone } = getParentContact(s);
                   const dropOff = s.transportAssignment?.dropOffPoint ?? '—';
-                  const driver = s.transportAssignment?.driverName || route?.driverName || '—';
-                  const driverPhone = s.transportAssignment?.driverPhone || route?.driverPhone || '—';
                   const assignedAt = s.transportAssignment?.assignedAt
                     ? new Date(s.transportAssignment.assignedAt).toLocaleDateString()
                     : '—';
@@ -426,8 +474,6 @@ function ViewStudentsDialog({ open, onClose, route }) {
                       <td className="px-3 py-2 border-b">{parentName}</td>
                       <td className="px-3 py-2 border-b">{parentPhone}</td>
                       <td className="px-3 py-2 border-b">{dropOff}</td>
-                      <td className="px-3 py-2 border-b">{driver}</td>
-                      <td className="px-3 py-2 border-b">{driverPhone}</td>
                       <td className="px-3 py-2 border-b">{assignedAt}</td>
                     </tr>
                   );

@@ -106,7 +106,7 @@ function SlotCard({ slot, onEdit, onDelete, canEdit, showTeacher = true, showCla
 }
 
 // ── Timetable grid (period-row × day-column) ───────────────────────────────────
-function TimetableGrid({ slots, canEdit, onEdit, onDelete, showTeacher = true, showClass = false }) {
+function TimetableGrid({ slots, canEdit, onEdit, onDelete, showTeacher = true, showClass = false, canCreateTimetable = false }) {
   const periods = useMemo(() => {
     const map = new Map();
     for (const s of slots) {
@@ -156,7 +156,11 @@ function TimetableGrid({ slots, canEdit, onEdit, onDelete, showTeacher = true, s
         </div>
         <div className="flex items-center justify-center text-muted-foreground gap-2">
           <Calendar className="h-4 w-4 opacity-50" />
-          <p className="text-sm">No slots yet. Click &quot;Add Slot&quot; to start building the timetable.</p>
+          <p className="text-sm">
+            {canCreateTimetable
+              ? 'No slots yet. Click "Add Slot" to start building the timetable.'
+              : 'No timetable created yet, kindly check back later'}
+          </p>
         </div>
       </div>
     );
@@ -608,6 +612,7 @@ function ClassTimetableTab({ canWrite }) {
         <TimetableGrid
           slots={displaySlots}
           canEdit={editMode}
+          canCreateTimetable={canWrite}
           onEdit={openEditSlot}
           onDelete={deleteSlot}
         />

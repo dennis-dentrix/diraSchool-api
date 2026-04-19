@@ -26,6 +26,7 @@ export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const title = getPageTitle(pathname, user);
+  const schoolName = user?.school?.name ?? (typeof user?.schoolId === 'object' ? user?.schoolId?.name : '');
 
   // Guard: redirect unauthenticated users to login
   useEffect(() => {
@@ -117,8 +118,11 @@ export default function DashboardLayout({ children }) {
 
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header onMenuClick={() => setMobileOpen(true)} title={title} />
+        <Header onMenuClick={() => setMobileOpen(true)} title={title} schoolName={schoolName} />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          {schoolName && user?.role !== 'superadmin' && (
+            <p className="text-xs text-muted-foreground mb-3">{schoolName}</p>
+          )}
           {children}
         </main>
       </div>

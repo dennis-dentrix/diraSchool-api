@@ -18,7 +18,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getInitials } from '@/lib/utils';
 
-export function Header({ onMenuClick, title }) {
+export function Header({ onMenuClick, title, schoolName }) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const queryClient = useQueryClient();
@@ -42,8 +42,13 @@ export function Header({ onMenuClick, title }) {
       </Button>
 
       {/* Page title + global fetch indicator */}
-      <div className="flex-1 hidden sm:flex items-center gap-2.5">
-        <h1 className="text-base font-semibold tracking-tight">{title}</h1>
+      <div className="flex-1 hidden sm:flex items-center gap-2.5 min-w-0">
+        <h1 className="text-base font-semibold tracking-tight shrink-0">{title}</h1>
+        {schoolName && (
+          <span className="text-xs text-muted-foreground truncate border-l pl-2">
+            {schoolName}
+          </span>
+        )}
         {isFetching > 0 && (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         )}
@@ -71,6 +76,7 @@ export function Header({ onMenuClick, title }) {
               <div className="flex flex-col space-y-1">
                 <p className="text-sm font-medium">{user?.firstName} {user?.lastName}</p>
                 <p className="text-xs text-muted-foreground">{user?.email}</p>
+                {schoolName && <p className="text-xs text-muted-foreground truncate">{schoolName}</p>}
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />

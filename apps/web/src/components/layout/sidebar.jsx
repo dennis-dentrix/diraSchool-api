@@ -38,6 +38,7 @@ export function Sidebar({ user }) {
     : schoolNavItems.filter((item) => item.roles?.includes(user?.role));
 
   const initials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`;
+  const schoolName = user?.school?.name ?? (typeof user?.schoolId === 'object' ? user?.schoolId?.name : '');
 
   return (
     <div className="flex flex-col h-full bg-sidebar w-64 shrink-0">
@@ -52,7 +53,7 @@ export function Sidebar({ user }) {
         <div>
           <p className="text-white font-bold text-sm leading-tight tracking-tight">Diraschool</p>
           <p className="text-slate-500 text-xs mt-0.5">
-            {isSuperAdmin ? 'Super Admin' : 'School Portal'}
+            {isSuperAdmin ? 'Super Admin' : (schoolName || 'School Portal')}
           </p>
         </div>
       </div>

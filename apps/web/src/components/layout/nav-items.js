@@ -122,7 +122,7 @@ export const schoolNavItems = [
     label: 'Settings',
     href: '/settings',
     icon: Settings,
-    roles: ADMIN,
+    roles: ALL_STAFF,
   },
 ];
 
