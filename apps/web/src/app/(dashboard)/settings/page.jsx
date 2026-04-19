@@ -70,7 +70,15 @@ export default function SettingsPage() {
   });
 
   const { mutate: saveSettings, isPending } = useMutation({
-    mutationFn: () => settingsApi.update(form),
+    mutationFn: () => {
+      const payload = { ...form };
+      if (Array.isArray(payload.terms)) {
+        payload.terms = payload.terms
+          .filter((t) => t.startDate && t.endDate)
+          .map((t) => ({ name: t.name, startDate: t.startDate, endDate: t.endDate }));
+      }
+      return settingsApi.update(payload);
+    },
     onSuccess: () => {
       toast.success('Settings saved');
       queryClient.invalidateQueries({ queryKey: ['settings'] });
@@ -96,11 +104,18 @@ export default function SettingsPage() {
   });
 
   const startEditing = () => {
+    const currentTerms = Array.isArray(data?.terms) ? data.terms : [];
+    const getTerm = (name) => currentTerms.find((t) => t.name === name);
     setForm({
       principalName:      data?.principalName ?? '',
       motto:              data?.motto ?? '',
       physicalAddress:    data?.physicalAddress ?? '',
       currentAcademicYear: data?.currentAcademicYear ?? String(new Date().getFullYear()),
+      terms: ['Term 1', 'Term 2', 'Term 3'].map((name) => ({
+        name,
+        startDate: getTerm(name)?.startDate ? String(getTerm(name).startDate).slice(0, 10) : '',
+        endDate: getTerm(name)?.endDate ? String(getTerm(name).endDate).slice(0, 10) : '',
+      })),
     });
     setEditing(true);
   };
@@ -110,6 +125,21 @@ export default function SettingsPage() {
   if (isLoading) {
     return <div className="space-y-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-36" />)}</div>;
   }
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const currentTerm = (data?.terms ?? []).find((t) => {
+    const start = String(t?.startDate ?? '').slice(0, 10);
+    const end = String(t?.endDate ?? '').slice(0, 10);
+    return start && end && todayIso >= start && todayIso <= end;
+  });
+  const nextTerm = [...(data?.terms ?? [])]
+    .filter((t) => String(t?.startDate ?? '').slice(0, 10) > todayIso)
+    .sort((a, b) => String(a?.startDate ?? '').localeCompare(String(b?.startDate ?? '')))[0];
+  const todayHoliday = (data?.holidays ?? []).find((h) => String(h?.date ?? '').slice(0, 10) === todayIso);
+  const isMidterm = !!todayHoliday && /mid\s*term/i.test(`${todayHoliday?.name ?? ''} ${todayHoliday?.description ?? ''}`);
+  const schoolDayStatus = todayHoliday
+    ? (isMidterm ? `Midterm break (${todayHoliday.name})` : `Holiday (${todayHoliday.name})`)
+    : (currentTerm ? 'In session' : 'On break');
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -128,6 +158,33 @@ export default function SettingsPage() {
           <Badge variant="outline" className="text-muted-foreground">View only</Badge>
         )}
       </PageHeader>
+
+      {/* ── Calendar Summary ─────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Calendar Summary</CardTitle>
+          </div>
+          <CardDescription>Live term and school-day status based on configured dates.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <InfoRow
+            label="Current Term"
+            value={currentTerm?.name
+              ? <Badge variant="secondary">{currentTerm.name}</Badge>
+              : <span className="text-muted-foreground/70 text-xs">No active term</span>}
+          />
+          <InfoRow
+            label="Next Term Start Date"
+            value={nextTerm?.startDate ? formatDate(nextTerm.startDate) : <span className="text-muted-foreground/70 text-xs">Not set</span>}
+          />
+          <InfoRow
+            label="Today"
+            value={<Badge variant={todayHoliday ? 'destructive' : 'secondary'}>{schoolDayStatus}</Badge>}
+          />
+        </CardContent>
+      </Card>
 
       {/* ── School Profile (county, constituency, address) ───────────────────── */}
       <Card>
@@ -238,21 +295,69 @@ export default function SettingsPage() {
                     : null
                 }
               />
+              <InfoRow
+                label="Current Term"
+                value={
+                  currentTerm?.name
+                    ? <Badge variant="secondary">{currentTerm.name}</Badge>
+                    : <span className="text-muted-foreground/70 text-xs">No active term date window</span>
+                }
+              />
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* ── Term Dates ────────────────────────────────────────────────────────── */}
-      {data?.terms?.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              <CardTitle className="text-base">Term Dates</CardTitle>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">Term Dates</CardTitle>
+          </div>
+          <CardDescription>Current term is computed automatically from these date windows.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {editing && form ? (
+            <div className="space-y-3">
+              {(form.terms ?? []).map((t, i) => (
+                <div key={t.name} className="grid grid-cols-1 sm:grid-cols-3 gap-3 border rounded-md p-3">
+                  <div className="space-y-1.5">
+                    <Label>Term</Label>
+                    <Input value={t.name} disabled />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Start Date</Label>
+                    <Input
+                      type="date"
+                      value={t.startDate}
+                      onChange={(e) =>
+                        setForm((p) => {
+                          const next = [...(p.terms ?? [])];
+                          next[i] = { ...next[i], startDate: e.target.value };
+                          return { ...p, terms: next };
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>End Date</Label>
+                    <Input
+                      type="date"
+                      value={t.endDate}
+                      onChange={(e) =>
+                        setForm((p) => {
+                          const next = [...(p.terms ?? [])];
+                          next[i] = { ...next[i], endDate: e.target.value };
+                          return { ...p, terms: next };
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-          </CardHeader>
-          <CardContent>
+          ) : (data?.terms?.length > 0 ? (
             <div className="space-y-0">
               {data.terms.map((t, i) => (
                 <div key={i} className="flex items-center justify-between py-2.5 border-b last:border-0">
@@ -263,9 +368,11 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <p className="text-sm text-muted-foreground py-1">No term dates configured.</p>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* ── Holidays ─────────────────────────────────────────────────────────── */}
       <Card>

@@ -18,7 +18,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getInitials } from '@/lib/utils';
 
-export function Header({ onMenuClick, title, schoolName }) {
+export function Header({ onMenuClick, title, schoolName, termLabel, schoolDayStatus }) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const queryClient = useQueryClient();
@@ -49,11 +49,33 @@ export function Header({ onMenuClick, title, schoolName }) {
             {schoolName}
           </span>
         )}
+        {termLabel && (
+          <span className="text-xs text-muted-foreground truncate border-l pl-2">
+            {termLabel}
+          </span>
+        )}
+        {schoolDayStatus && (
+          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 truncate">
+            {schoolDayStatus}
+          </span>
+        )}
         {isFetching > 0 && (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
         )}
       </div>
-      <div className="flex-1 md:hidden" />
+      <div className="flex-1 sm:hidden min-w-0">
+        <div className="flex items-center gap-2">
+          <h1 className="text-sm font-semibold tracking-tight truncate">{title}</h1>
+          {isFetching > 0 && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />}
+        </div>
+        {(termLabel || schoolDayStatus) && (
+          <p className="text-[11px] text-muted-foreground truncate">
+            {termLabel}
+            {termLabel && schoolDayStatus ? ' · ' : ''}
+            {schoolDayStatus}
+          </p>
+        )}
+      </div>
 
       {/* Right side */}
       <div className="flex items-center gap-2">

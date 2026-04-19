@@ -10,7 +10,6 @@ import { z } from 'zod';
 import { classesApi, usersApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { LEVEL_CATEGORIES, ACADEMIC_YEARS } from '@/lib/constants';
-import { capitalize } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,8 +22,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useRouter } from 'next/navigation';
 
 const schema = z.object({
@@ -97,7 +94,7 @@ export default function ClassesPage() {
   });
 
   const classStudents = classDetailData?.students ?? classDetailData?.data?.students ?? [];
-  const parentRows = useMemo(
+  const studentContactRows = useMemo(
     () => classStudents.map((student) => {
       const linkedParents = Array.isArray(student.parentIds) ? student.parentIds : [];
       const guardians = Array.isArray(student.guardians) ? student.guardians : [];
@@ -384,81 +381,39 @@ export default function ClassesPage() {
 
               {/* Student list */}
               <div>
-                <Tabs defaultValue="students" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="students">Students</TabsTrigger>
-                    <TabsTrigger value="parents">Parents</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="students" className="mt-3">
-                    <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                      <GraduationCap className="h-4 w-4" /> Students
-                    </h4>
-                    {studentsLoading ? (
-                      <div className="space-y-2">
-                        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
-                      </div>
-                    ) : classStudents.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-4 text-center">No students enrolled in this class</p>
-                    ) : (
-                      <div className="divide-y rounded-md border overflow-hidden">
-                        {classStudents.map((s, idx) => (
-                          <div key={s._id} className="flex items-center justify-between px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
-                            <div className="flex items-center gap-2.5">
-                              <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}</span>
-                              <div>
-                                <p className="text-sm font-medium">{s.firstName} {s.lastName}</p>
-                                <p className="text-xs text-muted-foreground font-mono">{s.admissionNumber}</p>
-                              </div>
-                            </div>
-                            <Badge
-                              variant={s.status === 'active' ? 'default' : 'secondary'}
-                              className="text-xs capitalize"
-                            >
-                              {capitalize(s.status ?? 'active')}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </TabsContent>
-
-                  <TabsContent value="parents" className="mt-3">
-                    <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                      <Users className="h-4 w-4" /> Parent Contacts
-                    </h4>
-                    {studentsLoading ? (
-                      <div className="space-y-2">
-                        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
-                      </div>
-                    ) : parentRows.length === 0 ? (
-                      <p className="text-sm text-muted-foreground py-4 text-center">No parent contacts found for this class</p>
-                    ) : (
-                      <div className="divide-y rounded-md border overflow-hidden">
-                        {parentRows.map((row, idx) => (
-                          <div key={row.studentId} className="px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2.5">
-                                <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}</span>
-                                <div>
-                                  <p className="text-sm font-medium">{row.studentName}</p>
-                                  <p className="text-xs text-muted-foreground font-mono">{row.admissionNumber}</p>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="mt-1.5 space-y-1 pl-7">
-                              {row.contacts.map((c, i) => (
-                                <p key={`${row.studentId}-${i}`} className="text-xs text-muted-foreground">
-                                  {c.name} · {c.phone || '—'}
-                                </p>
-                              ))}
+                <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Users className="h-4 w-4" /> Students
+                </h4>
+                {studentsLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
+                  </div>
+                ) : studentContactRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No students enrolled in this class</p>
+                ) : (
+                  <div className="divide-y rounded-md border overflow-hidden">
+                    {studentContactRows.map((row, idx) => (
+                      <div key={row.studentId} className="px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}</span>
+                            <div>
+                              <p className="text-sm font-medium">{row.studentName}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{row.admissionNumber}</p>
                             </div>
                           </div>
-                        ))}
+                        </div>
+                        <div className="mt-1.5 space-y-1 pl-7">
+                          {row.contacts.map((c, i) => (
+                            <p key={`${row.studentId}-${i}`} className="text-xs text-muted-foreground">
+                              {c.name} · {c.phone || '—'}
+                            </p>
+                          ))}
+                        </div>
                       </div>
-                    )}
-                  </TabsContent>
-                </Tabs>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}

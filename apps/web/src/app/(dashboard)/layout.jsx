@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { NavigationProgress } from '@/components/layout/navigation-progress';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/use-auth';
+import { settingsApi } from '@/lib/api';
 import { schoolNavItems, superadminNavItems } from '@/components/layout/nav-items';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -27,6 +29,59 @@ export default function DashboardLayout({ children }) {
   const router = useRouter();
   const title = getPageTitle(pathname, user);
   const schoolName = user?.school?.name ?? (typeof user?.schoolId === 'object' ? user?.schoolId?.name : '');
+
+  const { data: settingsData } = useQuery({
+    queryKey: ['header-settings'],
+    queryFn: async () => {
+      const res = await settingsApi.get();
+      return res.data?.settings ?? res.data?.data ?? res.data;
+    },
+    enabled: !!user && user?.role !== 'superadmin',
+    staleTime: 60 * 1000,
+  });
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const terms = settingsData?.terms ?? [];
+  const holidays = settingsData?.holidays ?? [];
+  const currentAcademicYear = settingsData?.currentAcademicYear;
+
+  const currentTerm = terms.find((t) => {
+    const start = String(t?.startDate ?? '').slice(0, 10);
+    const end = String(t?.endDate ?? '').slice(0, 10);
+    return start && end && todayIso >= start && todayIso <= end;
+  });
+
+  const todayHoliday = holidays.find((h) => String(h?.date ?? '').slice(0, 10) === todayIso);
+
+  const nextTerm = [...terms]
+    .filter((t) => String(t?.startDate ?? '').slice(0, 10) > todayIso)
+    .sort((a, b) => String(a?.startDate ?? '').localeCompare(String(b?.startDate ?? '')))[0];
+
+  const isMidterm = todayHoliday && /mid\s*term/i.test(`${todayHoliday.name ?? ''} ${todayHoliday.description ?? ''}`);
+  const previousTerm = [...terms]
+    .filter((t) => String(t?.endDate ?? '').slice(0, 10) < todayIso)
+    .sort((a, b) => String(b?.endDate ?? '').localeCompare(String(a?.endDate ?? '')))[0];
+
+  const formatIso = (value) => {
+    if (!value) return '';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return String(value).slice(0, 10);
+    return dt.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
+  };
+
+  const breakWindow = (!currentTerm && nextTerm && previousTerm)
+    ? `${formatIso(previousTerm.endDate)} - ${formatIso(nextTerm.startDate)}`
+    : null;
+
+  const schoolDayStatus = todayHoliday
+    ? (isMidterm ? `Midterm break: ${todayHoliday.name}` : `Holiday: ${todayHoliday.name}`)
+    : (!currentTerm && nextTerm
+      ? `On break${breakWindow ? ` (${breakWindow})` : ''} · Next term starts ${formatIso(nextTerm.startDate)}`
+      : null);
+
+  const termLabel = currentTerm
+    ? `${currentTerm.name}${currentAcademicYear ? ` · ${currentAcademicYear}` : ''}`
+    : (currentAcademicYear ? `Academic Year ${currentAcademicYear}` : null);
 
   // Guard: redirect unauthenticated users to login
   useEffect(() => {
@@ -118,7 +173,13 @@ export default function DashboardLayout({ children }) {
 
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header onMenuClick={() => setMobileOpen(true)} title={title} schoolName={schoolName} />
+        <Header
+          onMenuClick={() => setMobileOpen(true)}
+          title={title}
+          schoolName={schoolName}
+          termLabel={termLabel}
+          schoolDayStatus={schoolDayStatus}
+        />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {schoolName && user?.role !== 'superadmin' && (
             <p className="text-xs text-muted-foreground mb-3">{schoolName}</p>
