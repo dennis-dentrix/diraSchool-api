@@ -55,6 +55,10 @@ const examSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    examPaperUrl: {
+      type: String,
+      trim: true,
+    },
   },
   { timestamps: true }
 );

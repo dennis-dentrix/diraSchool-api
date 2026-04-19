@@ -11,17 +11,18 @@ const createExamSchema = z.object({
   type:       z.enum(Object.values(EXAM_TYPES), {
     message: `Exam type must be one of: ${Object.values(EXAM_TYPES).join(', ')}`,
   }),
-  totalMarks: z.coerce.number().positive('Total marks must be greater than 0'),
-  // term and academicYear come from the class — frontend may send them; we ignore them.
-  term:         z.string().optional(),
-  academicYear: z.string().optional(),
+  totalMarks:    z.coerce.number().positive('Total marks must be greater than 0'),
+  examPaperUrl:  z.union([z.string().url('Must be a valid URL'), z.literal(''), z.undefined()]).optional(),
+  term:          z.string().optional(),
+  academicYear:  z.string().optional(),
 });
 
 const updateExamSchema = z.object({
-  name:        z.string().trim().min(1).optional(),
-  type:        z.enum(Object.values(EXAM_TYPES)).optional(),
-  totalMarks:  z.coerce.number().positive().optional(),
-  isPublished: z.boolean().optional(),
+  name:          z.string().trim().min(1).optional(),
+  type:          z.enum(Object.values(EXAM_TYPES)).optional(),
+  totalMarks:    z.coerce.number().positive().optional(),
+  isPublished:   z.boolean().optional(),
+  examPaperUrl:  z.union([z.string().url('Must be a valid URL'), z.literal(''), z.undefined()]).optional(),
 });
 
 const listExamsSchema = z.object({

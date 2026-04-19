@@ -161,7 +161,8 @@ export const createPayment = asyncHandler(async (req, res) => {
   const populated = await Payment.findById(payment._id)
     .populate('studentId', 'firstName lastName admissionNumber')
     .populate('classId', 'name stream')
-    .populate('recordedByUserId', 'firstName lastName role');
+    .populate('recordedByUserId', 'firstName lastName role')
+    .populate('receiptIssuedByUserId', 'firstName lastName role');
 
   logAction(req, {
     action: AUDIT_ACTIONS.CREATE,
@@ -207,7 +208,8 @@ export const listPayments = asyncHandler(async (req, res) => {
     .limit(limit)
     .populate('studentId', 'firstName lastName admissionNumber')
     .populate('classId', 'name stream')
-    .populate('recordedByUserId', 'firstName lastName role');
+    .populate('recordedByUserId', 'firstName lastName role')
+    .populate('receiptIssuedByUserId', 'firstName lastName role');
 
   return sendSuccess(res, { payments, meta });
 });
@@ -223,6 +225,7 @@ export const getPayment = asyncHandler(async (req, res) => {
     .populate('studentId', 'firstName lastName admissionNumber')
     .populate('classId', 'name stream')
     .populate('recordedByUserId', 'firstName lastName role')
+    .populate('receiptIssuedByUserId', 'firstName lastName role')
     .populate('reversedByUserId', 'firstName lastName role');
 
   if (!payment) return sendError(res, 'Payment not found.', 404);
@@ -260,6 +263,42 @@ export const reversePayment = asyncHandler(async (req, res) => {
   });
 
   return sendSuccess(res, { payment });
+});
+
+/**
+ * POST /api/v1/fees/payments/:id/issue-receipt
+ * Marks a payment receipt as issued by the currently logged-in finance user.
+ */
+export const issueReceipt = asyncHandler(async (req, res) => {
+  const payment = await Payment.findOne({
+    _id: req.params.id,
+    schoolId: req.user.schoolId,
+  });
+
+  if (!payment) return sendError(res, 'Payment not found.', 404);
+
+  payment.receiptIssuedByUserId = req.user._id;
+  payment.receiptIssuedAt = new Date();
+  await payment.save();
+
+  const populated = await Payment.findById(payment._id)
+    .populate('studentId', 'firstName lastName admissionNumber')
+    .populate('classId', 'name stream')
+    .populate('recordedByUserId', 'firstName lastName role')
+    .populate('receiptIssuedByUserId', 'firstName lastName role')
+    .populate('reversedByUserId', 'firstName lastName role');
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.ISSUE,
+    resource: AUDIT_RESOURCES.PAYMENT,
+    resourceId: payment._id,
+    meta: {
+      receiptNumber: payment.receiptNumber ?? null,
+      issuedByRole: req.user.role,
+    },
+  });
+
+  return sendSuccess(res, { payment: populated });
 });
 
 // ── Balance ───────────────────────────────────────────────────────────────────

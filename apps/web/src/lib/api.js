@@ -205,6 +205,7 @@ export const feesApi = {
   listPayments: (params) => api.get('/fees/payments', { params }),
   createPayment: (data) => api.post('/fees/payments', data),
   getPayment: (id) => api.get(`/fees/payments/${id}`),
+  issueReceipt: (id) => api.post(`/fees/payments/${id}/issue-receipt`),
   reversePayment: (id, data) => api.post(`/fees/payments/${id}/reverse`, data),
   getBalance: (params) => api.get('/fees/balance', { params }),
 };

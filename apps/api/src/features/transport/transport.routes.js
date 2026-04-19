@@ -13,6 +13,7 @@ import {
 import {
   validateCreateRoute,
   validateUpdateRoute,
+  validateAssignStudents,
   validateStudentIds,
   validateListRoutes,
 } from './transport.validator.js';
@@ -38,7 +39,7 @@ router.get('/routes/:id',  canAccess, getRoute);
 router.post('/routes',                   canAccess, validateCreateRoute, createRoute);
 router.patch('/routes/:id',              canAccess, validateUpdateRoute, updateRoute);
 router.delete('/routes/:id',             canAccess, deleteRoute);
-router.post('/routes/:id/assign',        canAccess, validateStudentIds, assignStudents);
+router.post('/routes/:id/assign',        canAccess, validateAssignStudents, assignStudents);
 router.post('/routes/:id/unassign',      canAccess, validateStudentIds, unassignStudents);
 
 export default router;

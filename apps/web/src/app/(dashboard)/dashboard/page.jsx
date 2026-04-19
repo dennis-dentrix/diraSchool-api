@@ -10,7 +10,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { dashboardApi, feesApi, classesApi, subjectsApi } from '@/lib/api';
+import { dashboardApi, feesApi, classesApi, subjectsApi, attendanceApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useRouter } from 'next/navigation';
 import { StatCard } from '@/components/shared/stat-card';
@@ -78,10 +78,21 @@ function PendingStaffBanner({ count }) {
 }
 
 // ── Teacher Dashboard ──────────────────────────────────────────────────────────
+const TODAY_ISO = new Date().toISOString().split('T')[0];
+
+function getWeekStart() {
+  const now = new Date();
+  const diff = now.getDay() === 0 ? -6 : 1 - now.getDay();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() + diff);
+  return mon.toISOString().split('T')[0];
+}
+
 function TeacherDashboard({ user }) {
   const { data: myClassData, isLoading: classLoading } = useQuery({
     queryKey: ['my-class'],
     queryFn: async () => { const res = await classesApi.myClass(); return res.data; },
+    retry: false,
   });
 
   const { data: mySubjectsData, isLoading: subjectsLoading } = useQuery({
@@ -92,18 +103,115 @@ function TeacherDashboard({ user }) {
   const myClass    = myClassData?.data ?? myClassData;
   const mySubjects = mySubjectsData?.data ?? mySubjectsData ?? [];
 
+  // Fetch weekly attendance for teacher's own class
+  const { data: weekAttData, isLoading: attendanceLoading } = useQuery({
+    queryKey: ['teacher-attendance-week', myClass?._id],
+    queryFn: async () => {
+      const res = await attendanceApi.listRegisters({
+        classId: myClass._id,
+        from: getWeekStart(),
+        to: TODAY_ISO,
+        limit: 50,
+      });
+      return res.data;
+    },
+    enabled: !!myClass?._id,
+  });
+
+  const weekRegisters = weekAttData?.data ?? weekAttData?.registers ?? [];
+
+  // Aggregate weekly stats
+  const weekStats = weekRegisters.reduce(
+    (acc, reg) => {
+      for (const e of reg.entries ?? []) {
+        acc[e.status] = (acc[e.status] ?? 0) + 1;
+        acc.total += 1;
+      }
+      return acc;
+    },
+    { present: 0, absent: 0, late: 0, excused: 0, total: 0 }
+  );
+  const attendanceRate = weekStats.total > 0
+    ? Math.round((weekStats.present / weekStats.total) * 100)
+    : null;
+
+  // Today's register for this class
+  const todayReg = weekRegisters.find((r) => {
+    const d = typeof r.date === 'string' ? r.date.slice(0, 10) : new Date(r.date).toISOString().slice(0, 10);
+    return d === TODAY_ISO;
+  });
+
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const todayStr = new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold">{greeting}, {user?.firstName}</h2>
-        <p className="text-muted-foreground text-sm mt-0.5">Here's your teaching overview for today.</p>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-2xl font-bold">{greeting}, {user?.firstName}</h2>
+          <p className="text-muted-foreground text-sm mt-0.5">{todayStr} · Your teaching overview</p>
+        </div>
+        <Link href="/attendance">
+          <button className="flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium bg-green-50 text-green-700 border-green-200 hover:shadow-sm active:scale-95 transition-all">
+            <CalendarCheck className="h-4 w-4" /> Take Attendance
+          </button>
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* My Class card */}
+      {/* Stat row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-xl border p-4 space-y-1 bg-card hover:shadow-sm transition-shadow">
+          <p className="text-xs text-muted-foreground font-medium">My Class</p>
+          {classLoading ? <Skeleton className="h-7 w-20" /> : (
+            <p className="text-xl font-bold">
+              {myClass ? `${myClass.name}${myClass.stream ? ` ${myClass.stream}` : ''}` : '—'}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">{myClass ? `${myClass.studentCount ?? 0} students` : 'Not assigned'}</p>
+        </div>
+
+        <div className="rounded-xl border p-4 space-y-1 bg-card hover:shadow-sm transition-shadow">
+          <p className="text-xs text-muted-foreground font-medium">Subjects</p>
+          {subjectsLoading ? <Skeleton className="h-7 w-12" /> : (
+            <p className="text-xl font-bold">{mySubjects.length}</p>
+          )}
+          <p className="text-xs text-muted-foreground">assigned to you</p>
+        </div>
+
+        <div className={`rounded-xl border p-4 space-y-1 hover:shadow-sm transition-shadow ${
+          attendanceRate !== null
+            ? attendanceRate >= 80 ? 'bg-green-50/60' : attendanceRate >= 60 ? 'bg-amber-50/60' : 'bg-red-50/60'
+            : 'bg-card'
+        }`}>
+          <p className="text-xs text-muted-foreground font-medium">Week Rate</p>
+          {attendanceLoading ? <Skeleton className="h-7 w-16" /> : (
+            <p className={`text-xl font-bold ${
+              attendanceRate !== null
+                ? attendanceRate >= 80 ? 'text-green-700' : attendanceRate >= 60 ? 'text-amber-700' : 'text-red-700'
+                : ''
+            }`}>
+              {attendanceRate !== null ? `${attendanceRate}%` : '—'}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">this week</p>
+        </div>
+
+        <div className="rounded-xl border p-4 space-y-1 bg-card hover:shadow-sm transition-shadow">
+          <p className="text-xs text-muted-foreground font-medium">Today</p>
+          {classLoading || attendanceLoading ? <Skeleton className="h-7 w-20" /> : (
+            <p className={`text-xl font-bold ${todayReg?.status === 'submitted' ? 'text-green-600' : todayReg ? 'text-amber-600' : 'text-muted-foreground'}`}>
+              {!myClass ? '—' : todayReg?.status === 'submitted' ? 'Done' : todayReg ? 'Draft' : 'Pending'}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">register status</p>
+        </div>
+      </div>
+
+      {/* Main content row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* My Class detail */}
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -112,32 +220,56 @@ function TeacherDashboard({ user }) {
           </CardHeader>
           <CardContent>
             {classLoading ? (
-              <Skeleton className="h-16" />
+              <Skeleton className="h-20" />
             ) : myClass ? (
-              <div>
-                <p className="text-xl font-bold">{myClass.name}{myClass.stream ? ` ${myClass.stream}` : ''}</p>
-                <p className="text-sm text-muted-foreground">{myClass.levelCategory}</p>
-                <div className="flex items-center justify-between mt-2">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xl font-bold">{myClass.name}{myClass.stream ? ` ${myClass.stream}` : ''}</p>
+                  <p className="text-sm text-muted-foreground">{myClass.levelCategory} · {myClass.term} {myClass.academicYear}</p>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t">
                   <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <Users className="h-3.5 w-3.5" />
-                    <span>{myClass.studentCount ?? 0} students</span>
+                    <span>{myClass.studentCount ?? 0} enrolled students</span>
                   </div>
                   <Link href="/classes" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
-                    View <ChevronRight className="h-3 w-3" />
+                    View class <ChevronRight className="h-3 w-3" />
                   </Link>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">{myClass.term} · {myClass.academicYear}</p>
+                {/* Weekly attendance bar */}
+                {attendanceRate !== null && (
+                  <div className="space-y-1 pt-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>This week&apos;s attendance</span>
+                      <span className="font-semibold text-foreground">{attendanceRate}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all ${attendanceRate >= 80 ? 'bg-green-500' : attendanceRate >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                        style={{ width: `${attendanceRate}%` }}
+                      />
+                    </div>
+                    <div className="flex gap-3 text-xs text-muted-foreground pt-0.5">
+                      <span className="text-green-700">{weekStats.present} present</span>
+                      <span className="text-red-700">{weekStats.absent} absent</span>
+                      {weekStats.late > 0 && <span className="text-amber-700">{weekStats.late} late</span>}
+                    </div>
+                  </div>
+                )}
+                {attendanceRate === null && !attendanceLoading && myClass && (
+                  <p className="text-xs text-muted-foreground pt-1">No attendance taken this week yet.</p>
+                )}
               </div>
             ) : (
-              <div>
+              <div className="py-2">
                 <p className="text-sm text-muted-foreground">No class assigned yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Contact admin to be assigned a class</p>
+                <p className="text-xs text-muted-foreground mt-1">Contact your administrator to be assigned a class</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* My Subjects card */}
+        {/* My Subjects */}
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -146,75 +278,73 @@ function TeacherDashboard({ user }) {
           </CardHeader>
           <CardContent>
             {subjectsLoading ? (
-              <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-6" />)}</div>
+              <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
             ) : mySubjects.length ? (
-              <div className="space-y-2">
-                {mySubjects.slice(0, 5).map((s) => (
-                  <div key={s._id} className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{s.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {typeof s.classId === 'object' ? s.classId.name : ''}
-                    </span>
+              <div className="divide-y">
+                {mySubjects.map((s) => (
+                  <div key={s._id} className="flex items-center justify-between py-2.5">
+                    <div>
+                      <p className="text-sm font-medium">{s.name}</p>
+                      {s.department && <p className="text-xs text-muted-foreground">{s.department}</p>}
+                    </div>
+                    <Badge variant="secondary" className="text-xs shrink-0">
+                      {typeof s.classId === 'object' ? `${s.classId.name}${s.classId.stream ? ` ${s.classId.stream}` : ''}` : '—'}
+                    </Badge>
                   </div>
                 ))}
-                {mySubjects.length > 5 && (
-                  <Link href="/subjects" className="text-xs text-blue-600 hover:underline">
-                    +{mySubjects.length - 5} more
-                  </Link>
-                )}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No subjects assigned yet</p>
+              <div className="py-2">
+                <p className="text-sm text-muted-foreground">No subjects assigned yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Contact your administrator to be assigned subjects</p>
+              </div>
             )}
           </CardContent>
         </Card>
-
-        {/* Attendance stat */}
-        <StatCard
-          title="Class Attendance"
-          value="—"
-          description="No data yet"
-          icon={ClipboardList}
-          color="orange"
-        />
       </div>
 
-      {/* Weekly attendance chart */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Weekly Attendance</CardTitle>
-          <CardDescription>Present vs absent in your class this week</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center h-[200px] text-center gap-2">
-            <ClipboardList className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-muted-foreground">No attendance data yet</p>
-            <p className="text-xs text-muted-foreground">Start taking attendance to see your class report here</p>
-            <Link href="/attendance" className="text-xs text-blue-600 hover:underline mt-1">Take attendance →</Link>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* All subjects table if teacher teaches multiple classes */}
-      {mySubjects.length > 1 && (
+      {/* Recent attendance registers */}
+      {myClass && (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">All My Subjects</CardTitle>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-semibold">Recent Attendance — {myClass.name}{myClass.stream ? ` ${myClass.stream}` : ''}</CardTitle>
+            <Link href="/attendance" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+              View all <ChevronRight className="h-3 w-3" />
+            </Link>
           </CardHeader>
-          <CardContent>
-            <div className="divide-y">
-              {mySubjects.map((s) => (
-                <div key={s._id} className="flex items-center justify-between py-2.5">
-                  <div>
-                    <p className="text-sm font-medium">{s.name}</p>
-                    {s.department && <p className="text-xs text-muted-foreground">{s.department}</p>}
-                  </div>
-                  <Badge variant="secondary" className="text-xs">
-                    {typeof s.classId === 'object' ? `${s.classId.name}${s.classId.stream ? ` ${s.classId.stream}` : ''}` : '—'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
+          <CardContent className="pt-0">
+            {attendanceLoading ? (
+              <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+            ) : weekRegisters.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <ClipboardList className="h-7 w-7 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">No attendance taken this week yet</p>
+                <Link href="/attendance">
+                  <button className="text-xs text-blue-600 hover:underline mt-1">Take attendance →</button>
+                </Link>
+              </div>
+            ) : (
+              <div className="divide-y">
+                {[...weekRegisters].reverse().map((reg) => {
+                  const isSubmitted = reg.status === 'submitted';
+                  const present = reg.entries?.filter((e) => e.status === 'present').length ?? 0;
+                  const total = reg.entries?.length ?? 0;
+                  const d = typeof reg.date === 'string' ? reg.date.slice(0, 10) : new Date(reg.date).toISOString().slice(0, 10);
+                  const label = d === TODAY_ISO ? 'Today' : new Date(d + 'T00:00:00').toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' });
+                  return (
+                    <div key={reg._id} className="flex items-center justify-between py-2.5">
+                      <div>
+                        <p className="text-sm font-medium">{label}</p>
+                        <p className="text-xs text-muted-foreground">{present}/{total} present</p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isSubmitted ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {isSubmitted ? 'Submitted' : 'Draft'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

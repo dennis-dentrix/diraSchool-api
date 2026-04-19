@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Printer, CheckCircle, Pencil } from 'lucide-react';
+import { ArrowLeft, Printer, CheckCircle, Pencil, RefreshCw } from 'lucide-react';
 import { reportCardsApi, settingsApi, schoolsApi, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -108,6 +108,19 @@ export default function ReportCardDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const { mutate: regenerate, isPending: regenerating } = useMutation({
+    mutationFn: () => reportCardsApi.generate({
+      studentId:    typeof rc?.studentId === 'object' ? rc.studentId._id : rc?.studentId,
+      academicYear: rc?.academicYear,
+      term:         rc?.term,
+    }),
+    onSuccess: () => {
+      toast.success('Report card regenerated with latest results');
+      queryClient.invalidateQueries({ queryKey: ['report-card', id] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   async function saveSubjectRemark(subjectId, remark) {
     setSavingSubject(subjectId);
     try {
@@ -156,7 +169,7 @@ export default function ReportCardDetailPage() {
             {cls?.name}{cls?.stream ? ` ${cls.stream}` : ''} · {rc.term} · {rc.academicYear}
           </p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
           <Badge className={isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}>
             {isDraft ? 'Draft' : 'Published'}
           </Badge>
@@ -169,8 +182,19 @@ export default function ReportCardDetailPage() {
           </Button>
           {isDraft && (
             <Button
+              variant="outline"
               size="sm"
-              variant="default"
+              onClick={() => { if (confirm('Regenerate this report card with the latest results? Your remarks will be preserved.')) regenerate(); }}
+              disabled={regenerating}
+              title="Re-pulls all exam results and rebuilds subject grades. Remarks are kept."
+            >
+              <RefreshCw className={`h-4 w-4 mr-1 ${regenerating ? 'animate-spin' : ''}`} />
+              {regenerating ? 'Regenerating…' : 'Regenerate'}
+            </Button>
+          )}
+          {isDraft && (
+            <Button
+              size="sm"
               onClick={() => { if (confirm('Publish this report card? This cannot be undone.')) publish(); }}
               disabled={publishing}
             >

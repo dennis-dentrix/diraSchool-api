@@ -1,9 +1,7 @@
 {
-  "/(dashboard)/results/page": "app/(dashboard)/results/page.js",
-  "/(dashboard)/report-cards/page": "app/(dashboard)/report-cards/page.js",
-  "/(dashboard)/students/page": "app/(dashboard)/students/page.js",
-  "/(dashboard)/classes/page": "app/(dashboard)/classes/page.js",
-  "/(dashboard)/attendance/page": "app/(dashboard)/attendance/page.js",
-  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
-  "/(auth)/login/page": "app/(auth)/login/page.js"
+  "/icon.svg/route": "app/icon.svg/route.js",
+  "/(dashboard)/timetable/page": "app/(dashboard)/timetable/page.js",
+  "/(dashboard)/students/[id]/page": "app/(dashboard)/students/[id]/page.js",
+  "/(dashboard)/transport/page": "app/(dashboard)/transport/page.js",
+  "/(dashboard)/students/page": "app/(dashboard)/students/page.js"
 }

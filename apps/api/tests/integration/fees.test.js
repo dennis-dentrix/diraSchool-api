@@ -3,6 +3,7 @@ import request from 'supertest';
 import app from '../../src/server.js';
 import { setup, teardown, clearDatabase } from '../../src/config/vitest.setup.js';
 import { registerAndLogin } from './helpers.js';
+import User from '../../src/features/users/User.model.js';
 
 beforeAll(setup);
 afterAll(teardown);
@@ -89,6 +90,10 @@ async function recordPayment(agent, studentId, overrides = {}) {
     ...overrides,
   });
   return res.body.payment;
+}
+
+async function setRoleByEmail(email, role) {
+  await User.updateOne({ email: email.toLowerCase() }, { $set: { role } });
 }
 
 // ── POST /api/v1/fees/structures ──────────────────────────────────────────────
@@ -432,6 +437,35 @@ describe('POST /api/v1/fees/payments/:id/reverse', () => {
 
     const res = await agent.post(`/api/v1/fees/payments/${payment._id}/reverse`).send({});
     expect(res.status).toBe(400);
+  });
+});
+
+// ── POST /api/v1/fees/payments/:id/issue-receipt ─────────────────────────────
+
+describe('POST /api/v1/fees/payments/:id/issue-receipt', () => {
+  it('issues receipt as logged-in secretary', async () => {
+    const agent = await registerAndLogin(app, schoolA);
+    const cls = await createClass(agent);
+    const student = await enrollStudent(agent, cls._id);
+    const payment = await recordPayment(agent, student._id);
+
+    await setRoleByEmail(schoolA.email, 'secretary');
+
+    const res = await agent.post(`/api/v1/fees/payments/${payment._id}/issue-receipt`).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.payment.receiptIssuedAt).toBeDefined();
+    expect(res.body.payment.receiptIssuedByUserId).toBeDefined();
+    expect(res.body.payment.receiptIssuedByUserId.role).toBe('secretary');
+  });
+
+  it('blocks school admin from issuing receipt', async () => {
+    const agent = await registerAndLogin(app, schoolA);
+    const cls = await createClass(agent);
+    const student = await enrollStudent(agent, cls._id);
+    const payment = await recordPayment(agent, student._id);
+
+    const res = await agent.post(`/api/v1/fees/payments/${payment._id}/issue-receipt`).send({});
+    expect(res.status).toBe(403);
   });
 });
 

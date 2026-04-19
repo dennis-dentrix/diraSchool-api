@@ -219,13 +219,13 @@ export const enrollStudent = asyncHandler(async (req, res) => {
 
     // ── Fire invite emails after commit (fire-and-forget) ─────────────────────
     for (const invite of pendingInvites) {
-      enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invite).catch((err) => {
-        logger.error('[Students] Failed to enqueue parent invite email, falling back to direct send', {
+      sendInviteEmail(invite).catch((err) => {
+        logger.error('[Students] Parent invite email direct send failed, falling back to queue', {
           err: err.message,
           to: invite.to,
         });
-        sendInviteEmail(invite).catch((sendErr) =>
-          logger.error('[Students] Parent invite email fallback failed:', sendErr.message)
+        enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invite).catch((qErr) =>
+          logger.error('[Students] Parent invite email queue fallback also failed:', qErr.message)
         );
       });
     }
@@ -299,22 +299,159 @@ export const getStudent = asyncHandler(async (req, res) => {
  * Updates basic details. Does NOT handle class transfer (use /transfer).
  */
 export const updateStudent = asyncHandler(async (req, res) => {
-  const student = await Student.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
+  const schoolId = req.user.schoolId;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (!student) return sendError(res, 'Student not found.', 404);
+  try {
+    const student = await Student.findOne({ _id: req.params.id, schoolId }).session(session);
+    if (!student) {
+      await session.abortTransaction();
+      return sendError(res, 'Student not found.', 404);
+    }
 
-  const { firstName, lastName, gender, dateOfBirth, admissionNumber } = req.body;
-  if (firstName !== undefined) student.firstName = firstName;
-  if (lastName !== undefined) student.lastName = lastName;
-  if (gender !== undefined) student.gender = gender;
-  if (dateOfBirth !== undefined) student.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : undefined;
-  if (admissionNumber !== undefined) student.admissionNumber = admissionNumber.trim().toUpperCase();
+    const {
+      firstName, lastName, gender, dateOfBirth, admissionNumber, birthCertificateNumber, enrollmentDate, guardians,
+    } = req.body;
 
-  // Prevent the post('save') hook from double-incrementing studentCount
-  student.wasNew = false;
-  await student.save();
+    if (firstName !== undefined) student.firstName = firstName;
+    if (lastName !== undefined) student.lastName = lastName;
+    if (gender !== undefined) student.gender = gender;
+    if (dateOfBirth !== undefined) student.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : undefined;
+    if (admissionNumber !== undefined) student.admissionNumber = admissionNumber.trim().toUpperCase();
+    if (birthCertificateNumber !== undefined) student.birthCertificateNumber = birthCertificateNumber || undefined;
+    if (enrollmentDate !== undefined) student.enrollmentDate = enrollmentDate ? new Date(enrollmentDate) : undefined;
 
-  return sendSuccess(res, { student });
+    const pendingInvites = [];
+    if (guardians !== undefined) {
+      const school = await School.findById(schoolId).select('name').session(session);
+      const schoolName = school?.name ?? 'your school';
+
+      const existingParentIds = new Set((student.parentIds ?? []).map((id) => id.toString()));
+      const nextParentIds = new Set();
+      const nextGuardians = [];
+
+      for (let idx = 0; idx < guardians.length; idx += 1) {
+        const g = guardians[idx];
+        const existing = student.guardians?.[idx];
+        const email = g.email?.trim().toLowerCase() || undefined;
+        const phone = g.phone ? normalisePhone(g.phone) : undefined;
+
+        let linkedUserId = existing?.userId ? existing.userId.toString() : undefined;
+        let linkedUser = null;
+
+        if (linkedUserId) {
+          linkedUser = await User.findOne({ _id: linkedUserId, schoolId, role: ROLES.PARENT }).session(session);
+          if (!linkedUser) linkedUserId = undefined;
+        }
+
+        if (email) {
+          const emailChanged = !linkedUser || linkedUser.email?.toLowerCase() !== email;
+          if (emailChanged) {
+            let parentUser = await User.findOne({ schoolId, role: ROLES.PARENT, email }).session(session);
+
+            if (!parentUser) {
+              const rawToken = crypto.randomBytes(32).toString('hex');
+              const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+              const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+              const [newParent] = await User.create(
+                [
+                  {
+                    firstName: g.firstName.trim(),
+                    lastName: g.lastName.trim(),
+                    email,
+                    phone,
+                    password: crypto.randomBytes(16).toString('hex'),
+                    role: ROLES.PARENT,
+                    schoolId,
+                    mustChangePassword: false,
+                    invitePending: true,
+                    inviteToken: tokenHash,
+                    inviteTokenExpiry: expiry,
+                    emailVerified: true,
+                  },
+                ],
+                { session }
+              );
+
+              parentUser = newParent;
+              const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
+              pendingInvites.push({
+                to: parentUser.email,
+                firstName: parentUser.firstName,
+                schoolName,
+                inviteUrl,
+                meta: { schoolId, userId: parentUser._id, flow: 'parent-invite-update' },
+              });
+            }
+
+            linkedUserId = parentUser._id.toString();
+          }
+        }
+
+        if (linkedUserId) nextParentIds.add(linkedUserId);
+
+        nextGuardians.push({
+          ...(linkedUserId ? { userId: linkedUserId } : {}),
+          firstName: g.firstName,
+          lastName: g.lastName,
+          relationship: g.relationship,
+          phone,
+          email,
+          occupation: g.occupation || undefined,
+        });
+      }
+
+      student.guardians = nextGuardians;
+      student.parentIds = Array.from(nextParentIds);
+
+      if (student.parentIds.length) {
+        await User.updateMany(
+          { _id: { $in: student.parentIds } },
+          { $addToSet: { children: student._id } },
+          { session }
+        );
+      }
+
+      const removedParentIds = Array.from(existingParentIds).filter((id) => !nextParentIds.has(id));
+      if (removedParentIds.length) {
+        await User.updateMany(
+          { _id: { $in: removedParentIds } },
+          { $pull: { children: student._id } },
+          { session }
+        );
+      }
+    }
+
+    // Prevent the post('save') hook from double-incrementing studentCount
+    student.wasNew = false;
+    await student.save({ session });
+    await session.commitTransaction();
+
+    for (const invite of pendingInvites) {
+      sendInviteEmail(invite).catch((err) => {
+        logger.error('[Students] Updated guardian invite email direct send failed, falling back to queue', {
+          err: err.message,
+          to: invite.to,
+        });
+        enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invite).catch((qErr) =>
+          logger.error('[Students] Updated guardian invite email queue fallback also failed:', qErr.message)
+        );
+      });
+    }
+
+    const populated = await Student.findById(student._id)
+      .populate('classId', 'name stream levelCategory academicYear term')
+      .populate('parentIds', 'firstName lastName phone email');
+
+    return sendSuccess(res, { student: populated });
+  } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
+    throw err;
+  } finally {
+    session.endSession();
+  }
 });
 
 /**

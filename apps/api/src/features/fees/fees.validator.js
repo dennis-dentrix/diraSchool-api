@@ -8,6 +8,7 @@ const yearRegex = /^\d{4}$/;
 // ── Fee Structure ─────────────────────────────────────────────────────────────
 
 const feeItemSchema = z.object({
+  category: z.string().trim().optional(),
   name: z.string().trim().min(1, 'Fee item name is required'),
   amount: z.number().min(0, 'Fee item amount cannot be negative'),
 });
@@ -16,17 +17,14 @@ const createFeeStructureSchema = z.object({
   classId: z.string().regex(objectIdRegex, 'Invalid class ID'),
   academicYear: z.string().regex(yearRegex, 'Academic year must be a 4-digit year'),
   term: z.enum(TERMS, { message: `Term must be one of: ${TERMS.join(', ')}` }),
-  items: z
-    .array(feeItemSchema)
-    .min(1, 'At least one fee item is required'),
-}).strict();
+  items: z.array(feeItemSchema).min(1, 'At least one fee item is required'),
+  notes: z.string().trim().optional(),
+});
 
 const updateFeeStructureSchema = z.object({
-  items: z
-    .array(feeItemSchema)
-    .min(1, 'At least one fee item is required')
-    .optional(),
-}).strict();
+  items: z.array(feeItemSchema).min(1, 'At least one fee item is required').optional(),
+  notes: z.string().trim().optional(),
+});
 
 const listFeeStructuresSchema = z.object({
   classId: z.string().regex(objectIdRegex).optional(),

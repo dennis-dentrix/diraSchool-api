@@ -56,8 +56,9 @@ export const getRoute = asyncHandler(async (req, res) => {
     routeId: route._id,
     schoolId: req.user.schoolId,
   })
-    .select('firstName lastName admissionNumber classId status')
-    .populate('classId', 'name stream');
+    .select('firstName lastName admissionNumber classId status guardians parentIds transportAssignment')
+    .populate('classId', 'name stream')
+    .populate('parentIds', 'firstName lastName phone');
 
   return sendSuccess(res, { route, students });
 });
@@ -119,21 +120,38 @@ export const deleteRoute = asyncHandler(async (req, res) => {
  * Bulk-assigns students to this route (sets Student.routeId).
  */
 export const assignStudents = asyncHandler(async (req, res) => {
-  const { studentIds } = req.body;
+  const { assignments } = req.body;
   const schoolId = req.user.schoolId;
 
   const route = await TransportRoute.findOne({ _id: req.params.id, schoolId });
   if (!route) return sendError(res, 'Transport route not found.', 404);
 
-  // Only update students that belong to this school (safety guard)
-  const result = await Student.updateMany(
-    { _id: { $in: studentIds }, schoolId },
-    { $set: { routeId: route._id } }
-  );
+  const now = new Date();
+  const ops = assignments.map(({ studentId, dropOffPoint }) => ({
+    updateOne: {
+      filter: { _id: studentId, schoolId },
+      update: {
+        $set: {
+          routeId: route._id,
+          transportAssignment: {
+            routeId: route._id,
+            routeName: route.name,
+            driverName: route.driverName ?? '',
+            driverPhone: route.driverPhone ?? '',
+            dropOffPoint: dropOffPoint.trim(),
+            assignedAt: now,
+          },
+        },
+      },
+    },
+  }));
+
+  const result = await Student.bulkWrite(ops, { ordered: false });
+  const modifiedCount = result.modifiedCount ?? 0;
 
   return sendSuccess(res, {
-    message: `${result.modifiedCount} student(s) assigned to route "${route.name}".`,
-    modifiedCount: result.modifiedCount,
+    message: `${modifiedCount} student(s) assigned to route "${route.name}".`,
+    modifiedCount,
   });
 });
 
@@ -150,7 +168,7 @@ export const unassignStudents = asyncHandler(async (req, res) => {
 
   const result = await Student.updateMany(
     { _id: { $in: studentIds }, schoolId, routeId: route._id },
-    { $unset: { routeId: '' } }
+    { $unset: { routeId: '', transportAssignment: '' } }
   );
 
   return sendSuccess(res, {

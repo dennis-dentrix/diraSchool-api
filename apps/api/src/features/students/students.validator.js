@@ -43,6 +43,16 @@ export const enrollStudentSchema = z.object({
     .optional(),
 });
 
+// ── Guardian update sub-schema (no existingUserId — edit only, no new portal accounts) ──────────
+const guardianUpdateSchema = z.object({
+  firstName:    z.string().trim().min(1, 'Guardian first name is required'),
+  lastName:     z.string().trim().min(1, 'Guardian last name is required'),
+  relationship: z.enum(['mother', 'father', 'guardian', 'other']),
+  phone:        z.string().trim().regex(phoneRegex, 'Invalid phone (Kenyan format)').optional().or(z.literal('')),
+  email:        z.string().trim().email('Invalid email').optional().or(z.literal('')),
+  occupation:   z.string().trim().optional(),
+});
+
 // ── Update ────────────────────────────────────────────────────────────────────
 const updateStudentSchema = z.object({
   firstName:              z.string().trim().min(1).optional(),
@@ -52,7 +62,8 @@ const updateStudentSchema = z.object({
   birthCertificateNumber: z.string().trim().nullable().optional(),
   enrollmentDate:         z.string().date().optional(),
   admissionNumber:        z.string().trim().min(1).optional(),
-}).strict();
+  guardians:              z.array(guardianUpdateSchema).optional(),
+});
 
 const transferStudentSchema = z.object({
   newClassId: z.string().regex(objectIdRegex, 'Invalid class ID'),

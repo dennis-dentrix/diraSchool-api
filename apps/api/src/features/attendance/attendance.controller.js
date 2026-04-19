@@ -2,6 +2,7 @@ import Attendance from './Attendance.model.js';
 import Class from '../classes/Class.model.js';
 import Student from '../students/Student.model.js';
 import User from '../users/User.model.js';
+import SchoolSettings from '../settings/SchoolSettings.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
@@ -10,6 +11,35 @@ import {
   ROLES,
   STUDENT_STATUSES,
 } from '../../constants/index.js';
+
+// Day names matching SchoolSettings.workingDays enum values
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+const checkSchoolOpen = async (schoolId, dateString) => {
+  const settings = await SchoolSettings.findOne({ schoolId }).lean();
+  const date = new Date(`${dateString}T00:00:00.000Z`);
+  const dayName = DAY_NAMES[date.getUTCDay()];
+
+  const workingDays = settings?.workingDays ?? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+  if (!workingDays.includes(dayName)) {
+    return { open: false, reason: `School does not operate on ${dayName}s.` };
+  }
+
+  if (settings?.holidays?.length) {
+    const dateMs = date.getTime();
+    const holiday = settings.holidays.find((h) => {
+      const hDate = new Date(h.date);
+      return hDate.getUTCFullYear() === date.getUTCFullYear() &&
+             hDate.getUTCMonth()    === date.getUTCMonth() &&
+             hDate.getUTCDate()     === date.getUTCDate();
+    });
+    if (holiday) {
+      return { open: false, reason: `School is closed: ${holiday.name}.` };
+    }
+  }
+
+  return { open: true };
+};
 
 const normaliseDate = (dateString) => {
   return new Date(`${dateString}T00:00:00.000Z`);
@@ -64,6 +94,11 @@ const resolveSubstituteMeta = async (req, cls, substituteTeacherId) => {
  */
 export const createAttendanceRegister = asyncHandler(async (req, res) => {
   const { classId, date, entries, substituteTeacherId, substituteNote } = req.body;
+
+  const schoolStatus = await checkSchoolOpen(req.user.schoolId, date);
+  if (!schoolStatus.open) {
+    return sendError(res, schoolStatus.reason, 422);
+  }
 
   const cls = await Class.findOne({ _id: classId, schoolId: req.user.schoolId });
   if (!cls) return sendError(res, 'Class not found.', 404);

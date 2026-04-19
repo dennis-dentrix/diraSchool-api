@@ -2,13 +2,15 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle, Save, Lock, ChevronLeft } from 'lucide-react';
+import { CheckCircle, Save, Lock, ChevronLeft, Users } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { attendanceApi, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 
 // P / A / L / E pill button
@@ -48,6 +50,7 @@ export default function AttendanceRegisterPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [entries, setEntries] = useState([]);
+  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['attendance-register', id],
@@ -78,7 +81,7 @@ export default function AttendanceRegisterPage() {
         entries: entries.map(({ studentId, status }) => ({ studentId, status })),
       }),
     onSuccess: () => {
-      toast.success('Saved');
+      toast.success('Draft saved');
       queryClient.invalidateQueries({ queryKey: ['attendance-register', id] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -143,10 +146,14 @@ export default function AttendanceRegisterPage() {
             {formatDate(data?.date)} · {data?.term} · {data?.academicYear}
           </p>
         </div>
-        {isLocked && (
-          <div className="flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 text-xs font-medium px-3 py-1.5 rounded-full">
-            <Lock className="h-3 w-3" />Submitted
+        {isLocked ? (
+          <div className="flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 text-xs font-medium px-3 py-1.5 rounded-full shrink-0">
+            <Lock className="h-3 w-3" /> Submitted
           </div>
+        ) : (
+          <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 shrink-0">
+            Draft
+          </Badge>
         )}
       </div>
 
@@ -155,8 +162,8 @@ export default function AttendanceRegisterPage() {
         {STATUSES.map((s) => {
           const cfg = STATUS_CONFIG[s];
           return (
-            <div key={s} className="bg-white rounded-xl border p-3 text-center">
-              <p className="text-2xl font-bold">{counts[s]}</p>
+            <div key={s} className="bg-white rounded-xl border p-3 text-center shadow-sm">
+              <p className="text-2xl font-bold tabular-nums">{counts[s]}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{cfg.long}</p>
             </div>
           );
@@ -167,12 +174,14 @@ export default function AttendanceRegisterPage() {
       {total > 0 && (
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
-            <span>{marked}/{total} recorded</span>
-            <span className="font-medium text-green-700">{pct}% attendance rate</span>
+            <span className="flex items-center gap-1"><Users className="h-3 w-3" />{marked}/{total} recorded</span>
+            <span className={`font-semibold ${pct >= 80 ? 'text-green-700' : pct >= 60 ? 'text-amber-700' : 'text-red-700'}`}>
+              {pct}% attendance rate
+            </span>
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
-              className="h-full bg-green-500 transition-all duration-300"
+              className={`h-full transition-all duration-300 ${pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -213,14 +222,11 @@ export default function AttendanceRegisterPage() {
             return (
               <div
                 key={entry.studentId}
-                className="flex items-center gap-3 bg-white rounded-xl border px-4 py-3"
+                className="flex items-center gap-3 bg-white rounded-xl border px-4 py-3 shadow-sm"
               >
-                {/* Index */}
                 <span className="text-xs text-muted-foreground w-5 text-right shrink-0 tabular-nums">
                   {idx + 1}
                 </span>
-
-                {/* Name */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium leading-tight truncate">
                     {student ? `${student.firstName} ${student.lastName}` : entry.studentId}
@@ -229,8 +235,6 @@ export default function AttendanceRegisterPage() {
                     <p className="text-xs text-muted-foreground">{student.admissionNumber}</p>
                   )}
                 </div>
-
-                {/* P / A / L / E buttons */}
                 <div className="flex gap-1.5 shrink-0">
                   {STATUSES.map((s) => (
                     <StatusButton
@@ -261,17 +265,49 @@ export default function AttendanceRegisterPage() {
             {saving ? 'Saving…' : 'Save Draft'}
           </Button>
           <Button
-            onClick={() => {
-              if (confirm('Submit and lock this register? This cannot be undone.')) submitRegister();
-            }}
+            onClick={() => setSubmitConfirmOpen(true)}
             disabled={submitting || entries.length === 0}
             className="shadow-lg"
           >
             <CheckCircle className="h-4 w-4 mr-1.5" />
-            {submitting ? 'Submitting…' : 'Submit Register'}
+            Submit Register
           </Button>
         </div>
       )}
+
+      {/* ── Submit confirmation dialog ───────────────────────────────────────── */}
+      <AlertDialog open={submitConfirmOpen} onOpenChange={setSubmitConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Submit attendance register?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>This will lock the register for <strong>{className}</strong> on {formatDate(data?.date)}.</p>
+                <div className="rounded-lg bg-muted/60 border px-4 py-3 grid grid-cols-4 gap-2 text-center text-sm">
+                  {STATUSES.map((s) => (
+                    <div key={s}>
+                      <p className="font-bold text-base tabular-nums">{counts[s]}</p>
+                      <p className="text-xs text-muted-foreground">{STATUS_CONFIG[s].long}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {total} students · {pct}% attendance rate. This action cannot be undone.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { submitRegister(); setSubmitConfirmOpen(false); }}
+              disabled={submitting}
+            >
+              {submitting ? 'Submitting…' : 'Submit & Lock'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

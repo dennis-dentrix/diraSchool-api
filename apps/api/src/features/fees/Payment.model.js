@@ -83,11 +83,40 @@ const paymentSchema = new mongoose.Schema(
     receiptUrl: {
       type: String,
     },
+    // Auto-generated sequential receipt tracking number per school (e.g. RCT-2025-00001)
+    receiptNumber: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    // Staff member who issued the printed receipt (secretary/accountant only)
+    receiptIssuedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      index: true,
+    },
+    receiptIssuedAt: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );
 
 // Composite index for fetching a student's payments in a given term
 paymentSchema.index({ schoolId: 1, studentId: 1, academicYear: 1, term: 1 });
+
+// Auto-assign a sequential receipt number before first save
+paymentSchema.pre('save', async function (next) {
+  if (this.isNew && !this.receiptNumber) {
+    try {
+      const count = await mongoose.model('Payment').countDocuments({ schoolId: this.schoolId });
+      const year = new Date().getFullYear();
+      this.receiptNumber = `RCT-${year}-${String(count + 1).padStart(5, '0')}`;
+    } catch {
+      // Non-fatal — receipt number may be empty; payment still records
+    }
+  }
+  next();
+});
 
 export default mongoose.models.Payment || mongoose.model('Payment', paymentSchema);

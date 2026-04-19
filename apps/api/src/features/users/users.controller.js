@@ -208,12 +208,12 @@ export const resendInvite = asyncHandler(async (req, res) => {
       initiatedBy: req.user._id,
     },
   };
-  enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, resendInvitePayload).catch((err) => {
-    logger.error('[Users] Failed to enqueue resend-invite email, falling back to direct send', {
+  sendInviteEmail(resendInvitePayload).catch((err) => {
+    logger.error('[Users] Resend invite email direct send failed, falling back to queue', {
       err: err.message,
     });
-    sendInviteEmail(resendInvitePayload).catch((sendErr) =>
-      logger.error('[Users] Resend invite email fallback failed:', sendErr.message)
+    enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, resendInvitePayload).catch((qErr) =>
+      logger.error('[Users] Resend invite email queue fallback also failed:', qErr.message)
     );
   });
 

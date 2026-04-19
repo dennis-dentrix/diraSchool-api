@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, UserPlus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { studentsApi, getErrorMessage } from '@/lib/api';
-import { useAuthStore } from '@/store/auth.store';
+import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { formatDate, getStatusColor, capitalize } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,17 @@ const editSchema = z.object({
   enrollmentDate: z.string().optional(),
 });
 
+const guardianSchema = z.object({
+  firstName: z.string().min(1, 'Required'),
+  lastName: z.string().min(1, 'Required'),
+  relationship: z.enum(['mother', 'father', 'guardian', 'other']),
+  phone: z.string().optional(),
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  occupation: z.string().optional(),
+});
+
+const RELATIONSHIPS = ['mother', 'father', 'guardian', 'other'];
+
 function InfoRow({ label, value }) {
   return (
     <div className="flex justify-between py-2 border-b last:border-0">
@@ -45,11 +56,20 @@ export default function StudentDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
+  const adminUser = isAdmin(user);
   const isTeacher = user?.role === 'teacher';
+
   const [editOpen, setEditOpen] = useState(false);
+  const [guardianDialogOpen, setGuardianDialogOpen] = useState(false);
+  const [editingGuardianIdx, setEditingGuardianIdx] = useState(null); // null = add new
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(editSchema),
+  });
+
+  const guardianForm = useForm({
+    resolver: zodResolver(guardianSchema),
+    defaultValues: { relationship: 'guardian' },
   });
 
   const { data, isLoading } = useQuery({
@@ -60,6 +80,11 @@ export default function StudentDetailPage() {
     },
     enabled: !!id,
   });
+
+  const student = data?.student ?? data;
+  const cls = student?.classId;
+  const guardians = Array.isArray(student?.guardians) ? student.guardians : [];
+  const linkedParents = Array.isArray(student?.parentIds) ? student.parentIds : [];
 
   const { mutate: updateStudent, isPending: saving } = useMutation({
     mutationFn: (body) => studentsApi.update(id, body),
@@ -85,17 +110,48 @@ export default function StudentDetailPage() {
     setEditOpen(true);
   };
 
+  const openAddGuardian = () => {
+    guardianForm.reset({ firstName: '', lastName: '', relationship: 'guardian', phone: '', email: '', occupation: '' });
+    setEditingGuardianIdx(null);
+    setGuardianDialogOpen(true);
+  };
+
+  const openEditGuardian = (idx) => {
+    const g = guardians[idx];
+    guardianForm.reset({
+      firstName: g.firstName ?? '',
+      lastName: g.lastName ?? '',
+      relationship: g.relationship ?? 'guardian',
+      phone: g.phone ?? '',
+      email: g.email ?? '',
+      occupation: g.occupation ?? '',
+    });
+    setEditingGuardianIdx(idx);
+    setGuardianDialogOpen(true);
+  };
+
+  const submitGuardianForm = (formData) => {
+    let updatedGuardians;
+    if (editingGuardianIdx === null) {
+      updatedGuardians = [...guardians, formData];
+    } else {
+      updatedGuardians = guardians.map((g, i) => (i === editingGuardianIdx ? { ...g, ...formData } : g));
+    }
+    updateStudent({ guardians: updatedGuardians });
+    setGuardianDialogOpen(false);
+  };
+
+  const removeGuardian = (idx) => {
+    const updatedGuardians = guardians.filter((_, i) => i !== idx);
+    updateStudent({ guardians: updatedGuardians });
+  };
+
   if (isLoading) return (
     <div className="space-y-4">
       <Skeleton className="h-8 w-48" />
       <Skeleton className="h-48 w-full" />
     </div>
   );
-
-  const student = data?.student ?? data;
-  const cls = student?.classId;
-  const guardians = Array.isArray(student?.guardians) ? student.guardians : [];
-  const linkedParents = Array.isArray(student?.parentIds) ? student.parentIds : [];
 
   return (
     <div className="space-y-6">
@@ -148,8 +204,18 @@ export default function StudentDetailPage() {
               </CardContent>
             </Card>
 
+            {/* ── Parent / Guardian ──────────────────────────────────────────── */}
             <Card className="sm:col-span-2">
-              <CardHeader className="pb-2"><CardTitle className="text-base">Parent / Guardian Information</CardTitle></CardHeader>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base">Parent / Guardian Information</CardTitle>
+                  {adminUser && (
+                    <Button size="sm" variant="outline" onClick={openAddGuardian}>
+                      <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Add Guardian
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
               <CardContent className="pt-0">
                 {guardians.length === 0 && linkedParents.length === 0 && (
                   <p className="text-sm text-muted-foreground py-2">No parent or guardian information on record.</p>
@@ -160,12 +226,36 @@ export default function StudentDetailPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Guardians</p>
                     {guardians.map((g, idx) => (
                       <div key={idx} className="rounded-lg border p-3 text-sm">
-                        <p className="font-medium">{g?.firstName} {g?.lastName}</p>
-                        <div className="mt-1 grid grid-cols-2 gap-x-4 text-muted-foreground text-xs">
-                          <span>Relationship: {capitalize(g?.relationship ?? '')}</span>
-                          <span>Phone: {g?.phone ?? '—'}</span>
-                          {g?.email && <span className="col-span-2">Email: {g.email}</span>}
-                          {g?.occupation && <span>Occupation: {g.occupation}</span>}
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium">{g?.firstName} {g?.lastName}</p>
+                            <div className="mt-1 grid grid-cols-2 gap-x-4 text-muted-foreground text-xs">
+                              <span>Relationship: {capitalize(g?.relationship ?? '')}</span>
+                              <span>Phone: {g?.phone ?? '—'}</span>
+                              {g?.email && <span className="col-span-2">Email: {g.email}</span>}
+                              {g?.occupation && <span>Occupation: {g.occupation}</span>}
+                            </div>
+                          </div>
+                          {adminUser && (
+                            <div className="flex gap-1 shrink-0">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={() => openEditGuardian(idx)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => removeGuardian(idx)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -176,12 +266,13 @@ export default function StudentDetailPage() {
                   <div className="space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Linked Parent Accounts</p>
                     {linkedParents.map((p, idx) => (
-                      <div key={p?._id ?? idx} className="rounded-lg border p-3 text-sm">
+                      <div key={p?._id ?? idx} className="rounded-lg border p-3 text-sm bg-muted/20">
                         <p className="font-medium">{p?.firstName} {p?.lastName}</p>
                         <div className="mt-1 text-muted-foreground text-xs space-y-0.5">
                           <p>Phone: {p?.phone ?? '—'}</p>
                           <p>Email: {p?.email ?? '—'}</p>
                         </div>
+                        <p className="text-[11px] text-muted-foreground mt-1.5 italic">Has parent portal access</p>
                       </div>
                     ))}
                   </div>
@@ -208,7 +299,7 @@ export default function StudentDetailPage() {
         </TabsContent>
       </Tabs>
 
-      {/* ── Edit dialog ──────────────────────────────────────────────────────── */}
+      {/* ── Edit student dialog ──────────────────────────────────────────────── */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Edit Student Details</DialogTitle></DialogHeader>
@@ -263,6 +354,77 @@ export default function StudentDetailPage() {
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={saving}>Save Changes</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Add/Edit guardian dialog ─────────────────────────────────────────── */}
+      <Dialog open={guardianDialogOpen} onOpenChange={setGuardianDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingGuardianIdx === null ? 'Add Guardian' : 'Edit Guardian'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={guardianForm.handleSubmit(submitGuardianForm)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>First Name</Label>
+                <Input {...guardianForm.register('firstName')} />
+                {guardianForm.formState.errors.firstName && (
+                  <p className="text-xs text-destructive">{guardianForm.formState.errors.firstName.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label>Last Name</Label>
+                <Input {...guardianForm.register('lastName')} />
+                {guardianForm.formState.errors.lastName && (
+                  <p className="text-xs text-destructive">{guardianForm.formState.errors.lastName.message}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Relationship</Label>
+                <Select
+                  defaultValue={guardians[editingGuardianIdx ?? -1]?.relationship ?? 'guardian'}
+                  onValueChange={(v) => guardianForm.setValue('relationship', v)}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {RELATIONSHIPS.map((r) => (
+                      <SelectItem key={r} value={r}>{capitalize(r)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input {...guardianForm.register('phone')} placeholder="+254..." />
+                {guardianForm.formState.errors.phone && (
+                  <p className="text-xs text-destructive">{guardianForm.formState.errors.phone.message}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Email (optional)</Label>
+              <Input type="email" {...guardianForm.register('email')} placeholder="guardian@email.com" />
+              {guardianForm.formState.errors.email && (
+                <p className="text-xs text-destructive">{guardianForm.formState.errors.email.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Occupation (optional)</Label>
+              <Input {...guardianForm.register('occupation')} placeholder="e.g. Teacher" />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setGuardianDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>
+                {editingGuardianIdx === null ? 'Add Guardian' : 'Save Changes'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

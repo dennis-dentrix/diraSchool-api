@@ -1,8 +1,8 @@
 import express from 'express';
-import { protect, blockIfMustChangePassword, adminOnly } from '../../middleware/auth.js';
+import { protect, blockIfMustChangePassword, adminOnly, authorize } from '../../middleware/auth.js';
 import requireFeature from '../../middleware/requireFeature.js';
 import { uploadCsv } from '../../middleware/upload.js';
-import { PLAN_FEATURES } from '../../constants/index.js';
+import { ROLES, PLAN_FEATURES } from '../../constants/index.js';
 import {
   validateEnrollStudent,
   validateUpdateStudent,
@@ -21,22 +21,23 @@ import {
 
 const router = express.Router();
 
-router.use(protect, blockIfMustChangePassword, adminOnly);
+router.use(protect, blockIfMustChangePassword);
 
-router.route('/')
-  .get(listStudents)
-  .post(validateEnrollStudent, enrollStudent);
+// Read access: all school staff (secretary, accountant, and teachers need to view students)
+const canRead = authorize(
+  ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
+  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT, ROLES.TEACHER
+);
 
-// Bulk CSV import — feature-gated + must come before /:id to avoid route collision
-// TODO: Assign to correct plan tier in PLAN_FEATURE_MAP once pricing is finalised.
-router.post('/import', requireFeature(PLAN_FEATURES.BULK_IMPORT), uploadCsv, importStudents);
-router.get('/import/:jobId/status', getImportStatus);
+router.get('/', canRead, listStudents);
+router.get('/import/:jobId/status', canRead, getImportStatus);
+router.get('/:id', canRead, getStudent);
 
-router.route('/:id')
-  .get(getStudent)
-  .patch(validateUpdateStudent, updateStudent);
-
-router.post('/:id/transfer', validateTransferStudent, transferStudent);
-router.post('/:id/withdraw', withdrawStudent);
+// Write operations: admin roles only
+router.post('/', adminOnly, validateEnrollStudent, enrollStudent);
+router.post('/import', adminOnly, requireFeature(PLAN_FEATURES.BULK_IMPORT), uploadCsv, importStudents);
+router.patch('/:id', adminOnly, validateUpdateStudent, updateStudent);
+router.post('/:id/transfer', adminOnly, validateTransferStudent, transferStudent);
+router.post('/:id/withdraw', adminOnly, withdrawStudent);
 
 export default router;

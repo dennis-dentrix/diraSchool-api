@@ -44,6 +44,17 @@ const updateRouteSchema = z.object({
 
 // ── Assign / Unassign students ────────────────────────────────────────────────
 
+const assignStudentsSchema = z.object({
+  assignments: z
+    .array(
+      z.object({
+        studentId: z.string().regex(objectIdRegex, 'Invalid student ID'),
+        dropOffPoint: z.string().trim().min(1, 'Drop-off point is required'),
+      }).strict()
+    )
+    .min(1, 'At least one student assignment is required'),
+}).strict();
+
 const studentIdsSchema = z.object({
   studentIds: z
     .array(z.string().regex(objectIdRegex, 'Invalid student ID'))
@@ -76,5 +87,6 @@ const validateQuery = (schema) => (req, res, next) => {
 
 export const validateCreateRoute    = validateBody(createRouteSchema);
 export const validateUpdateRoute    = validateBody(updateRouteSchema);
+export const validateAssignStudents = validateBody(assignStudentsSchema);
 export const validateStudentIds     = validateBody(studentIdsSchema);
 export const validateListRoutes     = validateQuery(listRoutesSchema);

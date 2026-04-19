@@ -3,6 +3,11 @@ import { TERMS } from '../../constants/index.js';
 
 const feeItemSchema = new mongoose.Schema(
   {
+    category: {
+      type: String,
+      trim: true,
+      default: 'School Fees',
+    },
     name: {
       type: String,
       required: [true, 'Fee item name is required'],
@@ -54,6 +59,10 @@ const feeStructureSchema = new mongoose.Schema(
       type: Number,
       min: 0,
       default: 0,
+    },
+    notes: {
+      type: String,
+      trim: true,
     },
   },
   { timestamps: true }

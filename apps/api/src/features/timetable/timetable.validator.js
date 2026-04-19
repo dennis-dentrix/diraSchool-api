@@ -30,7 +30,7 @@ const createTimetableSchema = z.object({
 // ── Update slots (full replace) ───────────────────────────────────────────────
 
 const updateSlotsSchema = z.object({
-  slots: z.array(slotSchema).min(1, 'At least one slot is required'),
+  slots: z.array(slotSchema),
 }).strict();
 
 // ── List query ────────────────────────────────────────────────────────────────
@@ -39,6 +39,7 @@ const listTimetablesSchema = z.object({
   classId:      z.string().regex(objectIdRegex).optional(),
   academicYear: z.string().regex(yearRegex).optional(),
   term:         z.enum(TERMS).optional(),
+  teacherId:    z.string().regex(objectIdRegex).optional(),
   page:         z.coerce.number().int().positive().optional(),
   limit:        z.coerce.number().int().positive().optional(),
 });

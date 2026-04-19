@@ -42,9 +42,11 @@ export const createTimetable = asyncHandler(async (req, res) => {
  */
 export const listTimetables = asyncHandler(async (req, res) => {
   const filter = { schoolId: req.user.schoolId };
-  if (req.query.classId)      filter.classId      = req.query.classId;
-  if (req.query.academicYear) filter.academicYear  = req.query.academicYear;
-  if (req.query.term)         filter.term          = req.query.term;
+  if (req.query.classId)      filter.classId             = req.query.classId;
+  if (req.query.academicYear) filter.academicYear         = req.query.academicYear;
+  if (req.query.term)         filter.term                 = req.query.term;
+  // Teacher personal schedule: filter to timetables that contain slots for this teacher
+  if (req.query.teacherId)    filter['slots.teacherId']   = req.query.teacherId;
 
   const total = await Timetable.countDocuments(filter);
   const { skip, limit, meta } = paginate(req.query, total);

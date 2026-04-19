@@ -84,6 +84,21 @@ function ReceiptPreview({ data }) {
         <div className="bg-blue-50 text-center py-2 text-xs font-bold tracking-widest border border-t-0 border-blue-200 uppercase">
           Fee Payment Receipt
         </div>
+        {/* Receipt tracking info strip */}
+        <div className="border border-t-0 border-b-0 px-4 py-2.5 bg-gray-50 flex items-start justify-between gap-3 text-xs">
+          <div>
+            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Receipt No.</p>
+            <p className="font-bold text-sm text-blue-800 font-mono">{data.receiptNumber ?? 'Generating…'}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Date</p>
+            <p className="font-semibold">{data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Issued By</p>
+            <p className="font-semibold">{data.recordedBy}</p>
+          </div>
+        </div>
         <div className="border border-t-0 px-4 py-3">
           {[
             ['Student', data.studentName],
@@ -91,11 +106,9 @@ function ReceiptPreview({ data }) {
             ['Class', data.className],
             ['Academic Year', data.academicYear],
             ['Term', data.term],
-            ['Payment Date', data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())],
             ['Payment Method', capitalize(data.method)],
             data.reference ? ['Reference / Code', data.reference] : null,
             data.notes ? ['Notes', data.notes] : null,
-            ['Recorded By', data.recordedBy],
           ].filter(Boolean).map(([label, value]) => (
             <div key={label} className="flex justify-between py-2 border-b last:border-0 text-sm">
               <span className="text-muted-foreground">{label}</span>
@@ -120,7 +133,16 @@ function ReceiptPreview({ data }) {
   );
 }
 
-const buildColumns = (onViewReceipt) => [
+const buildColumns = ({ canIssueReceipts }) => [
+  {
+    id: 'receiptNumber',
+    header: 'Receipt No.',
+    cell: ({ row }) => (
+      <span className="font-mono text-xs font-semibold text-blue-700">
+        {row.original.receiptNumber ?? '—'}
+      </span>
+    ),
+  },
   {
     id: 'student',
     header: 'Student',
@@ -147,7 +169,7 @@ const buildColumns = (onViewReceipt) => [
   },
   {
     accessorKey: 'reference',
-    header: 'Reference',
+    header: 'Ref / Code',
     cell: ({ row }) => <span className="text-sm font-mono">{row.original.reference ?? '—'}</span>,
   },
   {
@@ -160,36 +182,52 @@ const buildColumns = (onViewReceipt) => [
     ),
   },
   {
-    accessorKey: 'createdAt',
-    header: 'Date',
-    cell: ({ row }) => <span className="text-sm">{formatDate(row.original.paymentDate ?? row.original.createdAt)}</span>,
+    id: 'dateRecorder',
+    header: 'Date / By',
+    cell: ({ row }) => {
+      const recorder = row.original.recordedByUserId;
+      return (
+        <div>
+          <p className="text-sm">{formatDate(row.original.paymentDate ?? row.original.createdAt)}</p>
+          {recorder && (
+            <p className="text-xs text-muted-foreground">
+              {recorder.firstName} {recorder.lastName}
+            </p>
+          )}
+        </div>
+      );
+    },
   },
   {
     id: 'receipt',
     header: 'Receipt',
-    cell: ({ row }) =>
-      row.original.receiptUrl ? (
-        <a href={row.original.receiptUrl} target="_blank" rel="noopener noreferrer">
-          <Button variant="ghost" size="sm" className="gap-1">
-            <Receipt className="h-3.5 w-3.5" /> Download PDF
-          </Button>
-        </a>
-      ) : (
+    cell: ({ row }) => (
+      <div className="flex items-center gap-1">
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1 text-blue-600 hover:text-blue-700"
-          onClick={() => onViewReceipt(row.original)}
+          className="gap-1 text-blue-600 hover:text-blue-700 h-7 px-2 disabled:text-gray-400 disabled:hover:text-gray-400"
+          onClick={() => window.open(`/fees/payments/${row.original._id}/print`, '_blank')}
+          disabled={!canIssueReceipts}
         >
-          <Receipt className="h-3.5 w-3.5" /> View Receipt
+          <Printer className="h-3.5 w-3.5" /> Print
         </Button>
-      ),
+        {row.original.receiptUrl && (
+          <a href={row.original.receiptUrl} target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" size="sm" className="gap-1 h-7 px-2">
+              <Receipt className="h-3.5 w-3.5" /> PDF
+            </Button>
+          </a>
+        )}
+      </div>
+    ),
   },
 ];
 
 export default function PaymentsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const canIssueReceipts = ['secretary', 'accountant'].includes(user?.role);
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -374,12 +412,6 @@ export default function PaymentsPage() {
     setPreviewOpen(true);
   };
 
-  const handleViewFromTable = (payment) => {
-    setPreviewData(buildReceiptData(null, payment));
-    setPendingPayload(null);
-    setPreviewOpen(true);
-  };
-
   const handleCloseForm = () => {
     setOpen(false);
     setSelectedClassId('');
@@ -449,7 +481,7 @@ export default function PaymentsPage() {
       </div>
 
       <DataTable
-        columns={buildColumns(handleViewFromTable)}
+        columns={buildColumns({ canIssueReceipts })}
         data={data?.data}
         loading={isLoading}
         pageCount={data?.pagination?.totalPages}

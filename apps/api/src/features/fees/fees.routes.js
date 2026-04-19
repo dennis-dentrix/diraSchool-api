@@ -1,5 +1,6 @@
 import express from 'express';
-import { protect, blockIfMustChangePassword, adminOnly } from '../../middleware/auth.js';
+import { protect, blockIfMustChangePassword, adminOnly, authorize } from '../../middleware/auth.js';
+import { ADMIN_ROLES, ROLES } from '../../constants/index.js';
 import {
   validateCreateFeeStructure,
   validateUpdateFeeStructure,
@@ -19,22 +20,28 @@ import {
   listPayments,
   getPayment,
   reversePayment,
+  issueReceipt,
   getStudentBalance,
 } from './fees.controller.js';
 
 const router = express.Router();
 
-// All fee routes require authentication + admin role
-router.use(protect, blockIfMustChangePassword, adminOnly);
+// All fee routes require authentication
+router.use(protect, blockIfMustChangePassword);
+
+const canManageFees = authorize(...ADMIN_ROLES, ROLES.SECRETARY, ROLES.ACCOUNTANT);
+const canIssueReceipts = authorize(ROLES.SECRETARY, ROLES.ACCOUNTANT);
 
 // ── Fee Structures ────────────────────────────────────────────────────────────
 router
   .route('/structures')
+  .all(adminOnly)
   .get(validateListFeeStructures, listFeeStructures)
   .post(validateCreateFeeStructure, createFeeStructure);
 
 router
   .route('/structures/:id')
+  .all(adminOnly)
   .get(getFeeStructure)
   .patch(validateUpdateFeeStructure, updateFeeStructure)
   .delete(deleteFeeStructure);
@@ -42,14 +49,16 @@ router
 // ── Payments ──────────────────────────────────────────────────────────────────
 router
   .route('/payments')
+  .all(canManageFees)
   .get(validateListPayments, listPayments)
   .post(validateCreatePayment, createPayment);
 
-router.route('/payments/:id').get(getPayment);
+router.route('/payments/:id').all(canManageFees).get(getPayment);
 
-router.post('/payments/:id/reverse', validateReversePayment, reversePayment);
+router.post('/payments/:id/reverse', canManageFees, validateReversePayment, reversePayment);
+router.post('/payments/:id/issue-receipt', canIssueReceipts, issueReceipt);
 
 // ── Balance ───────────────────────────────────────────────────────────────────
-router.get('/balance', validateBalanceQuery, getStudentBalance);
+router.get('/balance', canManageFees, validateBalanceQuery, getStudentBalance);
 
 export default router;

@@ -37,7 +37,7 @@ const validateClassAndSubject = async (schoolId, classId, subjectId) => {
  * POST /api/v1/exams
  */
 export const createExam = asyncHandler(async (req, res) => {
-  const { classId, subjectId, name, type, totalMarks } = req.body;
+  const { classId, subjectId, name, type, totalMarks, examPaperUrl } = req.body;
 
   const check = await validateClassAndSubject(req.user.schoolId, classId, subjectId);
   if (check.error) return sendError(res, check.error.message, check.error.statusCode);
@@ -52,6 +52,7 @@ export const createExam = asyncHandler(async (req, res) => {
     term: check.cls.term,
     academicYear: check.cls.academicYear,
     levelCategory: check.cls.levelCategory,
+    examPaperUrl: examPaperUrl || undefined,
   });
 
   return sendSuccess(res, { exam }, 201);

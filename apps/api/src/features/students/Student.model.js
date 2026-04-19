@@ -98,6 +98,17 @@ const studentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TransportRoute',
     },
+    transportAssignment: {
+      routeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TransportRoute',
+      },
+      routeName: { type: String, trim: true },
+      driverName: { type: String, trim: true },
+      driverPhone: { type: String, trim: true },
+      dropOffPoint: { type: String, trim: true },
+      assignedAt: { type: Date },
+    },
   },
   { timestamps: true }
 );

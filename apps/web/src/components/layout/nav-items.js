@@ -66,16 +66,10 @@ export const schoolNavItems = [
     roles: ACADEMIC,
   },
   {
-    label: 'Results',
-    href: '/results',
+    label: 'Results & Reports',
+    href: '/report-cards',
     icon: BarChart2,
     roles: ACADEMIC,
-  },
-  {
-    label: 'Report Cards',
-    href: '/report-cards',
-    icon: FileText,
-    roles: ADMIN,
   },
   {
     label: 'Fees',
