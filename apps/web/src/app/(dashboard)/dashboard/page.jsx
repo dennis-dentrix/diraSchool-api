@@ -7,10 +7,6 @@ import {
   AlertTriangle, UserX, BookOpen, BookMarked, ChevronRight,
   Plus, FileText, CalendarCheck,
 } from 'lucide-react';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
 import { dashboardApi, feesApi, classesApi, subjectsApi, attendanceApi, timetableApi, studentsApi, transportApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useRouter } from 'next/navigation';
@@ -65,14 +61,6 @@ function FinanceOpsDashboard({ user }) {
     },
   });
 
-  const { data: classData, isLoading: classLoading } = useQuery({
-    queryKey: ['finance-dashboard-classes'],
-    queryFn: async () => {
-      const res = await classesApi.list({ limit: 200 });
-      return res.data;
-    },
-  });
-
   const { data: studentData, isLoading: studentsLoading } = useQuery({
     queryKey: ['finance-dashboard-students'],
     queryFn: async () => {
@@ -81,17 +69,7 @@ function FinanceOpsDashboard({ user }) {
     },
   });
 
-  const { data: routeData, isLoading: routesLoading } = useQuery({
-    queryKey: ['finance-dashboard-routes'],
-    queryFn: async () => {
-      const res = await transportApi.listRoutes({ limit: 200 });
-      return res.data;
-    },
-  });
-
   const payments = paymentsData?.payments ?? paymentsData?.data ?? [];
-  const classes = classData?.classes ?? classData?.data ?? [];
-  const routes = routeData?.routes ?? routeData?.data ?? [];
   const totalStudents = studentData?.meta?.total ?? studentData?.pagination?.total ?? 0;
 
   const now = new Date();
@@ -110,12 +88,6 @@ function FinanceOpsDashboard({ user }) {
     })
     .reduce((sum, p) => sum + (p.amount ?? 0), 0);
 
-  const methodBreakdown = completedPayments.reduce((acc, p) => {
-    const key = String(p.method ?? 'other').toUpperCase();
-    acc[key] = (acc[key] ?? 0) + (p.amount ?? 0);
-    return acc;
-  }, {});
-
   const monthPaidStudentIds = new Set(
     completedPayments
       .filter((p) => {
@@ -127,20 +99,7 @@ function FinanceOpsDashboard({ user }) {
   );
   const studentsPaidThisMonth = monthPaidStudentIds.size;
   const studentsToFollowUp = Math.max(0, totalStudents - studentsPaidThisMonth);
-  const myUserId = String(user?._id ?? '');
   const unissuedReceipts = completedPayments.filter((p) => !p.receiptIssuedByUserId).length;
-  const receiptsIssuedByMeToday = completedPayments.filter((p) => {
-    const issuedBy = typeof p.receiptIssuedByUserId === 'object'
-      ? p.receiptIssuedByUserId?._id
-      : p.receiptIssuedByUserId;
-    const issuedAt = String(p.receiptIssuedAt ?? '').slice(0, 10);
-    return String(issuedBy) === myUserId && issuedAt === todayIso;
-  }).length;
-  const reversalsThisMonth = payments.filter((p) => {
-    if (p.status !== 'reversed') return false;
-    const d = new Date(p.updatedAt ?? p.createdAt);
-    return d.getMonth() === month && d.getFullYear() === year;
-  }).length;
   const latestPayments = [...payments]
     .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
     .slice(0, 8);
@@ -185,36 +144,6 @@ function FinanceOpsDashboard({ user }) {
           onClick={() => setDetail({ key: 'monthCollections', title: 'Monthly Collections', description: 'Payments completed this month.' })}
         />
         <StatCard
-          title="Active Students"
-          value={studentsLoading ? '—' : totalStudents}
-          description="School-wide count"
-          icon={GraduationCap}
-          color="purple"
-          loading={studentsLoading}
-          onClick={() => setDetail({ key: 'activeStudents', title: 'Active Students', description: 'Total active students in this school.' })}
-        />
-        <StatCard
-          title="Routes / Classes"
-          value={(routesLoading || classLoading) ? '—' : `${routes.length} / ${classes.length}`}
-          description="Transport and classes"
-          icon={Users}
-          color="orange"
-          loading={routesLoading || classLoading}
-          onClick={() => setDetail({ key: 'routesClasses', title: 'Routes and Classes', description: 'Configured transport routes and classes.' })}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Paid This Month"
-          value={paymentsLoading ? '—' : studentsPaidThisMonth}
-          description="Unique students"
-          icon={GraduationCap}
-          color="green"
-          loading={paymentsLoading}
-          onClick={() => setDetail({ key: 'paidThisMonth', title: 'Students Paid This Month', description: 'Unique students with completed payments this month.' })}
-        />
-        <StatCard
           title="Need Follow-up"
           value={(paymentsLoading || studentsLoading) ? '—' : studentsToFollowUp}
           description="Est. unpaid this month"
@@ -232,123 +161,19 @@ function FinanceOpsDashboard({ user }) {
           loading={paymentsLoading}
           onClick={() => setDetail({ key: 'unissuedReceipts', title: 'Unissued Receipts', description: 'Completed payments awaiting receipt issuance.' })}
         />
-        <StatCard
-          title="My Receipts Today"
-          value={paymentsLoading ? '—' : receiptsIssuedByMeToday}
-          description="Issued by you"
-          icon={ClipboardList}
-          color="blue"
-          loading={paymentsLoading}
-          onClick={() => setDetail({ key: 'myReceipts', title: 'My Receipts Today', description: 'Receipts issued by your account today.' })}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Payment Method Breakdown</CardTitle>
-            <CardDescription>Recent completed payments</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {paymentsLoading ? (
-              <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
-            ) : Object.keys(methodBreakdown).length ? (
-              <div className="divide-y">
-                {Object.entries(methodBreakdown).map(([method, amount]) => (
-                  <div key={method} className="flex items-center justify-between py-2.5">
-                    <span className="text-sm text-muted-foreground">{method}</span>
-                    <span className="text-sm font-semibold">{formatCurrency(amount)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-4 text-center">No payment data yet</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Operational Snapshot</CardTitle>
-            <CardDescription>Classes and transport readiness</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {(classLoading || routesLoading) ? (
-              <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
-            ) : (
-              <div className="divide-y">
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-sm text-muted-foreground">Configured classes</span>
-                  <span className="text-sm font-semibold">{classes.length}</span>
-                </div>
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-sm text-muted-foreground">Configured routes</span>
-                  <span className="text-sm font-semibold">{routes.length}</span>
-                </div>
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-sm text-muted-foreground">Has active routes</span>
-                  <span className="text-sm font-semibold">{routes.some((r) => r.isActive !== false) ? 'Yes' : 'No'}</span>
-                </div>
-                <div className="flex items-center justify-between py-2.5">
-                  <Link href="/transport" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
-                    Open transport <ChevronRight className="h-3 w-3" />
-                  </Link>
-                  <Link href="/classes" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
-                    Open classes <ChevronRight className="h-3 w-3" />
-                  </Link>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Work Queue</CardTitle>
-          <CardDescription>Recommended daily follow-ups</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {paymentsLoading ? (
-            <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
-          ) : (
-            <div className="divide-y">
-              <div className="flex items-center justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">Issue pending receipts</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold">{unissuedReceipts}</span>
-                  <Link href="/fees/payments" className="text-xs text-blue-600 hover:underline">Open</Link>
-                </div>
-              </div>
-              <div className="flex items-center justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">Student fee follow-up</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold">{studentsToFollowUp}</span>
-                  <Link href="/students" className="text-xs text-blue-600 hover:underline">Open</Link>
-                </div>
-              </div>
-              <div className="flex items-center justify-between py-2.5">
-                <span className="text-sm text-muted-foreground">Reversals this month</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold">{reversalsThisMonth}</span>
-                  <Link href="/fees/payments" className="text-xs text-blue-600 hover:underline">Review</Link>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">Recent Payments</CardTitle>
+          <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
+          <CardDescription>Latest completed and pending payment records</CardDescription>
         </CardHeader>
         <CardContent>
           {paymentsLoading ? (
             <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
           ) : payments.length ? (
             <div className="divide-y">
-              {payments.slice(0, 10).map((p) => (
+              {payments.slice(0, 6).map((p) => (
                 <div key={p._id} className="flex items-center justify-between py-2.5">
                   <div>
                     <p className="text-sm font-medium">{p.studentId?.firstName ?? 'Student'} {p.studentId?.lastName ?? ''}</p>
@@ -398,53 +223,14 @@ function FinanceOpsDashboard({ user }) {
               </Card>
             )}
 
-            {detail?.key === 'activeStudents' && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Enrollment Snapshot</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Active students</span><span className="font-semibold">{totalStudents}</span></div>
-                  <Link href="/students" className="text-xs text-blue-600 hover:underline">Open student list</Link>
-                </CardContent>
-              </Card>
-            )}
-
-            {detail?.key === 'routesClasses' && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Operations Snapshot</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Configured routes</span><span className="font-semibold">{routes.length}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Configured classes</span><span className="font-semibold">{classes.length}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Active routes</span><span className="font-semibold">{routes.filter((r) => r.isActive !== false).length}</span></div>
-                  <div className="flex gap-4 pt-1">
-                    <Link href="/transport" className="text-xs text-blue-600 hover:underline">Open transport</Link>
-                    <Link href="/classes" className="text-xs text-blue-600 hover:underline">Open classes</Link>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {detail?.key === 'paidThisMonth' && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Students Paid This Month</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Unique students</span><span className="font-semibold">{studentsPaidThisMonth}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Collection value</span><span className="font-semibold">{formatCurrency(monthCollections)}</span></div>
-                </CardContent>
-              </Card>
-            )}
-
             {detail?.key === 'followUp' && (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm">Follow-up Queue</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Active students</span><span className="font-semibold">{totalStudents}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Paid this month</span><span className="font-semibold">{studentsPaidThisMonth}</span></div>
                   <div className="flex items-center justify-between"><span className="text-muted-foreground">Need follow-up</span><span className="font-semibold">{studentsToFollowUp}</span></div>
                   <p className="text-xs text-muted-foreground">Estimate based on active students vs paid-this-month students.</p>
                   <Link href="/students" className="text-xs text-blue-600 hover:underline">Open students</Link>
@@ -474,19 +260,6 @@ function FinanceOpsDashboard({ user }) {
                     </div>
                   )}
                   <Link href="/fees/payments" className="text-xs text-blue-600 hover:underline mt-3 inline-block">Open payments</Link>
-                </CardContent>
-              </Card>
-            )}
-
-            {detail?.key === 'myReceipts' && (
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Your Issuance Activity</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Issued today</span><span className="font-semibold">{receiptsIssuedByMeToday}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">System reversals (month)</span><span className="font-semibold">{reversalsThisMonth}</span></div>
-                  <Link href="/fees/payments" className="text-xs text-blue-600 hover:underline">Open payments</Link>
                 </CardContent>
               </Card>
             )}
@@ -933,22 +706,8 @@ export default function DashboardPage() {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const todayStr = now.toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  const feeChartData = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - (5 - i));
-    const month = d.toLocaleString('default', { month: 'short' });
-    const total = recentPayments
-      .filter((p) => {
-        const pd = new Date(p.createdAt);
-        return pd.getMonth() === d.getMonth() && pd.getFullYear() === d.getFullYear();
-      })
-      .reduce((sum, p) => sum + (p.amount ?? 0), 0);
-    return { month, collected: total };
-  });
-
   const trialDaysLeft   = summary?.school?.trialDaysLeft ?? null;
   const pendingStaff    = summary?.alerts?.staffAwaitingFirstLogin ?? 0;
-  const termCollections = recentPayments.reduce((s, p) => s + (p.amount ?? 0), 0);
   const activeStudents = summary?.students?.byStatus?.active ?? 0;
   const inactiveStudents = summary?.students?.byStatus?.inactive ?? 0;
   const pendingStudents = summary?.students?.byStatus?.pending ?? 0;
@@ -990,15 +749,15 @@ export default function DashboardPage() {
             onClick={() => setAdminDetail({ key: 'staff', title: 'Staff Overview', description: 'Active staff by role and onboarding state.' })}
           />
         )}
-        {isFinance && (
-          <StatCard
-            title="Recent Collections"
-            value={paymentsLoading ? '—' : formatCurrency(termCollections)}
-            description="Last 6 months"
-            icon={CreditCard} color="green" loading={paymentsLoading}
-            onClick={() => setAdminDetail({ key: 'collections', title: 'Collections Overview', description: 'Fee collections in the selected period.' })}
-          />
-        )}
+        <StatCard
+          title="Pending Onboarding"
+          value={summaryLoading ? '—' : pendingStaff}
+          description="Staff not yet activated"
+          icon={UserX}
+          color="green"
+          loading={summaryLoading && isAdmin}
+          onClick={isAdmin ? () => setAdminDetail({ key: 'onboarding', title: 'Pending Staff Onboarding', description: 'Staff accounts awaiting first login.' }) : undefined}
+        />
         <StatCard
           title="Inactive Students"
           value={summaryLoading ? '—' : inactiveStudents}
@@ -1010,33 +769,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {isFinance && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">Fee Collections</CardTitle>
-              <CardDescription>Last 6 months</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={feeChartData}>
-                  <defs>
-                    <linearGradient id="feeGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                  <Tooltip formatter={(v) => formatCurrency(v)} />
-                  <Area type="monotone" dataKey="collected" stroke="#3b82f6" fill="url(#feeGrad)" strokeWidth={2} name="Collected" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        )}
-
+      <div className={`grid grid-cols-1 gap-4 ${isFinance ? 'lg:grid-cols-2' : ''}`}>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">School Operations</CardTitle>
@@ -1071,40 +804,19 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {isAdmin && (
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Staff by Role</CardTitle></CardHeader>
-            <CardContent>
-              {summaryLoading ? (
-                <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
-              ) : Object.keys(summary?.staff?.byRole ?? {}).length ? (
-                <div className="divide-y">
-                  {Object.entries(summary.staff.byRole).map(([role, count]) => (
-                    <div key={role} className="flex justify-between items-center py-2.5">
-                      <span className="text-sm capitalize text-muted-foreground">{role.replace(/_/g, ' ')}</span>
-                      <span className="text-sm font-semibold tabular-nums">{count}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground py-4 text-center">No staff data</p>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
         {isFinance && (
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Recent Payments</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Recent Payments</CardTitle>
+              <CardDescription>Latest fee records</CardDescription>
+            </CardHeader>
             <CardContent>
               {paymentsLoading ? (
                 <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
               ) : recentPayments.length ? (
                 <div className="divide-y">
-                  {recentPayments.map((p) => (
+                  {recentPayments.slice(0, 6).map((p) => (
                     <div key={p._id} className="flex items-center justify-between py-2.5">
                       <div>
                         <p className="text-sm font-medium">{p.studentId?.firstName ?? 'Student'} {p.studentId?.lastName ?? ''}</p>
@@ -1165,13 +877,13 @@ export default function DashboardPage() {
               </Card>
             )}
 
-            {adminDetail?.key === 'collections' && (
+            {adminDetail?.key === 'onboarding' && (
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Collections</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Pending Staff Onboarding</CardTitle></CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Last 6 months</span><span className="font-semibold">{formatCurrency(termCollections)}</span></div>
-                  <p className="text-xs text-muted-foreground">This reflects recently fetched completed payment records.</p>
-                  <Link href="/fees/payments" className="text-xs text-blue-600 hover:underline">Open payments</Link>
+                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Awaiting first login</span><span className="font-semibold">{pendingStaff}</span></div>
+                  <p className="text-xs text-muted-foreground">These staff accounts should set passwords and complete first login.</p>
+                  <Link href="/staff" className="text-xs text-blue-600 hover:underline">Open staff</Link>
                 </CardContent>
               </Card>
             )}
