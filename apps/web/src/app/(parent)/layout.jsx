@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useLogout } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,7 +11,10 @@ import { Home, LogOut } from 'lucide-react';
 
 function NavLink({ href, children }) {
   const pathname = usePathname();
-  const isActive = pathname === href;
+  const searchParams = useSearchParams();
+  const target = href.split('?tab=')[1];
+  const activeTab = searchParams.get('tab') || 'fees';
+  const isActive = pathname === '/portal' && target ? activeTab === target : pathname === href;
   return (
     <Link
       href={href}
@@ -75,6 +78,15 @@ export default function ParentLayout({ children }) {
               <span className="hidden sm:inline">Sign out</span>
             </Button>
           </div>
+        </div>
+        <div className="max-w-4xl mx-auto px-4 pb-3 overflow-x-auto">
+          <nav className="flex items-center gap-2 min-w-max">
+            <NavLink href="/portal?tab=fees"><Home className="h-4 w-4" />Fees</NavLink>
+            <NavLink href="/portal?tab=attendance">Attendance</NavLink>
+            <NavLink href="/portal?tab=results">Results</NavLink>
+            <NavLink href="/portal?tab=reports">Report Cards</NavLink>
+            <NavLink href="/portal?tab=school">School Info</NavLink>
+          </nav>
         </div>
       </header>
 

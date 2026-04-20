@@ -109,6 +109,7 @@ export const JOB_NAMES = {
   IMPORT_STUDENTS_CSV: 'import-students-csv',
   IN_APP_NOTIFICATION: 'in-app-notification',
   SEND_INVITE_EMAIL:        'send-invite-email',
+  SEND_PARENT_ENROLLMENT_EMAIL: 'send-parent-enrollment-email',
   SEND_RESET_EMAIL:         'send-reset-email',
   SEND_VERIFICATION_EMAIL:  'send-verification-email',
 };

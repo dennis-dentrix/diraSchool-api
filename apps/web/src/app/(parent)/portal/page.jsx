@@ -1,16 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { parentApi, settingsApi } from '@/lib/api';
 import { formatDate, formatCurrency, capitalize } from '@/lib/utils';
 import { ACADEMIC_YEARS, TERMS } from '@/lib/constants';
-import { GraduationCap, CreditCard, ClipboardList, School, CalendarDays } from 'lucide-react';
+import { GraduationCap, CreditCard, ClipboardList, School, CalendarDays, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // ── Child Selector ────────────────────────────────────────────────────────────
 function ChildSelector({ children, selected, onSelect }) {
@@ -292,6 +294,57 @@ function ResultsTab({ studentId }) {
   );
 }
 
+function ReportCardsTab({ studentId }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['parent-report-cards', studentId],
+    queryFn: async () => {
+      const res = await parentApi.reportCards(studentId);
+      return res.data.data ?? res.data;
+    },
+    enabled: !!studentId,
+  });
+
+  if (isLoading) return <Skeleton className="h-48 w-full" />;
+
+  const cards = Array.isArray(data) ? data : (data?.reportCards ?? []);
+
+  if (!cards.length) {
+    return <p className="text-sm text-muted-foreground py-8 text-center">No published report cards available yet.</p>;
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Published Report Cards</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="divide-y">
+          {cards.map((c) => (
+            <div key={c._id} className="py-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">{c.term} {c.academicYear}</p>
+                <p className="text-xs text-muted-foreground">
+                  Grade: {c.overallGrade ?? 'N/A'} · Status: {c.status}
+                </p>
+              </div>
+              {c.pdfUrl ? (
+                <Button asChild size="sm" variant="outline" className="gap-1.5">
+                  <a href={c.pdfUrl} target="_blank" rel="noreferrer">
+                    <Download className="h-3.5 w-3.5" />
+                    Download
+                  </a>
+                </Button>
+              ) : (
+                <Badge variant="outline">PDF not ready</Badge>
+              )}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── School Info tab ───────────────────────────────────────────────────────────
 function SchoolTab() {
   const { data, isLoading } = useQuery({
@@ -418,6 +471,11 @@ function SchoolTab() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ParentPortalPage() {
   const [selectedChild, setSelectedChild] = useState(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const validTabs = ['fees', 'attendance', 'results', 'reports', 'school'];
+  const [activeTab, setActiveTab] = useState(validTabs.includes(tabFromUrl) ? tabFromUrl : 'fees');
 
   const { data: childrenData, isLoading } = useQuery({
     queryKey: ['parent-children'],
@@ -432,6 +490,14 @@ export default function ParentPortalPage() {
       setSelectedChild(childrenData[0]._id);
     }
   }, [childrenData, selectedChild]);
+
+  useEffect(() => {
+    if (validTabs.includes(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    } else if (!tabFromUrl) {
+      setActiveTab('fees');
+    }
+  }, [tabFromUrl]);
 
   const children = Array.isArray(childrenData) ? childrenData : (childrenData?.children ?? []);
   const child = children.find((c) => c._id === selectedChild);
@@ -486,8 +552,11 @@ export default function ParentPortalPage() {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="fees">
-        <TabsList className="w-full grid grid-cols-4">
+      <Tabs value={activeTab} onValueChange={(next) => {
+        setActiveTab(next);
+        router.replace(`/portal?tab=${next}`, { scroll: false });
+      }}>
+        <TabsList className="w-full grid grid-cols-5">
           <TabsTrigger value="fees" className="gap-1.5 text-xs sm:text-sm">
             <CreditCard className="h-3.5 w-3.5" />Fees
           </TabsTrigger>
@@ -496,6 +565,9 @@ export default function ParentPortalPage() {
           </TabsTrigger>
           <TabsTrigger value="results" className="gap-1.5 text-xs sm:text-sm">
             <GraduationCap className="h-3.5 w-3.5" />Results
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="gap-1.5 text-xs sm:text-sm">
+            <Download className="h-3.5 w-3.5" />Reports
           </TabsTrigger>
           <TabsTrigger value="school" className="gap-1.5 text-xs sm:text-sm">
             <School className="h-3.5 w-3.5" />School
@@ -510,6 +582,9 @@ export default function ParentPortalPage() {
         </TabsContent>
         <TabsContent value="results" className="mt-4">
           {selectedChild ? <ResultsTab studentId={selectedChild} /> : null}
+        </TabsContent>
+        <TabsContent value="reports" className="mt-4">
+          {selectedChild ? <ReportCardsTab studentId={selectedChild} /> : null}
         </TabsContent>
         <TabsContent value="school" className="mt-4">
           <SchoolTab />

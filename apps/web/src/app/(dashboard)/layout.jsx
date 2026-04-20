@@ -89,6 +89,9 @@ export default function DashboardLayout({ children }) {
     if (!isLoading && !user) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
+    if (!isLoading && user?.role === 'parent') {
+      router.replace('/portal');
+    }
   }, [user, isLoading, router, pathname]);
 
   if (isLoading || !user) {

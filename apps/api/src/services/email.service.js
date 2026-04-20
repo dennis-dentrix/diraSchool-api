@@ -264,14 +264,31 @@ export const sendInviteEmail = ({
   firstName,
   schoolName,
   inviteUrl,
+  childName,
   expiresInDays = 7,
   meta = {},
 }) =>
   sendEmail({
     to,
     subject: `You've been added to ${schoolName} — set your password`,
-    html: _inviteTemplate({ firstName, schoolName, inviteUrl, expiresInDays }),
+    html: _inviteTemplate({ firstName, schoolName, inviteUrl, childName, expiresInDays }),
     template: 'invite',
+    meta,
+  });
+
+export const sendParentEnrollmentEmail = ({
+  to,
+  firstName,
+  schoolName,
+  childName,
+  isAdditionalChild = false,
+  meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `${childName} has been enrolled at ${schoolName}`,
+    html: _parentEnrollmentTemplate({ firstName, schoolName, childName, isAdditionalChild }),
+    template: 'parent-enrollment',
     meta,
   });
 
@@ -394,11 +411,17 @@ const _verifyTemplate = ({ firstName, schoolName, code, verifyUrl, expiresInMinu
     `
   );
 
-const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
+const _inviteTemplate = ({ firstName, schoolName, inviteUrl, childName, expiresInDays }) =>
   _shell(
     `Invitation to ${schoolName}`,
     `
       <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
+      ${childName ? `
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        Your child <strong>${childName}</strong> has been successfully enrolled at
+        <strong>${schoolName}</strong>.
+      </p>
+      ` : ''}
       <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
         Your account has been created on <strong>Diraschool</strong> for
         <strong>${schoolName}</strong>.
@@ -415,6 +438,29 @@ const _inviteTemplate = ({ firstName, schoolName, inviteUrl, expiresInDays }) =>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
       <p style="margin:0;font-size:13px;color:#6b7280;">
         If you weren't expecting this invitation, contact your school administrator.
+      </p>
+    `
+  );
+
+const _parentEnrollmentTemplate = ({ firstName, schoolName, childName, isAdditionalChild }) =>
+  _shell(
+    `${childName} enrolled at ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        ${
+  isAdditionalChild
+    ? `Your child <strong>${childName}</strong> has been added to your parent account at <strong>${schoolName}</strong>.`
+    : `Your child <strong>${childName}</strong> has been successfully enrolled at <strong>${schoolName}</strong>.`
+}
+      </p>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        You can sign in to your existing Diraschool parent portal account to view fees, attendance,
+        results, and report cards.
+      </p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;">
+        If this update is unexpected, contact your school administrator.
       </p>
     `
   );
