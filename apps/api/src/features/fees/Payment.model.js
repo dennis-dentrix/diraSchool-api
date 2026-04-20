@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { PAYMENT_METHODS, PAYMENT_STATUSES, TERMS } from '../../constants/index.js';
+import { getRedis } from '../../config/redis.js';
 
 const paymentSchema = new mongoose.Schema(
   {
@@ -105,13 +106,24 @@ const paymentSchema = new mongoose.Schema(
 // Composite index for fetching a student's payments in a given term
 paymentSchema.index({ schoolId: 1, studentId: 1, academicYear: 1, term: 1 });
 
-// Auto-assign a sequential receipt number before first save
+// Auto-assign a sequential receipt number before first save.
+// Uses a Redis atomic INCR per school-year to eliminate race conditions.
+// Falls back to countDocuments only when Redis is unavailable (test env).
 paymentSchema.pre('save', async function (next) {
   if (this.isNew && !this.receiptNumber) {
     try {
-      const count = await mongoose.model('Payment').countDocuments({ schoolId: this.schoolId });
       const year = new Date().getFullYear();
-      this.receiptNumber = `RCT-${year}-${String(count + 1).padStart(5, '0')}`;
+      const redis = getRedis();
+      let seq;
+      if (redis) {
+        const key = `receipt:seq:${this.schoolId}:${year}`;
+        seq = await redis.incr(key);
+        // First hit this year — set a 2-year TTL so old keys self-clean
+        if (seq === 1) await redis.expire(key, 2 * 365 * 24 * 60 * 60);
+      } else {
+        seq = (await mongoose.model('Payment').countDocuments({ schoolId: this.schoolId })) + 1;
+      }
+      this.receiptNumber = `RCT-${year}-${String(seq).padStart(5, '0')}`;
     } catch {
       // Non-fatal — receipt number may be empty; payment still records
     }

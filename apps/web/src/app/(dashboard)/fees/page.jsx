@@ -51,10 +51,18 @@ const paymentColumns = [
 ];
 
 export default function FeesPage() {
-  const { data: payments, isLoading } = useQuery({
+  const { data: payments, isLoading, isError, error } = useQuery({
     queryKey: ['payments', 'recent'],
     queryFn: async () => {
       const res = await feesApi.listPayments({ limit: 10 });
+      return res.data;
+    },
+  });
+
+  const { data: financeSummary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['fees-dashboard-summary'],
+    queryFn: async () => {
+      const res = await feesApi.dashboardSummary();
       return res.data;
     },
   });
@@ -67,7 +75,8 @@ export default function FeesPage() {
     },
   });
 
-  const totalCollected = payments?.data?.reduce((s, p) => s + (p.status === 'completed' ? p.amount : 0), 0) ?? 0;
+  const monthCollected = financeSummary?.summary?.monthToDate?.totalAmount ?? 0;
+  const followUpCount = financeSummary?.summary?.students?.followUpCount ?? 0;
 
   return (
     <div className="space-y-6">
@@ -81,9 +90,9 @@ export default function FeesPage() {
       </PageHeader>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Collected" value={formatCurrency(totalCollected)} icon={TrendingUp} color="green" loading={isLoading} description="Recent payments" />
+        <StatCard title="This Month Collected" value={formatCurrency(monthCollected)} icon={TrendingUp} color="green" loading={summaryLoading} description="Server-side totals" />
         <StatCard title="Fee Structures" value={structures?.pagination?.total ?? '—'} icon={FileText} color="blue" description="Configured" />
-        <StatCard title="Pending Payments" value="—" icon={AlertCircle} color="orange" description="Balance outstanding" />
+        <StatCard title="Need Follow-up" value={followUpCount} icon={AlertCircle} color="orange" loading={summaryLoading} description="Active students unpaid this month" />
       </div>
 
       <Card>
@@ -92,7 +101,7 @@ export default function FeesPage() {
           <Link href="/fees/payments" className="text-sm text-blue-600 hover:underline">View all</Link>
         </CardHeader>
         <CardContent>
-          <DataTable columns={paymentColumns} data={payments?.data} loading={isLoading} />
+          <DataTable columns={paymentColumns} data={payments?.data} loading={isLoading} error={isError ? error : null} />
         </CardContent>
       </Card>
     </div>

@@ -23,6 +23,7 @@ import { normalisePhone } from '../../utils/phone.js';
 import { ROLES, STUDENT_STATUSES } from '../../constants/index.js';
 import { getRedis } from '../../config/redis.js';
 import logger from '../../config/logger.js';
+import { notifyUser } from '../../utils/notify.js';
 
 const RESULT_TTL = 2 * 60 * 60; // 2 hours
 
@@ -35,7 +36,7 @@ const saveResult = async (jobId, result) => {
 };
 
 export const processImportJob = async (job) => {
-  const { jobId, schoolId, classId, rows } = job.data;
+  const { jobId, schoolId, classId, rows, requestedByUserId } = job.data;
 
   logger.info('[Import] Starting student CSV import', {
     jobId,
@@ -49,6 +50,15 @@ export const processImportJob = async (job) => {
   if (!cls) {
     const result = { status: 'failed', error: 'Target class not found.', total: rows.length, succeeded: 0, failed: rows.length, errors: [] };
     await saveResult(jobId, result);
+    await notifyUser({
+      schoolId,
+      userId: requestedByUserId,
+      type: 'error',
+      title: 'Student Import Failed',
+      message: 'Target class was not found. Import job could not run.',
+      link: '/students',
+      meta: { jobId },
+    });
     throw new Error(result.error);
   }
 
@@ -154,6 +164,15 @@ export const processImportJob = async (job) => {
   };
 
   await saveResult(jobId, result);
+  await notifyUser({
+    schoolId,
+    userId: requestedByUserId,
+    type: failed > 0 ? 'warning' : 'success',
+    title: 'Student Import Completed',
+    message: `${succeeded} succeeded, ${failed} failed.`,
+    link: '/students',
+    meta: { jobId, succeeded, failed },
+  });
 
   logger.info('[Import] CSV import complete', { jobId, succeeded, failed });
 

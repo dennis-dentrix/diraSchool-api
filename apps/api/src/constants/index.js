@@ -1,31 +1,19 @@
 // ============================================================
 // SINGLE SOURCE OF TRUTH — never hardcode these strings elsewhere
 // ============================================================
+import {
+  ROLES,
+  ADMIN_ROLES,
+  TERMS,
+  LEVEL_CATEGORIES,
+  DAYS_OF_WEEK,
+  PLAN_TIERS,
+} from '@diraschool/shared/constants';
 
-export const ROLES = {
-  SUPERADMIN: 'superadmin',
-  SCHOOL_ADMIN: 'school_admin',
-  DIRECTOR: 'director',
-  HEADTEACHER: 'headteacher',
-  DEPUTY_HEADTEACHER: 'deputy_headteacher',
-  SECRETARY: 'secretary',
-  ACCOUNTANT: 'accountant',
-  TEACHER: 'teacher',
-  PARENT: 'parent',
-};
-
-// All roles that have full admin access to a school
-export const ADMIN_ROLES = [
-  ROLES.SCHOOL_ADMIN,
-  ROLES.DIRECTOR,
-  ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER,
-];
+export { ROLES, ADMIN_ROLES, TERMS, LEVEL_CATEGORIES, DAYS_OF_WEEK, PLAN_TIERS };
 
 // All roles scoped to a specific school (not superadmin)
 export const SCHOOL_ROLES = Object.values(ROLES).filter((r) => r !== ROLES.SUPERADMIN);
-
-export const TERMS = ['Term 1', 'Term 2', 'Term 3'];
 
 export const YEARS = () => {
   const current = new Date().getFullYear();
@@ -74,15 +62,6 @@ export const ATTENDANCE_STATUSES = {
 export const ATTENDANCE_REGISTER_STATUSES = {
   DRAFT: 'draft',
   SUBMITTED: 'submitted',
-};
-
-// CBC level categories — drive which grading scale is applied
-export const LEVEL_CATEGORIES = {
-  PRE_PRIMARY: 'Pre-Primary',         // PP1–PP2: observation only, no grades
-  LOWER_PRIMARY: 'Lower Primary',     // Grade 1–3: 4-level rubric EE/ME/AE/BE
-  UPPER_PRIMARY: 'Upper Primary',     // Grade 4–6: 4-level rubric EE/ME/AE/BE
-  JUNIOR_SECONDARY: 'Junior Secondary', // Grade 7–9: 8-point scale EE1–BE2
-  SENIOR_SCHOOL: 'Senior School',     // Grade 10–12: 8-point scale EE1–BE2
 };
 
 // 4-level rubric (Grade 1–6)
@@ -170,18 +149,6 @@ export const BORROWER_TYPES = {
   STAFF:   'staff',
 };
 
-export const DAYS_OF_WEEK = [
-  'monday','tuesday','wednesday','thursday','friday','saturday','sunday',
-];
-
-// ── Subscription plan tiers ───────────────────────────────────────────────────
-export const PLAN_TIERS = {
-  TRIAL:    'trial',
-  BASIC:    'basic',
-  STANDARD: 'standard',
-  PREMIUM:  'premium',
-};
-
 // ── Feature keys — one constant per gated feature ────────────────────────────
 // Core features (students, classes, attendance, exams, fees, users) are NOT listed
 // here — they are always available on every plan.
@@ -196,27 +163,23 @@ export const PLAN_FEATURES = {
   SMS:           'sms',
 };
 
-/**
- * PLAN_FEATURE_MAP — maps each tier to the features it unlocks.
- *
- * ⚠️  TODO: Finalise tier allocations once pricing is confirmed.
- *
- * Current state: all features are included on every tier (including trial)
- * so nothing is blocked while pricing is being decided.  When tiers are set,
- * simply remove feature keys from the lower-tier arrays — the middleware and
- * routes will enforce the gates automatically without any other code change.
- *
- * Suggested starting point (edit when ready):
- *   trial    → core only (no add-ons, time-limited)
- *   basic    → + report_cards, parent_portal, timetable
- *   standard → + library, transport, bulk_import, audit_log
- *   premium  → + sms + everything
- */
 export const PLAN_FEATURE_MAP = {
-  [PLAN_TIERS.TRIAL]: Object.values(PLAN_FEATURES),    // TODO: restrict when pricing set
-  [PLAN_TIERS.BASIC]: Object.values(PLAN_FEATURES),    // TODO: define
-  [PLAN_TIERS.STANDARD]: Object.values(PLAN_FEATURES), // TODO: define
-  [PLAN_TIERS.PREMIUM]: Object.values(PLAN_FEATURES),  // all features
+  [PLAN_TIERS.TRIAL]: [],
+  [PLAN_TIERS.BASIC]: [
+    PLAN_FEATURES.REPORT_CARDS,
+    PLAN_FEATURES.PARENT_PORTAL,
+    PLAN_FEATURES.TIMETABLE,
+  ],
+  [PLAN_TIERS.STANDARD]: [
+    PLAN_FEATURES.REPORT_CARDS,
+    PLAN_FEATURES.PARENT_PORTAL,
+    PLAN_FEATURES.TIMETABLE,
+    PLAN_FEATURES.LIBRARY,
+    PLAN_FEATURES.TRANSPORT,
+    PLAN_FEATURES.BULK_IMPORT,
+    PLAN_FEATURES.AUDIT_LOG,
+  ],
+  [PLAN_TIERS.PREMIUM]: Object.values(PLAN_FEATURES),
 };
 
 // Redis cache TTLs (seconds)

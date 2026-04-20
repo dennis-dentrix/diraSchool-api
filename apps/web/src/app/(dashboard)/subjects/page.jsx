@@ -229,7 +229,7 @@ export default function SubjectsPage() {
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({ resolver: zodResolver(schema) });
 
   // Admin: full list (no teacher filter)
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['subjects', page, deptFilter],
     queryFn: async () => {
       const res = await subjectsApi.list({ page, limit: 50, department: deptFilter || undefined });
@@ -499,6 +499,7 @@ export default function SubjectsPage() {
           )}
           data={deptFilter ? subjects.filter((s) => s.department === deptFilter) : subjects}
           loading={isLoading}
+          error={isError ? error : null}
           pageCount={meta?.totalPages ?? meta?.pages}
           currentPage={page}
           onPageChange={setPage}

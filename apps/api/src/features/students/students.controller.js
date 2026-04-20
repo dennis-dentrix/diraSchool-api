@@ -15,6 +15,7 @@ import { getRedis } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
+import { uploadBuffer } from '../../jobs/helpers/cloudinaryUpload.js';
 
 const enqueueEmail = async (type, payload) =>
   emailQueue.add(type, { type, payload });
@@ -521,6 +522,37 @@ export const withdrawStudent = asyncHandler(async (req, res) => {
   return sendSuccess(res, { student, message: 'Student withdrawn.' });
 });
 
+/**
+ * POST /api/v1/students/:id/photo
+ * Uploads/updates a student's profile photo.
+ * Field name: "photo" (multipart/form-data)
+ */
+export const uploadStudentPhoto = asyncHandler(async (req, res) => {
+  const student = await Student.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
+  if (!student) return sendError(res, 'Student not found.', 404);
+
+  const upload = await uploadBuffer(req.file.buffer, {
+    folder: `students/${req.user.schoolId}`,
+    public_id: `${student.admissionNumber}_${student._id}`,
+    resource_type: 'image',
+    overwrite: true,
+  });
+
+  if (!upload?.url) {
+    return sendError(
+      res,
+      'Photo upload unavailable. Configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.',
+      503
+    );
+  }
+
+  student.photo = upload.url;
+  student.wasNew = false;
+  await student.save();
+
+  return sendSuccess(res, { photo: student.photo, studentId: student._id });
+});
+
 // ── CSV Bulk Import ───────────────────────────────────────────────────────────
 
 /**
@@ -598,6 +630,7 @@ export const importStudents = asyncHandler(async (req, res) => {
   const job = await importQueue.add(JOB_NAMES.IMPORT_STUDENTS_CSV, {
     jobId: null,  // will be replaced below after we know job.id
     schoolId: req.user.schoolId.toString(),
+    requestedByUserId: req.user._id.toString(),
     classId,
     rows,
   });

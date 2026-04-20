@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import logger from '../config/logger.js';
+import { captureError } from '../config/sentry.js';
 
 /**
  * Global error handler. All async errors land here via asyncHandler.
@@ -48,6 +49,14 @@ const errorHandler = (err, req, res, _next) => {
       userId: req.user?._id,
       schoolId: req.user?.schoolId,
       body: req.body,
+    });
+    captureError(err, {
+      request: {
+        method: req.method,
+        url: req.originalUrl || req.url,
+        userId: req.user?._id?.toString(),
+        schoolId: req.user?.schoolId?.toString(),
+      },
     });
   } else if (statusCode >= 400 && process.env.NODE_ENV !== 'test') {
     // 4xx: debug-level — useful for tracing bad requests without noise

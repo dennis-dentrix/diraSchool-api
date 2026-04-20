@@ -8,9 +8,9 @@ import { ArrowLeft, Pencil, UserPlus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { studentsApi, getErrorMessage } from '@/lib/api';
+import { studentsApi, feesApi, attendanceApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
-import { formatDate, getStatusColor, capitalize } from '@/lib/utils';
+import { formatDate, formatCurrency, getStatusColor, capitalize } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,6 +50,191 @@ function InfoRow({ label, value }) {
   );
 }
 
+function StudentFeesTab({ studentId }) {
+  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
+    queryKey: ['student-payments', studentId],
+    queryFn: async () => {
+      const res = await feesApi.listPayments({ studentId, limit: 100 });
+      return res.data?.payments ?? res.data?.data ?? [];
+    },
+    enabled: !!studentId,
+  });
+
+  const { data: balanceData, isLoading: balanceLoading } = useQuery({
+    queryKey: ['student-balance', studentId],
+    queryFn: async () => {
+      const res = await feesApi.getBalance({ studentId });
+      return res.data?.balance ?? res.data?.data ?? res.data;
+    },
+    enabled: !!studentId,
+  });
+
+  const payments = paymentsData ?? [];
+  const totalPaid = payments.filter((p) => p.status === 'completed').reduce((s, p) => s + (p.amount ?? 0), 0);
+
+  if (paymentsLoading) return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <p className="text-xs text-muted-foreground font-medium">Total Paid</p>
+            <p className="text-xl font-bold text-green-600 mt-0.5">{formatCurrency(totalPaid)}</p>
+          </CardContent>
+        </Card>
+        {balanceData !== undefined && !balanceLoading && (
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-xs text-muted-foreground font-medium">Outstanding Balance</p>
+              <p className={`text-xl font-bold mt-0.5 ${(balanceData?.outstanding ?? 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                {formatCurrency(balanceData?.outstanding ?? 0)}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <p className="text-xs text-muted-foreground font-medium">Payments</p>
+            <p className="text-xl font-bold mt-0.5">{payments.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {payments.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <p className="text-sm">No payments recorded for this student.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Payment History</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {payments.map((p) => (
+                <div key={p._id} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">{p.term} {p.academicYear}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate(p.paymentDate ?? p.createdAt)} · {capitalize(p.method ?? '—')}
+                      {p.receiptNumber ? ` · ${p.receiptNumber}` : ''}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-sm font-semibold ${p.status === 'completed' ? 'text-green-600' : p.status === 'reversed' ? 'text-destructive line-through' : 'text-muted-foreground'}`}>
+                      {formatCurrency(p.amount ?? 0)}
+                    </p>
+                    <p className="text-xs text-muted-foreground capitalize">{p.status}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function StudentAttendanceTab({ studentId, classId }) {
+  const { data: registersData, isLoading } = useQuery({
+    queryKey: ['student-attendance', studentId, classId],
+    queryFn: async () => {
+      const res = await attendanceApi.listRegisters({ classId, limit: 200 });
+      return res.data?.data ?? res.data?.registers ?? [];
+    },
+    enabled: !!classId,
+  });
+
+  const registers = registersData ?? [];
+
+  const { present, absent, late, excused, total } = registers.reduce(
+    (acc, reg) => {
+      const entry = (reg.entries ?? []).find((e) => {
+        const sid = typeof e.studentId === 'object' ? e.studentId?._id : e.studentId;
+        return String(sid) === String(studentId);
+      });
+      if (entry) {
+        acc[entry.status] = (acc[entry.status] ?? 0) + 1;
+        acc.total += 1;
+      }
+      return acc;
+    },
+    { present: 0, absent: 0, late: 0, excused: 0, total: 0 }
+  );
+
+  const rate = total > 0 ? Math.round((present / total) * 100) : null;
+
+  if (isLoading) return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>;
+
+  if (!classId) return (
+    <Card>
+      <CardContent className="py-12 text-center text-muted-foreground">
+        <p className="text-sm">Student class information unavailable.</p>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Attendance Rate', value: rate !== null ? `${rate}%` : '—', color: rate !== null ? (rate >= 80 ? 'text-green-600' : rate >= 60 ? 'text-amber-600' : 'text-destructive') : '' },
+          { label: 'Days Present', value: present, color: 'text-green-600' },
+          { label: 'Days Absent', value: absent, color: 'text-destructive' },
+          { label: 'Days Late', value: late, color: 'text-amber-600' },
+        ].map(({ label, value, color }) => (
+          <Card key={label}>
+            <CardContent className="pt-4 pb-3">
+              <p className="text-xs text-muted-foreground font-medium">{label}</p>
+              <p className={`text-xl font-bold mt-0.5 ${color}`}>{value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {total === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <p className="text-sm">No attendance records found for this student.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Recent Attendance</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <div className="divide-y">
+              {[...registers]
+                .filter((reg) => (reg.entries ?? []).some((e) => {
+                  const sid = typeof e.studentId === 'object' ? e.studentId?._id : e.studentId;
+                  return String(sid) === String(studentId);
+                }))
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .slice(0, 20)
+                .map((reg) => {
+                  const entry = (reg.entries ?? []).find((e) => {
+                    const sid = typeof e.studentId === 'object' ? e.studentId?._id : e.studentId;
+                    return String(sid) === String(studentId);
+                  });
+                  const statusColors = { present: 'bg-green-100 text-green-700', absent: 'bg-red-100 text-red-700', late: 'bg-amber-100 text-amber-700', excused: 'bg-blue-100 text-blue-700' };
+                  return (
+                    <div key={reg._id} className="flex items-center justify-between px-4 py-2.5">
+                      <p className="text-sm">{formatDate(reg.date)}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[entry?.status] ?? 'bg-muted text-muted-foreground'}`}>
+                        {capitalize(entry?.status ?? 'unknown')}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function StudentDetailPage() {
   const params = useParams();
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
@@ -62,6 +247,7 @@ export default function StudentDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [guardianDialogOpen, setGuardianDialogOpen] = useState(false);
   const [editingGuardianIdx, setEditingGuardianIdx] = useState(null); // null = add new
+  const [photoFile, setPhotoFile] = useState(null);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(editSchema),
@@ -92,6 +278,21 @@ export default function StudentDetailPage() {
       toast.success('Student details updated');
       queryClient.invalidateQueries({ queryKey: ['student', id] });
       setEditOpen(false);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+  const { mutate: uploadPhoto, isPending: uploadingPhoto } = useMutation({
+    mutationFn: async () => {
+      if (!photoFile) throw new Error('Select an image first.');
+      const fd = new FormData();
+      fd.append('photo', photoFile);
+      return studentsApi.uploadPhoto(id, fd);
+    },
+    onSuccess: () => {
+      toast.success('Student photo uploaded');
+      setPhotoFile(null);
+      queryClient.invalidateQueries({ queryKey: ['student', id] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -160,6 +361,14 @@ export default function StudentDetailPage() {
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
+        <div className="w-12 h-12 rounded-full overflow-hidden bg-blue-100 text-blue-700 text-sm font-bold flex items-center justify-center shrink-0">
+          {student?.photo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={student.photo} alt="Student" className="w-full h-full object-cover" />
+          ) : (
+            `${student?.firstName?.[0] ?? ''}${student?.lastName?.[0] ?? ''}`
+          )}
+        </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold">{student?.firstName} {student?.lastName}</h1>
           <p className="text-muted-foreground text-sm font-mono">{student?.admissionNumber}</p>
@@ -173,6 +382,24 @@ export default function StudentDetailPage() {
           </Button>
         )}
       </div>
+      {!isTeacher && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Student Photo</CardTitle></CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Input
+                type="file"
+                accept="image/*"
+                className="max-w-sm"
+                onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+              />
+              <Button size="sm" onClick={() => uploadPhoto()} disabled={!photoFile || uploadingPhoto}>
+                {uploadingPhoto ? 'Uploading…' : 'Upload Photo'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="details">
         <TabsList>
@@ -283,19 +510,11 @@ export default function StudentDetailPage() {
         </TabsContent>
 
         <TabsContent value="fees">
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <p className="text-sm">Fee details are available in the Fees section.</p>
-            </CardContent>
-          </Card>
+          <StudentFeesTab studentId={id} />
         </TabsContent>
 
         <TabsContent value="attendance">
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <p className="text-sm">Attendance summary coming soon.</p>
-            </CardContent>
-          </Card>
+          <StudentAttendanceTab studentId={id} classId={typeof cls === 'object' ? cls._id : cls} />
         </TabsContent>
       </Tabs>
 

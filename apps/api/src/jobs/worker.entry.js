@@ -13,11 +13,12 @@
 import 'dotenv/config';
 import { Worker } from 'bullmq';
 import mongoose from 'mongoose';
-import { validateEnv, env } from '../config/env.js';
+import { validateEnv } from '../config/env.js';
 import { connectDB } from '../config/db.js';
 import logger from '../config/logger.js';
 import { QUEUE_NAMES } from '../constants/index.js';
 import { createBullMQConnection } from '../config/redis.js';
+import { captureError, initSentry } from '../config/sentry.js';
 import { processSmsJob } from './workers/sms.worker.js';
 import { processReportJob } from './workers/report.worker.js';
 import { processReceiptJob } from './workers/receipt.worker.js';
@@ -25,6 +26,7 @@ import { processImportJob } from './workers/import.worker.js';
 import { startEmailWorker } from './workers/email.worker.js';
 
 validateEnv();
+initSentry('diraschool-worker');
 
 // Must be a Redis *instance* — see redis.js createBullMQConnection() for details.
 const connection = createBullMQConnection();
@@ -71,9 +73,15 @@ for (const [name, worker] of [
     logger.error(`[Worker:${name}] Job ${job?.id} failed: ${err.message}`, {
       stack: err.stack,
     });
+    captureError(err, {
+      worker: { name, jobId: job?.id?.toString(), queue: job?.queueName },
+    });
   });
   worker.on('error', (err) => {
     logger.error(`[Worker:${name}] Worker error: ${err.message}`);
+    captureError(err, {
+      worker: { name },
+    });
   });
 }
 
@@ -94,3 +102,10 @@ const shutdown = async (signal) => {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('unhandledRejection', (reason) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  captureError(error, { process: { type: 'unhandledRejection' } });
+});
+process.on('uncaughtException', (error) => {
+  captureError(error, { process: { type: 'uncaughtException' } });
+});

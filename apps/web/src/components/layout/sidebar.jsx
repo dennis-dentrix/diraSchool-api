@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { schoolNavItems, superadminNavItems } from './nav-items';
@@ -11,6 +12,52 @@ function NavItem({ item, pathname }) {
     item.href === '/dashboard'
       ? pathname === '/dashboard'
       : pathname.startsWith(item.href);
+
+  const hasChildren = item.children?.length > 0;
+
+  if (hasChildren) {
+    return (
+      <div>
+        <Link
+          href={item.href}
+          className={cn(
+            'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+            isActive
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-900/60'
+              : 'text-slate-400 hover:text-white hover:bg-white/[0.08]',
+          )}
+        >
+          <item.icon className={cn('h-4 w-4 shrink-0 transition-transform duration-150', !isActive && 'group-hover:scale-110')} />
+          <span>{item.label}</span>
+          <ChevronDown className={cn('ml-auto h-3 w-3 transition-transform duration-200', isActive && 'rotate-180')} />
+        </Link>
+        {isActive && (
+          <div className="ml-7 mt-0.5 mb-1 space-y-0.5 border-l border-white/10 pl-3">
+            {item.children.map((child) => {
+              const childActive =
+                child.href === item.href
+                  ? pathname === child.href
+                  : pathname === child.href || pathname.startsWith(child.href + '/');
+              return (
+                <Link
+                  key={child.href}
+                  href={child.href}
+                  className={cn(
+                    'block px-2 py-1.5 rounded-md text-xs font-medium transition-colors',
+                    childActive
+                      ? 'text-white bg-white/10'
+                      : 'text-slate-400 hover:text-white hover:bg-white/[0.06]',
+                  )}
+                >
+                  {child.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Link

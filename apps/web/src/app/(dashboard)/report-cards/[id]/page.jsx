@@ -120,6 +120,15 @@ export default function ReportCardDetailPage() {
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
+  const { mutate: queuePdf, isPending: queueingPdf } = useMutation({
+    mutationFn: () => reportCardsApi.generatePdf(id),
+    onSuccess: () => {
+      toast.success('PDF generation queued');
+      queryClient.invalidateQueries({ queryKey: ['report-card', id] });
+      queryClient.invalidateQueries({ queryKey: ['report-cards'] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
 
   async function saveSubjectRemark(subjectId, remark) {
     setSavingSubject(subjectId);
@@ -180,6 +189,24 @@ export default function ReportCardDetailPage() {
           >
             <Printer className="h-4 w-4 mr-1" /> Print
           </Button>
+          {rc?.pdfUrl ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(rc.pdfUrl, '_blank')}
+            >
+              Download PDF
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => queuePdf()}
+              disabled={queueingPdf}
+            >
+              {queueingPdf ? 'Queueing…' : 'Generate PDF'}
+            </Button>
+          )}
           {isDraft && (
             <Button
               variant="outline"
@@ -203,6 +230,17 @@ export default function ReportCardDetailPage() {
           )}
         </div>
       </div>
+
+      {rc?.pdfStatus && rc.pdfStatus !== 'ready' && (
+        <Card>
+          <CardContent className="pt-4 pb-4 text-sm">
+            <p className="font-medium">
+              PDF status: <span className="capitalize">{rc.pdfStatus.replace('_', ' ')}</span>
+            </p>
+            {rc?.pdfError && <p className="text-destructive mt-1">{rc.pdfError}</p>}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Student Info Card */}
       <Card>

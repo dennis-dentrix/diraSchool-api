@@ -59,6 +59,23 @@ export const validateEnv = () => {
     );
     // Non-fatal — warn but don't exit, so the server can still start
   }
+
+  const cloudinaryVars = [
+    'CLOUDINARY_CLOUD_NAME',
+    'CLOUDINARY_API_KEY',
+    'CLOUDINARY_API_SECRET',
+  ];
+  const configuredCloudinaryVars = cloudinaryVars.filter((key) => !!process.env[key]);
+  if (configuredCloudinaryVars.length > 0 && configuredCloudinaryVars.length < cloudinaryVars.length) {
+    writeStderr(
+      '\n[ENV ERROR] Partial Cloudinary configuration detected.\n' +
+      'Set all 3 variables or none:\n' +
+      '  CLOUDINARY_CLOUD_NAME\n' +
+      '  CLOUDINARY_API_KEY\n' +
+      '  CLOUDINARY_API_SECRET\n'
+    );
+    process.exit(1);
+  }
 };
 
 export const env = {

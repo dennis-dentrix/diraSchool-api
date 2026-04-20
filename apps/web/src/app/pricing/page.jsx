@@ -108,7 +108,7 @@ const FAQS = [
   },
   {
     q: 'Are all features available at every plan level?',
-    a: 'Yes — every school gets every feature regardless of size or plan. No premium feature tiers, no add-ons to unlock. CBC report cards, parent portal, transport, library, timetables — all included.',
+    a: 'No. Features unlock by plan: Basic includes report cards + parent portal + timetable. Standard adds library + transport + bulk import + audit logs. Premium adds SMS and all remaining features.',
   },
 ];
 
@@ -166,7 +166,7 @@ function Hero() {
           {[
             ['Under 1% of a student\'s term fees', 'for the whole management system'],
             ['Billed at term start', 'when schools collect fees'],
-            ['All features included', 'no premium tier required'],
+            ['Tiered feature access', 'upgrade as operations grow'],
           ].map(([bold, sub]) => (
             <div key={bold} className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10">
               <span className="font-semibold text-white">{bold}</span>

@@ -7,7 +7,7 @@ import {
   AlertTriangle, UserX, BookOpen, BookMarked, ChevronRight,
   Plus, FileText, CalendarCheck,
 } from 'lucide-react';
-import { dashboardApi, feesApi, classesApi, subjectsApi, attendanceApi, timetableApi, studentsApi, transportApi } from '@/lib/api';
+import { dashboardApi, feesApi, classesApi, subjectsApi, attendanceApi, timetableApi, transportApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { useRouter } from 'next/navigation';
 import { StatCard } from '@/components/shared/stat-card';
@@ -53,60 +53,28 @@ function QuickActions({ isAdmin: admin, isFinance: finance }) {
 function FinanceOpsDashboard({ user }) {
   const [detail, setDetail] = useState(null);
 
-  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
-    queryKey: ['finance-dashboard-payments'],
+  const { data: financeSummaryData, isLoading: financeSummaryLoading } = useQuery({
+    queryKey: ['finance-dashboard-summary'],
     queryFn: async () => {
-      const res = await feesApi.listPayments({ limit: 120 });
+      const res = await feesApi.dashboardSummary();
       return res.data;
     },
   });
 
-  const { data: studentData, isLoading: studentsLoading } = useQuery({
-    queryKey: ['finance-dashboard-students'],
-    queryFn: async () => {
-      const res = await studentsApi.list({ limit: 1, status: 'active' });
-      return res.data;
-    },
-  });
-
-  const payments = paymentsData?.payments ?? paymentsData?.data ?? [];
-  const totalStudents = studentData?.meta?.total ?? studentData?.pagination?.total ?? 0;
+  const payments = financeSummaryData?.recentPayments ?? [];
+  const summary = financeSummaryData?.summary ?? null;
+  const todayCollections = summary?.today?.totalAmount ?? 0;
+  const monthCollections = summary?.monthToDate?.totalAmount ?? 0;
+  const studentsToFollowUp = summary?.students?.followUpCount ?? 0;
+  const studentsPaidThisMonth = summary?.students?.paidThisMonth ?? 0;
+  const totalStudents = summary?.students?.totalActive ?? 0;
+  const unissuedReceipts = summary?.unissuedReceipts ?? 0;
+  const latestPayments = payments;
+  const pendingReceiptRows = payments.filter((p) => !p.receiptIssuedByUserId).slice(0, 8);
 
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
-  const month = now.getMonth();
-  const year = now.getFullYear();
-
   const completedPayments = payments.filter((p) => p.status === 'completed');
-  const todayCollections = completedPayments
-    .filter((p) => (p.createdAt || '').slice(0, 10) === todayIso)
-    .reduce((sum, p) => sum + (p.amount ?? 0), 0);
-  const monthCollections = completedPayments
-    .filter((p) => {
-      const d = new Date(p.createdAt);
-      return d.getMonth() === month && d.getFullYear() === year;
-    })
-    .reduce((sum, p) => sum + (p.amount ?? 0), 0);
-
-  const monthPaidStudentIds = new Set(
-    completedPayments
-      .filter((p) => {
-        const d = new Date(p.createdAt);
-        return d.getMonth() === month && d.getFullYear() === year;
-      })
-      .map((p) => String(typeof p.studentId === 'object' ? p.studentId?._id : p.studentId))
-      .filter(Boolean)
-  );
-  const studentsPaidThisMonth = monthPaidStudentIds.size;
-  const studentsToFollowUp = Math.max(0, totalStudents - studentsPaidThisMonth);
-  const unissuedReceipts = completedPayments.filter((p) => !p.receiptIssuedByUserId).length;
-  const latestPayments = [...payments]
-    .sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
-    .slice(0, 8);
-  const pendingReceiptRows = completedPayments
-    .filter((p) => !p.receiptIssuedByUserId)
-    .slice(0, 8);
-
   const hour = now.getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const todayStr = now.toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -127,38 +95,38 @@ function FinanceOpsDashboard({ user }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Today's Collections"
-          value={paymentsLoading ? '—' : formatCurrency(todayCollections)}
+          value={financeSummaryLoading ? '—' : formatCurrency(todayCollections)}
           description="Completed payments"
           icon={CreditCard}
           color="green"
-          loading={paymentsLoading}
+          loading={financeSummaryLoading}
           onClick={() => setDetail({ key: 'todayCollections', title: "Today's Collections", description: 'Payments completed today.' })}
         />
         <StatCard
           title="This Month"
-          value={paymentsLoading ? '—' : formatCurrency(monthCollections)}
+          value={financeSummaryLoading ? '—' : formatCurrency(monthCollections)}
           description="Completed payments"
           icon={FileText}
           color="blue"
-          loading={paymentsLoading}
+          loading={financeSummaryLoading}
           onClick={() => setDetail({ key: 'monthCollections', title: 'Monthly Collections', description: 'Payments completed this month.' })}
         />
         <StatCard
           title="Need Follow-up"
-          value={(paymentsLoading || studentsLoading) ? '—' : studentsToFollowUp}
+          value={financeSummaryLoading ? '—' : studentsToFollowUp}
           description="Est. unpaid this month"
           icon={AlertTriangle}
           color="orange"
-          loading={paymentsLoading || studentsLoading}
+          loading={financeSummaryLoading}
           onClick={() => setDetail({ key: 'followUp', title: 'Students Needing Follow-up', description: 'Estimated students without completed payment this month.' })}
         />
         <StatCard
           title="Unissued Receipts"
-          value={paymentsLoading ? '—' : unissuedReceipts}
+          value={financeSummaryLoading ? '—' : unissuedReceipts}
           description="Completed, not issued"
           icon={FileText}
           color="purple"
-          loading={paymentsLoading}
+          loading={financeSummaryLoading}
           onClick={() => setDetail({ key: 'unissuedReceipts', title: 'Unissued Receipts', description: 'Completed payments awaiting receipt issuance.' })}
         />
       </div>
@@ -169,7 +137,7 @@ function FinanceOpsDashboard({ user }) {
           <CardDescription>Latest completed and pending payment records</CardDescription>
         </CardHeader>
         <CardContent>
-          {paymentsLoading ? (
+          {financeSummaryLoading ? (
             <div className="space-y-2">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
           ) : payments.length ? (
             <div className="divide-y">
@@ -206,7 +174,7 @@ function FinanceOpsDashboard({ user }) {
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex items-center justify-between"><span className="text-muted-foreground">Total collected</span><span className="font-semibold">{formatCurrency(todayCollections)}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Completed payments</span><span className="font-semibold">{completedPayments.filter((p) => String(p.createdAt ?? '').slice(0, 10) === todayIso).length}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Completed payments</span><span className="font-semibold">{summary?.today?.paymentsCount ?? completedPayments.filter((p) => String(p.createdAt ?? '').slice(0, 10) === todayIso).length}</span></div>
                 </CardContent>
               </Card>
             )}
@@ -218,7 +186,7 @@ function FinanceOpsDashboard({ user }) {
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <div className="flex items-center justify-between"><span className="text-muted-foreground">Total collected</span><span className="font-semibold">{formatCurrency(monthCollections)}</span></div>
-                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Completed payments</span><span className="font-semibold">{completedPayments.filter((p) => { const d = new Date(p.createdAt); return d.getMonth() === month && d.getFullYear() === year; }).length}</span></div>
+                  <div className="flex items-center justify-between"><span className="text-muted-foreground">Completed payments</span><span className="font-semibold">{summary?.monthToDate?.paymentsCount ?? 0}</span></div>
                 </CardContent>
               </Card>
             )}

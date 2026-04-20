@@ -4,12 +4,14 @@ import { fileURLToPath } from 'url';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
 
 import { validateEnv, env } from './config/env.js';
 import { connectDB } from './config/db.js';
 import { connectRedis, getRedis } from './config/redis.js';
+import { captureError, initSentry } from './config/sentry.js';
 import { corsOptions } from './config/cors.js';
 import logger from './config/logger.js';
 import errorHandler from './middleware/errorHandler.js';
@@ -36,6 +38,7 @@ import dashboardRoutes from './features/dashboard/dashboard.routes.js';
 import emailRoutes from './features/email/email.routes.js';
 import pricingRoutes from './features/pricing/pricing.routes.js';
 import exportRoutes from './features/export/export.routes.js';
+import notificationRoutes from './features/notifications/notifications.routes.js';
 
 // ── Startup diagnostic — always runs first, visible in Railway logs ──────────
 // This prints BEFORE validateEnv() so missing vars are visible even if we crash.
@@ -58,6 +61,7 @@ console.log('='.repeat(50));
 
 // Validate env — exits with clear error if any required var is missing
 validateEnv();
+initSentry('diraschool-api');
 
 const app = express();
 
@@ -66,6 +70,21 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(csrf); // Origin/Referer validation — defense-in-depth CSRF guard
+
+// ── Global IP rate limit ─────────────────────────────────────────────────────
+// 200 req / IP / minute — coarse protection against scrapers and abusive clients.
+// Auth endpoints carry their own tighter limit (20/15 min) in auth.routes.js.
+const globalLimiter =
+  process.env.NODE_ENV === 'test'
+    ? (req, res, next) => next()
+    : rateLimit({
+        windowMs: 60 * 1000,
+        max: 200,
+        standardHeaders: true,
+        legacyHeaders: false,
+        message: { message: 'Too many requests. Please slow down.' },
+      });
+app.use(globalLimiter);
 
 // ── Parsing middleware ───────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));
@@ -113,7 +132,15 @@ app.get('/health', async (req, res) => {
   return res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    services: { api: 'up', mongodb: 'up', redis: redisStatus },
+    services: {
+      api: 'up',
+      mongodb: 'up',
+      redis: redisStatus,
+      cloudinary:
+        env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET
+          ? 'configured'
+          : 'not_configured',
+    },
     // Always include redisError when present so we can debug in Railway logs
     ...(redisError && { redisError }),
   });
@@ -142,6 +169,7 @@ app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/email', emailRoutes);
 app.use('/api/v1/pricing', pricingRoutes);
 app.use('/api/v1/export', exportRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 // ── 404 catch-all ────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -155,6 +183,17 @@ app.use(errorHandler);
 const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 
 if (isMain) {
+  process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    logger.error(`[Boot] Unhandled rejection: ${error.message}`, { stack: error.stack });
+    captureError(error, { process: { type: 'unhandledRejection' } });
+  });
+
+  process.on('uncaughtException', (error) => {
+    logger.error(`[Boot] Uncaught exception: ${error.message}`, { stack: error.stack });
+    captureError(error, { process: { type: 'uncaughtException' } });
+  });
+
   const start = async () => {
     // 1. Start HTTP server FIRST so Railway's health check gets a response
     //    immediately — even before MongoDB and Redis are fully connected.

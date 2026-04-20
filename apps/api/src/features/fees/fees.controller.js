@@ -366,3 +366,93 @@ export const getStudentBalance = asyncHandler(async (req, res) => {
     isPaidUp: outstanding === 0,
   });
 });
+
+/**
+ * GET /api/v1/fees/dashboard-summary
+ * Server-side finance totals for dashboard cards and follow-up metrics.
+ *
+ * Query params (optional):
+ *   month=1..12
+ *   year=YYYY
+ */
+export const getFinanceDashboardSummary = asyncHandler(async (req, res) => {
+  const now = new Date();
+  const month = Number(req.query.month) || (now.getUTCMonth() + 1);
+  const year = Number(req.query.year) || now.getUTCFullYear();
+
+  const monthStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+  const monthEnd = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  const dayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+
+  const baseMatch = {
+    schoolId: req.user.schoolId,
+    status: PAYMENT_STATUSES.COMPLETED,
+  };
+
+  const [
+    monthAgg,
+    todayAgg,
+    monthPaidStudentsAgg,
+    unissuedReceipts,
+    totalStudents,
+    recentPayments,
+  ] = await Promise.all([
+    Payment.aggregate([
+      { $match: { ...baseMatch, createdAt: { $gte: monthStart, $lt: monthEnd } } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
+    Payment.aggregate([
+      { $match: { ...baseMatch, createdAt: { $gte: dayStart, $lt: dayEnd } } },
+      { $group: { _id: null, totalAmount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
+    Payment.aggregate([
+      { $match: { ...baseMatch, createdAt: { $gte: monthStart, $lt: monthEnd } } },
+      { $group: { _id: '$studentId' } },
+      { $count: 'total' },
+    ]),
+    Payment.countDocuments({
+      ...baseMatch,
+      receiptIssuedByUserId: { $exists: false },
+    }),
+    Student.countDocuments({
+      schoolId: req.user.schoolId,
+      status: STUDENT_STATUSES.ACTIVE,
+    }),
+    Payment.find(baseMatch)
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .populate('studentId', 'firstName lastName admissionNumber')
+      .select('amount method status createdAt receiptNumber receiptIssuedByUserId studentId')
+      .lean(),
+  ]);
+
+  const monthTotal = monthAgg[0]?.totalAmount ?? 0;
+  const monthPaymentsCount = monthAgg[0]?.count ?? 0;
+  const todayTotal = todayAgg[0]?.totalAmount ?? 0;
+  const todayPaymentsCount = todayAgg[0]?.count ?? 0;
+  const studentsPaidThisMonth = monthPaidStudentsAgg[0]?.total ?? 0;
+  const studentsToFollowUp = Math.max(0, totalStudents - studentsPaidThisMonth);
+
+  return sendSuccess(res, {
+    summary: {
+      month,
+      year,
+      today: {
+        totalAmount: todayTotal,
+        paymentsCount: todayPaymentsCount,
+      },
+      monthToDate: {
+        totalAmount: monthTotal,
+        paymentsCount: monthPaymentsCount,
+      },
+      students: {
+        totalActive: totalStudents,
+        paidThisMonth: studentsPaidThisMonth,
+        followUpCount: studentsToFollowUp,
+      },
+      unissuedReceipts,
+    },
+    recentPayments,
+  });
+});

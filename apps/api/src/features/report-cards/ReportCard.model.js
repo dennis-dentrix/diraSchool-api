@@ -102,6 +102,17 @@ const reportCardSchema = new mongoose.Schema(
       default: 'draft',
       index: true,
     },
+    // Generated PDF location (Cloudinary raw file URL).
+    pdfUrl: { type: String, trim: true },
+    pdfPublicId: { type: String, trim: true },
+    pdfStatus: {
+      type: String,
+      enum: ['not_requested', 'queued', 'processing', 'ready', 'failed'],
+      default: 'not_requested',
+      index: true,
+    },
+    pdfGeneratedAt: { type: Date },
+    pdfError: { type: String, trim: true },
     publishedAt: { type: Date },
     generatedAt: { type: Date, default: Date.now },
   },

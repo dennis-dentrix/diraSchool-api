@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { sendError } from '../../utils/response.js';
 import { TERMS, PAYMENT_METHODS } from '../../constants/index.js';
-
-const objectIdRegex = /^[a-f\d]{24}$/i;
-const yearRegex = /^\d{4}$/;
+import { objectIdRegex, yearRegex } from '@diraschool/shared/schemas';
 
 // ── Fee Structure ─────────────────────────────────────────────────────────────
 
@@ -70,6 +68,11 @@ const balanceQuerySchema = z.object({
   term: z.enum(TERMS, { message: `Term must be one of: ${TERMS.join(', ')}` }),
 });
 
+const financeDashboardSummaryQuerySchema = z.object({
+  month: z.coerce.number().int().min(1).max(12).optional(),
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+});
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validateBody = (schema) => (req, res, next) => {
@@ -94,3 +97,4 @@ export const validateCreatePayment = validateBody(createPaymentSchema);
 export const validateReversePayment = validateBody(reversePaymentSchema);
 export const validateListPayments = validateQuery(listPaymentsSchema);
 export const validateBalanceQuery = validateQuery(balanceQuerySchema);
+export const validateFinanceDashboardSummaryQuery = validateQuery(financeDashboardSummaryQuerySchema);

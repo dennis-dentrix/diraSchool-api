@@ -19,6 +19,8 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { SUBSCRIPTION_STATUSES, PLAN_TIERS, ROLES } from '../../constants/index.js';
+import { env } from '../../config/env.js';
+import { captureError, sentryEnabled } from '../../config/sentry.js';
 
 // ── GET /api/v1/admin/stats ──────────────────────────────────────────────────
 
@@ -54,7 +56,7 @@ export const getStats = asyncHandler(async (req, res) => {
 
     // Top 5 counties by school count
     School.aggregate([
-      { $match:  { county: { $exists: true, $ne: null, $ne: '' } } },
+      { $match:  { county: { $exists: true, $nin: [null, ''] } } },
       { $group:  { _id: '$county', count: { $sum: 1 } } },
       { $sort:   { count: -1 } },
       { $limit:  5 },
@@ -349,5 +351,42 @@ export const toggleAdminUser = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     message: `User ${user.isActive ? 'activated' : 'deactivated'}.`,
     user: { _id: user._id, isActive: user.isActive },
+  });
+});
+
+// ── POST /api/v1/admin/monitoring-test ──────────────────────────────────────
+/**
+ * Emits a synthetic Sentry error event for verification.
+ *
+ * Safety:
+ * - Superadmin-only route (via router middleware)
+ * - Blocked in production unless SENTRY_ALLOW_PROD_TEST_ENDPOINT=true
+ */
+export const triggerMonitoringTest = asyncHandler(async (req, res) => {
+  if (env.isProduction && process.env.SENTRY_ALLOW_PROD_TEST_ENDPOINT !== 'true') {
+    return sendError(
+      res,
+      'Monitoring test endpoint is disabled in production. Set SENTRY_ALLOW_PROD_TEST_ENDPOINT=true to allow it temporarily.',
+      403
+    );
+  }
+
+  if (!sentryEnabled) {
+    return sendError(res, 'Sentry is not configured on this environment.', 400);
+  }
+
+  const testError = new Error('Synthetic monitoring test event (manual trigger)');
+  const eventId = captureError(testError, {
+    monitoringTest: {
+      triggeredByUserId: req.user?._id?.toString(),
+      triggeredAt: new Date().toISOString(),
+      route: '/api/v1/admin/monitoring-test',
+      environment: env.NODE_ENV,
+    },
+  });
+
+  return sendSuccess(res, {
+    message: 'Sentry test event sent.',
+    eventId,
   });
 });

@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import ReportCard from './ReportCard.model.js';
 import Result from '../results/Result.model.js';
 import Student from '../students/Student.model.js';
@@ -8,8 +7,29 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { computeCBCGrade } from '../../utils/grading.js';
-import { STUDENT_STATUSES, ATTENDANCE_REGISTER_STATUSES, AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
+import {
+  STUDENT_STATUSES,
+  ATTENDANCE_REGISTER_STATUSES,
+  AUDIT_ACTIONS,
+  AUDIT_RESOURCES,
+  JOB_NAMES,
+} from '../../constants/index.js';
 import { logAction } from '../../utils/auditLogger.js';
+import { reportQueue } from '../../jobs/queues.js';
+import { notifyUser } from '../../utils/notify.js';
+
+const queueReportPdf = async ({ reportCardId, schoolId, requestedByUserId }) => {
+  await ReportCard.updateOne(
+    { _id: reportCardId },
+    { pdfStatus: 'queued', pdfError: undefined }
+  );
+
+  await reportQueue.add(JOB_NAMES.GENERATE_REPORT_CARD, {
+    reportCardId: String(reportCardId),
+    schoolId: String(schoolId),
+    requestedByUserId: String(requestedByUserId),
+  });
+};
 
 // ── Core generation logic ─────────────────────────────────────────────────────
 
@@ -20,74 +40,113 @@ import { logAction } from '../../utils/auditLogger.js';
  * Returns null if the student has no results for the given period.
  */
 async function buildReportCardPayload(schoolId, student, cls, academicYear, term) {
-  // Fetch all results for this student in the given term/year, with exam+subject details
-  const results = await Result.find({
-    schoolId,
-    studentId: student._id,
-    academicYear,
-    term,
-  })
-    .populate('examId', 'name type')
-    .populate('subjectId', 'name code')
-    .lean();
+  // Aggregate results in MongoDB to reduce Node-side memory/CPU on large classes.
+  const [aggregatedSubjects, submittedDaysCount, attendanceByStatus] = await Promise.all([
+    Result.aggregate([
+      {
+        $match: {
+          schoolId,
+          studentId: student._id,
+          academicYear,
+          term,
+        },
+      },
+      {
+        $lookup: {
+          from: 'exams',
+          localField: 'examId',
+          foreignField: '_id',
+          as: 'exam',
+        },
+      },
+      { $unwind: { path: '$exam', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'subjects',
+          localField: 'subjectId',
+          foreignField: '_id',
+          as: 'subject',
+        },
+      },
+      { $unwind: { path: '$subject', preserveNullAndEmptyArrays: true } },
+      { $sort: { 'subject.name': 1, 'exam.name': 1, createdAt: 1 } },
+      {
+        $group: {
+          _id: '$subjectId',
+          subjectId: { $first: '$subjectId' },
+          subjectName: { $first: { $ifNull: ['$subject.name', 'Unknown Subject'] } },
+          subjectCode: { $first: '$subject.code' },
+          sumMarks: { $sum: '$marks' },
+          sumTotal: { $sum: '$totalMarks' },
+          exams: {
+            $push: {
+              examId: '$examId',
+              examName: { $ifNull: ['$exam.name', 'Exam'] },
+              examType: { $ifNull: ['$exam.type', 'unknown'] },
+              marks: '$marks',
+              totalMarks: '$totalMarks',
+              percentage: '$percentage',
+              grade: '$grade',
+              points: '$points',
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          subjectId: 1,
+          subjectName: 1,
+          subjectCode: 1,
+          sumMarks: 1,
+          sumTotal: 1,
+          exams: 1,
+          averagePercentage: {
+            $cond: [
+              { $gt: ['$sumTotal', 0] },
+              { $round: [{ $multiply: [{ $divide: ['$sumMarks', '$sumTotal'] }, 100] }, 2] },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { subjectName: 1 } },
+    ]),
+    Attendance.countDocuments({
+      schoolId,
+      classId: cls._id,
+      academicYear,
+      term,
+      status: ATTENDANCE_REGISTER_STATUSES.SUBMITTED,
+    }),
+    Attendance.aggregate([
+      {
+        $match: {
+          schoolId,
+          classId: cls._id,
+          academicYear,
+          term,
+          status: ATTENDANCE_REGISTER_STATUSES.SUBMITTED,
+        },
+      },
+      { $unwind: '$entries' },
+      { $match: { 'entries.studentId': student._id } },
+      { $group: { _id: '$entries.status', count: { $sum: 1 } } },
+    ]),
+  ]);
 
-  // ── Group results by subject ─────────────────────────────────────────────
-
-  const subjectMap = new Map(); // subjectId string → { meta, entries[] }
-
-  for (const r of results) {
-    const subKey = r.subjectId._id.toString();
-
-    if (!subjectMap.has(subKey)) {
-      subjectMap.set(subKey, {
-        subjectId: r.subjectId._id,
-        subjectName: r.subjectId.name,
-        subjectCode: r.subjectId.code || null,
-        entries: [],
-      });
-    }
-
-    subjectMap.get(subKey).entries.push({
-      examId: r.examId._id,
-      examName: r.examId.name,
-      examType: r.examId.type,
-      marks: r.marks,
-      totalMarks: r.totalMarks,
-      percentage: r.percentage,
-      grade: r.grade,
-      points: r.points,
-    });
-  }
-
-  // ── Build subject summaries with weighted-average percentage ─────────────
-
-  const subjectSummaries = [];
-
-  for (const [, sub] of subjectMap) {
-    // Weighted average: sum(marks) / sum(totalMarks) × 100
-    const sumMarks = sub.entries.reduce((acc, e) => acc + e.marks, 0);
-    const sumTotal = sub.entries.reduce((acc, e) => acc + e.totalMarks, 0);
-    const averagePercentage = sumTotal > 0
-      ? Number(((sumMarks / sumTotal) * 100).toFixed(2))
-      : 0;
-
-    const { grade, points } = computeCBCGrade(cls.levelCategory, averagePercentage);
-
-    subjectSummaries.push({
+  const subjectSummaries = aggregatedSubjects.map((sub) => {
+    const { grade, points } = computeCBCGrade(cls.levelCategory, sub.averagePercentage);
+    return {
       subjectId: sub.subjectId,
       subjectName: sub.subjectName,
-      subjectCode: sub.subjectCode,
-      exams: sub.entries,
-      averagePercentage,
+      subjectCode: sub.subjectCode || null,
+      exams: sub.exams,
+      averagePercentage: sub.averagePercentage,
       grade,
       points,
-    });
-  }
-
-  // Sort subjects alphabetically for consistent output
-  subjectSummaries.sort((a, b) => a.subjectName.localeCompare(b.subjectName));
-
-  // ── Overall aggregate ────────────────────────────────────────────────────
+    };
+  });
 
   const gradedSubjects = subjectSummaries.filter((s) => s.points !== null);
   const totalPoints = gradedSubjects.reduce((acc, s) => acc + (s.points ?? 0), 0);
@@ -95,31 +154,15 @@ async function buildReportCardPayload(schoolId, student, cls, academicYear, term
     ? Number((totalPoints / gradedSubjects.length).toFixed(2))
     : 0;
 
-  // Derive overall grade from average percentage across all subjects
-  const sumAllMarks = results.reduce((acc, r) => acc + r.marks, 0);
-  const sumAllTotal = results.reduce((acc, r) => acc + r.totalMarks, 0);
-  const overallPercentage = sumAllTotal > 0
-    ? (sumAllMarks / sumAllTotal) * 100
-    : 0;
+  const sumAllMarks = aggregatedSubjects.reduce((acc, s) => acc + (s.sumMarks ?? 0), 0);
+  const sumAllTotal = aggregatedSubjects.reduce((acc, s) => acc + (s.sumTotal ?? 0), 0);
+  const overallPercentage = sumAllTotal > 0 ? (sumAllMarks / sumAllTotal) * 100 : 0;
   const { grade: overallGrade } = computeCBCGrade(cls.levelCategory, overallPercentage);
 
-  // ── Attendance summary from submitted registers ──────────────────────────
-
-  const registers = await Attendance.find({
-    schoolId,
-    classId: cls._id,
-    academicYear,
-    term,
-    status: ATTENDANCE_REGISTER_STATUSES.SUBMITTED,
-  }).select('entries').lean();
-
-  const attendanceSummary = { totalDays: registers.length, present: 0, absent: 0, late: 0, excused: 0 };
-  const studentIdStr = student._id.toString();
-
-  for (const reg of registers) {
-    const entry = reg.entries.find((e) => e.studentId.toString() === studentIdStr);
-    if (entry) {
-      attendanceSummary[entry.status] = (attendanceSummary[entry.status] ?? 0) + 1;
+  const attendanceSummary = { totalDays: submittedDaysCount, present: 0, absent: 0, late: 0, excused: 0 };
+  for (const row of attendanceByStatus) {
+    if (Object.prototype.hasOwnProperty.call(attendanceSummary, row._id)) {
+      attendanceSummary[row._id] = row.count;
     }
   }
 
@@ -221,6 +264,22 @@ export const generateReportCard = asyncHandler(async (req, res) => {
     .populate('studentId', 'firstName lastName admissionNumber gender')
     .populate('classId', 'name stream levelCategory academicYear term');
 
+  await queueReportPdf({
+    reportCardId: reportCard._id,
+    schoolId: req.user.schoolId,
+    requestedByUserId: req.user._id,
+  });
+
+  await notifyUser({
+    schoolId: req.user.schoolId,
+    userId: req.user._id,
+    type: 'info',
+    title: 'Report Card PDF Queued',
+    message: `Generating PDF for ${student.firstName} ${student.lastName} (${term} ${academicYear}).`,
+    link: `/report-cards/${reportCard._id}`,
+    meta: { reportCardId: reportCard._id.toString() },
+  });
+
   return sendSuccess(res, { reportCard: populated }, existing ? 200 : 201);
 });
 
@@ -296,7 +355,7 @@ export const generateClassReportCards = asyncHandler(async (req, res) => {
         }
       }
 
-      await ReportCard.findOneAndUpdate(
+      const reportCard = await ReportCard.findOneAndUpdate(
         {
           schoolId: req.user.schoolId,
           studentId: student._id,
@@ -320,11 +379,27 @@ export const generateClassReportCards = asyncHandler(async (req, res) => {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
+      await queueReportPdf({
+        reportCardId: reportCard._id,
+        schoolId: req.user.schoolId,
+        requestedByUserId: req.user._id,
+      });
+
       results.generated++;
     } catch (err) {
       results.errors.push({ studentId: student._id, error: err.message });
     }
   }
+
+  await notifyUser({
+    schoolId: req.user.schoolId,
+    userId: req.user._id,
+    type: 'info',
+    title: 'Class Report Card PDFs Queued',
+    message: `${results.generated} student PDF job(s) queued for ${term} ${academicYear}.`,
+    link: '/report-cards',
+    meta: { classId, term, academicYear, generated: results.generated, skipped: results.skipped },
+  });
 
   return sendSuccess(res, {
     message: `Report cards generated for ${results.generated} student(s). ${results.skipped} skipped (published).`,
@@ -629,6 +704,22 @@ export const publishReportCard = asyncHandler(async (req, res) => {
   reportCard.publishedAt = new Date();
   await reportCard.save();
 
+  await queueReportPdf({
+    reportCardId: reportCard._id,
+    schoolId: req.user.schoolId,
+    requestedByUserId: req.user._id,
+  });
+
+  await notifyUser({
+    schoolId: req.user.schoolId,
+    userId: req.user._id,
+    type: 'info',
+    title: 'Published Report Card PDF Queued',
+    message: `PDF regeneration queued for ${reportCard.term} ${reportCard.academicYear}.`,
+    link: `/report-cards/${reportCard._id}`,
+    meta: { reportCardId: reportCard._id.toString() },
+  });
+
   logAction(req, {
     action: AUDIT_ACTIONS.PUBLISH,
     resource: AUDIT_RESOURCES.REPORT_CARD,
@@ -641,4 +732,36 @@ export const publishReportCard = asyncHandler(async (req, res) => {
   });
 
   return sendSuccess(res, { reportCard });
+});
+
+/**
+ * POST /api/v1/report-cards/:id/generate-pdf
+ * Explicitly re-queues PDF generation for a report card.
+ */
+export const generateReportCardPdf = asyncHandler(async (req, res) => {
+  const reportCard = await ReportCard.findOne({
+    _id: req.params.id,
+    schoolId: req.user.schoolId,
+  })
+    .populate('studentId', 'firstName lastName');
+
+  if (!reportCard) return sendError(res, 'Report card not found.', 404);
+
+  await queueReportPdf({
+    reportCardId: reportCard._id,
+    schoolId: req.user.schoolId,
+    requestedByUserId: req.user._id,
+  });
+
+  await notifyUser({
+    schoolId: req.user.schoolId,
+    userId: req.user._id,
+    type: 'info',
+    title: 'Report Card PDF Queued',
+    message: `Regeneration queued for ${reportCard.studentId?.firstName ?? 'student'} ${reportCard.studentId?.lastName ?? ''}`.trim(),
+    link: `/report-cards/${reportCard._id}`,
+    meta: { reportCardId: reportCard._id.toString() },
+  });
+
+  return sendSuccess(res, { message: 'PDF generation queued.' }, 202);
 });

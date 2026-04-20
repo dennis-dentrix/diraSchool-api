@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { protect, blockIfMustChangePassword, adminOnly, authorize } from '../../middleware/auth.js';
+import { protect, blockIfMustChangePassword, authorize } from '../../middleware/auth.js';
 import requireFeature from '../../middleware/requireFeature.js';
 import {
   createTimetable,
@@ -18,7 +18,7 @@ import { ROLES, PLAN_FEATURES } from '../../constants/index.js';
 const router = Router();
 
 // ── Feature gate: timetable module ───────────────────────────────────────────
-// TODO: Assign to correct plan tier in PLAN_FEATURE_MAP once pricing is finalised.
+// Plan-tier feature gate is active via PLAN_FEATURE_MAP.
 router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.TIMETABLE));
 
 // Read access: admins + teachers

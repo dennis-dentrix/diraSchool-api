@@ -14,7 +14,7 @@ const router = Router();
 
 // All parent routes: must be authenticated, not pending password change, and role=parent
 // ── Feature gate: parent portal ──────────────────────────────────────────────
-// TODO: Assign to correct plan tier in PLAN_FEATURE_MAP once pricing is finalised.
+// Plan-tier feature gate is active via PLAN_FEATURE_MAP.
 router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.PARENT_PORTAL), authorize(ROLES.PARENT));
 
 router.get('/children', getMyChildren);

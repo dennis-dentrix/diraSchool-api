@@ -33,6 +33,15 @@ const upload = multer({
   fileFilter,
 });
 
+const imageUpload = multer({
+  storage,
+  limits: { fileSize: MAX_SIZE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (String(file.mimetype).startsWith('image/')) return cb(null, true);
+    return cb(new Error('Only image files are allowed.'));
+  },
+});
+
 /**
  * Single-file upload middleware for CSV imports.
  * Field name must be "file".
@@ -52,6 +61,24 @@ export const uploadCsv = (req, res, next) => {
     if (!req.file) {
       return sendError(res, 'A CSV file is required (field name: "file").', 400);
     }
+    next();
+  });
+};
+
+/**
+ * Single-image upload middleware.
+ * Default field name: "file", max size: 5 MB.
+ */
+export const uploadImage = (fieldName = 'file') => (req, res, next) => {
+  imageUpload.single(fieldName)(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return sendError(res, 'Image file must be 5 MB or smaller.', 400);
+      }
+      return sendError(res, err.message, 400);
+    }
+    if (err) return sendError(res, err.message, 400);
+    if (!req.file) return sendError(res, `An image file is required (field name: "${fieldName}").`, 400);
     next();
   });
 };

@@ -1,0 +1,14 @@
+{
+  "name": "@diraschool/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./constants": "./src/constants.js",
+    "./schemas": "./src/schemas.js"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  }
+}

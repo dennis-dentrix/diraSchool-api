@@ -18,12 +18,12 @@ import {
   updateRemarks,
   updateSubjectRemark,
   publishReportCard,
+  generateReportCardPdf,
 } from './report-cards.controller.js';
 
 const router = express.Router();
 
-// ── Feature gate: report cards ────────────────────────────────────────────────
-// TODO: Assign to correct plan tier in PLAN_FEATURE_MAP once pricing is finalised.
+// ── Feature gate: report cards (plan-tier enforced) ─────────────────────────
 router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.REPORT_CARDS), adminOnly);
 
 // ── Generation ────────────────────────────────────────────────────────────────
@@ -38,5 +38,6 @@ router.get('/:id', getReportCard);
 router.patch('/:id/remarks', validateRemarks, updateRemarks);
 router.patch('/:id/subjects/:subjectId/remark', validateSubjectRemark, updateSubjectRemark);
 router.post('/:id/publish', publishReportCard);
+router.post('/:id/generate-pdf', generateReportCardPdf);
 
 export default router;

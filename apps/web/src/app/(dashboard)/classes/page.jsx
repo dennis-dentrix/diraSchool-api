@@ -67,7 +67,7 @@ export default function ClassesPage() {
     resolver: zodResolver(editSchema),
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['classes', filterYear],
     queryFn: async () => {
       const res = await classesApi.list({ academicYear: filterYear, limit: 100 });
@@ -216,6 +216,12 @@ export default function ClassesPage() {
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-36" />)}
+        </div>
+      ) : isError ? (
+        <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-destructive/20 bg-destructive/5">
+          <BookOpen className="h-8 w-8 mb-2 text-destructive/60" />
+          <p className="text-sm font-medium text-destructive">Failed to load classes</p>
+          <p className="text-xs text-muted-foreground mt-1">Please refresh and try again.</p>
         </div>
       ) : classes.length === 0 ? (
         <EmptyState

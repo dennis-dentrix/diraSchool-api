@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { sendError } from '../../utils/response.js';
 import { TERMS } from '../../constants/index.js';
-
-const objectIdRegex = /^[a-f\d]{24}$/i;
-const yearRegex = /^\d{4}$/;
+import { objectIdRegex, yearRegex } from '@diraschool/shared/schemas';
 
 const generateSchema = z.object({
   studentId: z.string().regex(objectIdRegex, 'Invalid student ID'),

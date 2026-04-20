@@ -9,6 +9,7 @@ import {
   validateReversePayment,
   validateListPayments,
   validateBalanceQuery,
+  validateFinanceDashboardSummaryQuery,
 } from './fees.validator.js';
 import {
   createFeeStructure,
@@ -22,6 +23,7 @@ import {
   reversePayment,
   issueReceipt,
   getStudentBalance,
+  getFinanceDashboardSummary,
 } from './fees.controller.js';
 
 const router = express.Router();
@@ -57,6 +59,7 @@ router.route('/payments/:id').all(canManageFees).get(getPayment);
 
 router.post('/payments/:id/reverse', canManageFees, validateReversePayment, reversePayment);
 router.post('/payments/:id/issue-receipt', canIssueReceipts, issueReceipt);
+router.get('/dashboard-summary', canManageFees, validateFinanceDashboardSummaryQuery, getFinanceDashboardSummary);
 
 // ── Balance ───────────────────────────────────────────────────────────────────
 router.get('/balance', canManageFees, validateBalanceQuery, getStudentBalance);

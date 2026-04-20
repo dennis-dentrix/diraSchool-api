@@ -1,7 +1,7 @@
 import express from 'express';
 import { protect, blockIfMustChangePassword, adminOnly, authorize } from '../../middleware/auth.js';
 import requireFeature from '../../middleware/requireFeature.js';
-import { uploadCsv } from '../../middleware/upload.js';
+import { uploadCsv, uploadImage } from '../../middleware/upload.js';
 import { ROLES, PLAN_FEATURES } from '../../constants/index.js';
 import {
   validateEnrollStudent,
@@ -17,6 +17,7 @@ import {
   withdrawStudent,
   importStudents,
   getImportStatus,
+  uploadStudentPhoto,
 } from './students.controller.js';
 
 const router = express.Router();
@@ -45,6 +46,7 @@ router.post(
 );
 router.post('/import', adminOnly, requireFeature(PLAN_FEATURES.BULK_IMPORT), uploadCsv, importStudents);
 router.patch('/:id', adminOnly, validateUpdateStudent, updateStudent);
+router.post('/:id/photo', adminOnly, uploadImage('photo'), uploadStudentPhoto);
 router.post('/:id/transfer', adminOnly, validateTransferStudent, transferStudent);
 router.post('/:id/withdraw', adminOnly, withdrawStudent);
 

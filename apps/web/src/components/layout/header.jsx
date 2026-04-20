@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Menu, Bell, LogOut, Settings, Loader2 } from 'lucide-react';
+import { Menu, Bell, LogOut, Settings, Loader2, CheckCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import { useMutation, useQueryClient, useIsFetching } from '@tanstack/react-query';
-import { authApi, getErrorMessage } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient, useIsFetching } from '@tanstack/react-query';
+import { authApi, notificationsApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +23,28 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
   const { user, logout } = useAuthStore();
   const queryClient = useQueryClient();
   const isFetching = useIsFetching();
+  const { data: unreadData } = useQuery({
+    queryKey: ['notifications-unread-count'],
+    queryFn: async () => {
+      const res = await notificationsApi.unreadCount();
+      return res.data?.count ?? res.data?.data?.count ?? 0;
+    },
+    staleTime: 10_000,
+    refetchInterval: 20_000,
+    enabled: !!user && user.role !== 'superadmin',
+  });
+  const { data: notifData } = useQuery({
+    queryKey: ['notifications-list'],
+    queryFn: async () => {
+      const res = await notificationsApi.list({ page: 1, limit: 8 });
+      return res.data?.notifications ?? res.data?.data ?? [];
+    },
+    staleTime: 10_000,
+    refetchInterval: 20_000,
+    enabled: !!user && user.role !== 'superadmin',
+  });
+  const unreadCount = unreadData ?? 0;
+  const notifications = Array.isArray(notifData) ? notifData : [];
 
   const { mutate: doLogout } = useMutation({
     mutationFn: () => authApi.logout(),
@@ -32,6 +54,20 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
       router.push('/login');
     },
     onError: (err) => toast.error(getErrorMessage(err)),
+  });
+  const { mutate: markAllRead, isPending: markingAllRead } = useMutation({
+    mutationFn: () => notificationsApi.markAllRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-list'] });
+    },
+  });
+  const { mutate: markRead } = useMutation({
+    mutationFn: (id) => notificationsApi.markRead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-list'] });
+    },
   });
 
   return (
@@ -79,9 +115,55 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
 
       {/* Right side */}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="text-muted-foreground">
-          <Bell className="h-5 w-5" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-muted-foreground relative">
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] leading-4 text-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-80 max-h-[420px] overflow-y-auto" align="end">
+            <DropdownMenuLabel className="font-normal flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">Notifications</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={markingAllRead || unreadCount === 0}
+                onClick={() => markAllRead()}
+              >
+                <CheckCheck className="h-3.5 w-3.5 mr-1" />
+                Mark all read
+              </Button>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {notifications.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">No notifications yet</div>
+            ) : notifications.map((n) => (
+              <DropdownMenuItem
+                key={n._id}
+                className="items-start py-2.5 cursor-pointer"
+                onClick={() => {
+                  if (!n.readAt) markRead(n._id);
+                  if (n.link) router.push(n.link);
+                }}
+              >
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">{n.title}</p>
+                  {n.message && <p className="text-xs text-muted-foreground whitespace-normal">{n.message}</p>}
+                  <p className="text-[10px] text-muted-foreground">
+                    {new Date(n.createdAt).toLocaleString()}
+                    {!n.readAt ? ' · Unread' : ''}
+                  </p>
+                </div>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

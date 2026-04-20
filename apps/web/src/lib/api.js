@@ -152,6 +152,10 @@ export const studentsApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   importStatus: (jobId) => api.get(`/students/import/${jobId}/status`),
+  uploadPhoto: (id, formData) =>
+    api.post(`/students/${id}/photo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 };
 
 // ─── Attendance ───────────────────────────────────────────────────────────────
@@ -208,6 +212,7 @@ export const feesApi = {
   issueReceipt: (id) => api.post(`/fees/payments/${id}/issue-receipt`),
   reversePayment: (id, data) => api.post(`/fees/payments/${id}/reverse`, data),
   getBalance: (params) => api.get('/fees/balance', { params }),
+  dashboardSummary: (params) => api.get('/fees/dashboard-summary', { params }),
 };
 
 // ─── Report Cards ─────────────────────────────────────────────────────────────
@@ -221,6 +226,15 @@ export const reportCardsApi = {
   updateSubjectRemark: (id, subjectId, data) =>
     api.patch(`/report-cards/${id}/subjects/${subjectId}/remark`, data),
   publish: (id) => api.post(`/report-cards/${id}/publish`),
+  generatePdf: (id) => api.post(`/report-cards/${id}/generate-pdf`),
+};
+
+// ─── In-app Notifications ────────────────────────────────────────────────────
+export const notificationsApi = {
+  list: (params) => api.get('/notifications', { params }),
+  unreadCount: () => api.get('/notifications/unread-count'),
+  markRead: (id) => api.post(`/notifications/${id}/read`),
+  markAllRead: () => api.post('/notifications/mark-all-read'),
 };
 
 // ─── Parent Portal ────────────────────────────────────────────────────────────

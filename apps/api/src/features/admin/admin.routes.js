@@ -8,6 +8,7 @@ import {
   listSystemAuditLogs,
   listAdminUsers,
   toggleAdminUser,
+  triggerMonitoringTest,
 } from './admin.controller.js';
 
 const router = express.Router();
@@ -22,5 +23,6 @@ router.patch('/schools/:id/status',   updateSchoolStatus);
 router.get('/audit-logs',             listSystemAuditLogs);
 router.get('/users',                  listAdminUsers);
 router.patch('/users/:id/toggle',     toggleAdminUser);
+router.post('/monitoring-test',       triggerMonitoringTest);
 
 export default router;

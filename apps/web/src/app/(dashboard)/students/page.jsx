@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp, Download } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { studentsApi, classesApi, exportApi, downloadBlob, getErrorMessage } from '@/lib/api';
@@ -36,12 +36,16 @@ const schema = z.object({
   birthCertificateNumber: z.string().optional(),
   enrollmentDate:         z.string().optional(),
   classId:                z.string().min(1, 'Required'),
-  guardianFirstName:    z.string().optional(),
-  guardianLastName:     z.string().optional(),
-  guardianRelationship: z.string().optional(),
-  guardianPhone:        z.string().optional(),
-  guardianEmail:        z.string().email('Invalid email').optional().or(z.literal('')),
-  guardianOccupation:   z.string().optional(),
+  guardians: z.array(
+    z.object({
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+      relationship: z.string().optional(),
+      phone: z.string().optional(),
+      email: z.string().email('Invalid email').optional().or(z.literal('')),
+      occupation: z.string().optional(),
+    })
+  ).optional(),
 });
 
 const RELATIONSHIPS = ['mother', 'father', 'guardian', 'other'];
@@ -133,9 +137,16 @@ export default function StudentsPage() {
   const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
   const debouncedSearch = useDebounce(search, 400);
 
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, setValue, control, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
-    defaultValues: { enrollmentDate: today },
+    defaultValues: {
+      enrollmentDate: today,
+      guardians: [{ relationship: 'mother' }],
+    },
+  });
+  const { fields: guardianFields, append: appendGuardian, remove: removeGuardian } = useFieldArray({
+    control,
+    name: 'guardians',
   });
 
   // For teachers: fetch their assigned class to use as a filter
@@ -146,7 +157,7 @@ export default function StudentsPage() {
   });
   const teacherClassId = myClassData?.data?._id ?? myClassData?._id;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['students', page, debouncedSearch, selectedStatus, teacherClassId],
     queryFn: async () => {
       const res = await studentsApi.list({
@@ -172,24 +183,21 @@ export default function StudentsPage() {
 
   const { mutate: createStudent, isPending } = useMutation({
     mutationFn: (formData) => {
-      const {
-        guardianFirstName, guardianLastName, guardianRelationship,
-        guardianPhone, guardianEmail, guardianOccupation,
-        ...studentFields
-      } = formData;
-
-      const hasGuardian = guardianFirstName || guardianLastName || guardianPhone;
+      const { guardians = [], ...studentFields } = formData;
+      const normalizedGuardians = guardians
+        .map((g) => ({
+          firstName: g.firstName?.trim(),
+          lastName: g.lastName?.trim(),
+          relationship: g.relationship || 'guardian',
+          phone: g.phone?.trim(),
+          email: g.email?.trim() || undefined,
+          occupation: g.occupation?.trim() || undefined,
+        }))
+        .filter((g) => g.firstName || g.lastName || g.phone || g.email);
       const payload = {
         ...studentFields,
-        ...(hasGuardian ? {
-          guardians: [{
-            firstName:    guardianFirstName,
-            lastName:     guardianLastName || '',
-            relationship: guardianRelationship || 'guardian',
-            phone:        guardianPhone,
-            email:        guardianEmail || undefined,
-            occupation:   guardianOccupation || undefined,
-          }],
+        ...(normalizedGuardians.length ? {
+          guardians: normalizedGuardians,
         } : {}),
       };
       return studentsApi.create(payload);
@@ -199,7 +207,7 @@ export default function StudentsPage() {
       queryClient.invalidateQueries({ queryKey: ['students'] });
       setOpen(false);
       setShowGuardian(false);
-      reset({ enrollmentDate: today });
+      reset({ enrollmentDate: today, guardians: [{ relationship: 'mother' }] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -279,6 +287,7 @@ export default function StudentsPage() {
         )}
         data={students}
         loading={isLoading}
+        error={isError ? error : null}
         pageCount={pagination?.totalPages ?? pagination?.pages}
         currentPage={page}
         onPageChange={setPage}
@@ -367,44 +376,66 @@ export default function StudentsPage() {
 
                 {showGuardian && (
                   <div className="px-3 pb-3 space-y-3 border-t pt-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>First Name</Label>
-                        <Input {...register('guardianFirstName')} placeholder="Mary" />
+                    {guardianFields.map((g, idx) => (
+                      <div key={g.id} className="rounded-md border p-3 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Guardian {idx + 1}
+                          </p>
+                          {guardianFields.length > 1 && (
+                            <Button type="button" size="sm" variant="ghost" onClick={() => removeGuardian(idx)}>
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>First Name</Label>
+                            <Input {...register(`guardians.${idx}.firstName`)} placeholder="Mary" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Last Name</Label>
+                            <Input {...register(`guardians.${idx}.lastName`)} placeholder="Kamau" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>Relationship</Label>
+                            <Select onValueChange={(v) => setValue(`guardians.${idx}.relationship`, v)} defaultValue={idx === 0 ? 'mother' : 'guardian'}>
+                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectContent>
+                                {RELATIONSHIPS.map((r) => (
+                                  <SelectItem key={r} value={r}>{capitalize(r)}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Occupation</Label>
+                            <Input {...register(`guardians.${idx}.occupation`)} placeholder="Farmer" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label>Phone</Label>
+                            <Input {...register(`guardians.${idx}.phone`)} placeholder="0712 345 678" />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Email <span className="text-muted-foreground text-xs">(sends portal invite)</span></Label>
+                            <Input {...register(`guardians.${idx}.email`)} type="email" placeholder="parent@email.com" />
+                            {errors.guardians?.[idx]?.email && <p className="text-xs text-destructive">{errors.guardians[idx].email.message}</p>}
+                          </div>
+                        </div>
                       </div>
-                      <div className="space-y-1.5">
-                        <Label>Last Name</Label>
-                        <Input {...register('guardianLastName')} placeholder="Kamau" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>Relationship</Label>
-                        <Select onValueChange={(v) => setValue('guardianRelationship', v)} defaultValue="mother">
-                          <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                          <SelectContent>
-                            {RELATIONSHIPS.map((r) => (
-                              <SelectItem key={r} value={r}>{capitalize(r)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Occupation</Label>
-                        <Input {...register('guardianOccupation')} placeholder="Farmer" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>Phone</Label>
-                        <Input {...register('guardianPhone')} placeholder="0712 345 678" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>Email <span className="text-muted-foreground text-xs">(sends portal invite)</span></Label>
-                        <Input {...register('guardianEmail')} type="email" placeholder="parent@email.com" />
-                        {errors.guardianEmail && <p className="text-xs text-destructive">{errors.guardianEmail.message}</p>}
-                      </div>
-                    </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => appendGuardian({ relationship: 'guardian' })}
+                    >
+                      Add another guardian
+                    </Button>
                   </div>
                 )}
               </div>

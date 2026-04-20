@@ -1,37 +1,20 @@
-export const ROLES = {
-  SUPERADMIN: 'superadmin',
-  SCHOOL_ADMIN: 'school_admin',
-  DIRECTOR: 'director',
-  HEADTEACHER: 'headteacher',
-  DEPUTY_HEADTEACHER: 'deputy_headteacher',
-  SECRETARY: 'secretary',
-  ACCOUNTANT: 'accountant',
-  TEACHER: 'teacher',
-  PARENT: 'parent',
-};
+import {
+  ROLES,
+  ADMIN_ROLES,
+  TERMS,
+  LEVEL_CATEGORIES as LEVEL_CATEGORIES_MAP,
+  PLAN_TIERS as PLAN_TIERS_MAP,
+} from '@diraschool/shared/constants';
 
-export const ADMIN_ROLES = [
-  'school_admin',
-  'director',
-  'headteacher',
-  'deputy_headteacher',
-];
+export { ROLES, ADMIN_ROLES, TERMS };
 
-export const TERMS = ['Term 1', 'Term 2', 'Term 3'];
-
-export const LEVEL_CATEGORIES = [
-  'Pre-Primary',
-  'Lower Primary',
-  'Upper Primary',
-  'Junior Secondary',
-  'Senior School',
-];
+export const LEVEL_CATEGORIES = Object.values(LEVEL_CATEGORIES_MAP);
 
 export const PAYMENT_METHODS = ['cash', 'mpesa', 'bank'];
 export const EXAM_TYPES = ['opener', 'midterm', 'endterm', 'sba'];
 export const ATTENDANCE_STATUSES = ['present', 'absent', 'late', 'excused'];
 export const SUBSCRIPTION_STATUSES = ['trial', 'active', 'suspended', 'expired'];
-export const PLAN_TIERS = ['trial', 'basic', 'standard', 'premium'];
+export const PLAN_TIERS = Object.values(PLAN_TIERS_MAP);
 export const STUDENT_STATUSES = ['active', 'transferred', 'graduated', 'withdrawn'];
 export const WORKING_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 

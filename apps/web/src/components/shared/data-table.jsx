@@ -7,7 +7,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import {
   Table,
@@ -20,7 +20,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function DataTable({ columns, data, loading, pageCount, onPageChange, currentPage }) {
+export function DataTable({ columns, data, loading, error, pageCount, onPageChange, currentPage }) {
   const [sorting, setSorting] = useState([]);
 
   const table = useReactTable({
@@ -34,6 +34,16 @@ export function DataTable({ columns, data, loading, pageCount, onPageChange, cur
     manualPagination: !!onPageChange,
     pageCount,
   });
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 rounded-xl border border-destructive/20 bg-destructive/5 text-center">
+        <AlertCircle className="h-8 w-8 mb-2 text-destructive" />
+        <p className="text-sm font-medium text-destructive">Failed to load data</p>
+        <p className="text-xs text-muted-foreground mt-1">{error?.message ?? 'Please refresh and try again.'}</p>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
