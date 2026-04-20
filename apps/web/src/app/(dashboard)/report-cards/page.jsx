@@ -28,7 +28,19 @@ function buildRcColumns(onPublish, onView, onPrint, onGeneratePdf, onDownloadPdf
       header: 'Student',
       cell: ({ row }) => {
         const s = row.original.studentId;
-        return <p className="font-medium text-sm">{typeof s === 'object' ? `${s.firstName} ${s.lastName}` : '—'}</p>;
+        if (typeof s !== 'object') return <p className="font-medium text-sm">—</p>;
+        return (
+          <div className="flex items-center gap-2.5">
+            {s.photo ? (
+              <img src={s.photo} alt={`${s.firstName} ${s.lastName}`} className="w-7 h-7 rounded-full object-cover border shrink-0" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
+                {s.firstName?.[0]}{s.lastName?.[0]}
+              </div>
+            )}
+            <p className="font-medium text-sm">{s.firstName} {s.lastName}</p>
+          </div>
+        );
       },
     },
     {

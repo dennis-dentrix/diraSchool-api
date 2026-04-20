@@ -139,6 +139,17 @@ export default function ReportCardPrintPage() {
                   ? `${student.firstName} ${student.lastName}`.toUpperCase()
                   : '—'}
               </td>
+              <td className="w-24 p-1 align-middle text-center" rowSpan={3}>
+                {typeof student === 'object' && student.photo ? (
+                  <img
+                    src={student.photo}
+                    alt={`${student.firstName} ${student.lastName}`}
+                    style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '6px', margin: '0 auto' }}
+                  />
+                ) : (
+                  <div style={{ width: '70px', height: '70px', border: '1px solid #333', margin: '0 auto' }} />
+                )}
+              </td>
             </tr>
             <tr>
               <td className="font-bold bg-gray-50">Admission No.</td>

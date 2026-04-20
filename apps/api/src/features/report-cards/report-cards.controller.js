@@ -261,7 +261,7 @@ export const generateReportCard = asyncHandler(async (req, res) => {
   );
 
   const populated = await ReportCard.findById(reportCard._id)
-    .populate('studentId', 'firstName lastName admissionNumber gender')
+    .populate('studentId', 'firstName lastName admissionNumber gender photo')
     .populate('classId', 'name stream levelCategory academicYear term');
 
   await queueReportPdf({
@@ -583,7 +583,7 @@ export const listReportCards = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
-    .populate('studentId', 'firstName lastName admissionNumber gender')
+    .populate('studentId', 'firstName lastName admissionNumber gender photo')
     .populate('classId', 'name stream levelCategory');
 
   return sendSuccess(res, { reportCards, meta });
@@ -597,7 +597,7 @@ export const getReportCard = asyncHandler(async (req, res) => {
     _id: req.params.id,
     schoolId: req.user.schoolId,
   })
-    .populate('studentId', 'firstName lastName admissionNumber gender dateOfBirth')
+    .populate('studentId', 'firstName lastName admissionNumber gender photo dateOfBirth')
     .populate('classId', 'name stream levelCategory academicYear term');
 
   if (!reportCard) return sendError(res, 'Report card not found.', 404);

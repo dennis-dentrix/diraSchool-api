@@ -250,6 +250,25 @@ export default function ReportCardDetailPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {typeof student === 'object' && (
+            <div className="flex items-center gap-3 mb-4">
+              {student.photo ? (
+                <img
+                  src={student.photo}
+                  alt={`${student.firstName} ${student.lastName}`}
+                  className="w-16 h-16 rounded-full object-cover border"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 text-lg font-bold flex items-center justify-center">
+                  {student.firstName?.[0]}{student.lastName?.[0]}
+                </div>
+              )}
+              <div>
+                <p className="text-base font-semibold">{student.firstName} {student.lastName}</p>
+                <p className="text-xs text-muted-foreground font-mono">{student.admissionNumber}</p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <InfoItem
               label="Full Name"

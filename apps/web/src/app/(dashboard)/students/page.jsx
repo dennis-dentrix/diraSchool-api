@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp, Download } from 'lucide-react';
@@ -62,9 +62,17 @@ const columns = (onView, onWithdraw, canWithdraw) => [
           onClick={() => onView(s._id)}
           className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
         >
-          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
-            {s.firstName?.[0]}{s.lastName?.[0]}
-          </div>
+          {s.photo ? (
+            <img
+              src={s.photo}
+              alt={`${s.firstName} ${s.lastName}`}
+              className="w-8 h-8 rounded-full object-cover border shrink-0"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
+              {s.firstName?.[0]}{s.lastName?.[0]}
+            </div>
+          )}
           <div>
             <p className="font-medium text-sm leading-tight">{s.firstName} {s.lastName}</p>
             <p className="text-xs text-muted-foreground font-mono">{s.admissionNumber}</p>
@@ -132,6 +140,10 @@ export default function StudentsPage() {
   const [search, setSearch]               = useState('');
   const [page, setPage]                   = useState(1);
   const [open, setOpen]                   = useState(false);
+  const [importOpen, setImportOpen]       = useState(false);
+  const [importClassId, setImportClassId] = useState('');
+  const [importFile, setImportFile]       = useState(null);
+  const [importJobId, setImportJobId]     = useState(null);
   const [selectedStatus, setSelectedStatus] = useState('active');
   const [showGuardian, setShowGuardian]   = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
@@ -218,6 +230,64 @@ export default function StudentsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const { mutate: startImport, isPending: importSubmitting } = useMutation({
+    mutationFn: async () => {
+      if (!importClassId) throw new Error('Select a class for this import.');
+      if (!importFile) throw new Error('Select a CSV file to import.');
+      const formData = new FormData();
+      formData.append('classId', importClassId);
+      formData.append('file', importFile);
+      return studentsApi.importCsv(formData);
+    },
+    onSuccess: (res) => {
+      const payload = res?.data ?? {};
+      const jobId = payload?.jobId ?? payload?.data?.jobId;
+      if (!jobId) {
+        toast.error(payload?.message ?? 'Import queued, but no job ID was returned.');
+        return;
+      }
+      setImportJobId(jobId);
+      setImportOpen(false);
+      setImportFile(null);
+      setImportClassId('');
+      toast.success('Import queued. Processing has started.');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { data: importStatus } = useQuery({
+    queryKey: ['students-import-status', importJobId],
+    queryFn: async () => {
+      const res = await studentsApi.importStatus(importJobId);
+      return res.data;
+    },
+    enabled: !!importJobId,
+    refetchInterval: (query) => {
+      const payload = query.state.data;
+      const result = payload?.result ?? payload?.data?.result ?? payload?.data ?? payload;
+      const isComplete = result?.status === 'complete' || result?.status === 'failed';
+      return isComplete ? false : 2000;
+    },
+  });
+
+  useEffect(() => {
+    if (!importJobId) return;
+    const result = importStatus?.result ?? importStatus?.data?.result ?? importStatus?.data ?? importStatus;
+    if (result?.status !== 'complete' && result?.status !== 'failed') return;
+
+    const succeeded = result?.succeeded ?? 0;
+    const failed = result?.failed ?? 0;
+    if (result?.status === 'failed') {
+      toast.error(result?.error ?? 'Student import failed.');
+    } else if (failed > 0) {
+      toast.warning(`Import complete: ${succeeded} succeeded, ${failed} failed.`);
+    } else {
+      toast.success(`Import complete: ${succeeded} students added.`);
+    }
+    setImportJobId(null);
+    queryClient.invalidateQueries({ queryKey: ['students'] });
+  }, [importJobId, importStatus, queryClient]);
+
   const openConfirm = (title, description, onConfirm) =>
     setConfirmDialog({ open: true, title, description, onConfirm });
 
@@ -241,7 +311,7 @@ export default function StudentsPage() {
             >
               <Download className="h-4 w-4 mr-1" /> Export CSV
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
               <Upload className="h-4 w-4 mr-1" /> Import CSV
             </Button>
             <Button size="sm" onClick={() => setOpen(true)}>
@@ -294,6 +364,53 @@ export default function StudentsPage() {
       />
 
       {/* ── Enroll dialog (admin/non-teacher only) ─────────────────────── */}
+      {!isTeacher && (
+        <Dialog open={importOpen} onOpenChange={(v) => { setImportOpen(v); if (!v) { setImportFile(null); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Import Students CSV</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Class *</Label>
+                <Select value={importClassId} onValueChange={setImportClassId}>
+                  <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                  <SelectContent>
+                    {classes.map((cls) => (
+                      <SelectItem key={cls._id} value={cls._id}>
+                        {cls.name}{cls.stream ? ` ${cls.stream}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>CSV File *</Label>
+                <Input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required columns: <code>admissionNumber, firstName, lastName, gender</code>.
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setImportOpen(false)}>Cancel</Button>
+              <Button
+                type="button"
+                disabled={importSubmitting || !importClassId || !importFile}
+                onClick={() => startImport()}
+              >
+                {importSubmitting ? 'Uploading…' : 'Start Import'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {!isTeacher && (
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setShowGuardian(false); }}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
