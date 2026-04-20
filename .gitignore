@@ -31,6 +31,9 @@ Thumbs.db
 docs/__pycache__/
 
 # ── One-off scripts (safe to delete after use) ───────────────
-apps/api/scripts/
+# Keep folder visible so we can whitelist required scripts.
+apps/api/scripts/*
+!apps/api/scripts/seed.js
+!apps/api/scripts/verify-cloudinary.js
 
 apps/web/.next
