@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { parentApi, settingsApi } from '@/lib/api';
 import { formatDate, formatCurrency, capitalize } from '@/lib/utils';
 import { ACADEMIC_YEARS, TERMS } from '@/lib/constants';
-import { GraduationCap, CreditCard, ClipboardList, School, CalendarDays, Download } from 'lucide-react';
+import { GraduationCap, School, CalendarDays, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,26 +16,52 @@ import { Button } from '@/components/ui/button';
 
 // ── Child Selector ────────────────────────────────────────────────────────────
 function ChildSelector({ children, selected, onSelect }) {
+  const totalChildren = children.length;
   return (
-    <div className="flex gap-2 flex-wrap mb-4">
-      {children.map((child) => (
-        <button
-          key={child._id}
-          onClick={() => onSelect(child._id)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all ${
-            selected === child._id
-              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-              : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50'
-          }`}
-        >
-          <span className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
-            selected === child._id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-          }`}>
-            {child.firstName?.[0]}{child.lastName?.[0]}
-          </span>
-          {child.firstName} {child.lastName}
-        </button>
-      ))}
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-semibold text-slate-800">Children</p>
+        <p className="text-xs text-muted-foreground">
+          {totalChildren} learner{totalChildren === 1 ? '' : 's'} linked
+        </p>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {children.map((child) => {
+          const active = selected === child._id;
+          const classLabel = typeof child.classId === 'object'
+            ? `${child.classId.name}${child.classId.stream ? ` ${child.classId.stream}` : ''}`
+            : 'No class assigned';
+          return (
+            <button
+              key={child._id}
+              onClick={() => onSelect(child._id)}
+              className={`min-w-[230px] text-left rounded-xl border p-3 transition-all ${
+                active
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50'
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <span className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
+                  active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {child.firstName?.[0]}{child.lastName?.[0]}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{child.firstName} {child.lastName}</p>
+                  <p className={`text-[11px] truncate ${active ? 'text-blue-100' : 'text-muted-foreground'}`}>
+                    Adm: {child.admissionNumber}
+                  </p>
+                  <p className={`text-[11px] truncate ${active ? 'text-blue-100' : 'text-muted-foreground'}`}>
+                    {classLabel}
+                  </p>
+                </div>
+                {active && <Badge className="ml-auto bg-white/20 text-white border-white/20">Active</Badge>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -557,20 +583,20 @@ export default function ParentPortalPage() {
         router.replace(`/portal?tab=${next}`, { scroll: false });
       }}>
         <TabsList className="w-full grid grid-cols-5">
-          <TabsTrigger value="fees" className="gap-1.5 text-xs sm:text-sm">
-            <CreditCard className="h-3.5 w-3.5" />Fees
+          <TabsTrigger value="fees" className="text-xs sm:text-sm">
+            Fees
           </TabsTrigger>
-          <TabsTrigger value="attendance" className="gap-1.5 text-xs sm:text-sm">
-            <ClipboardList className="h-3.5 w-3.5" />Attendance
+          <TabsTrigger value="attendance" className="text-xs sm:text-sm">
+            Attendance
           </TabsTrigger>
-          <TabsTrigger value="results" className="gap-1.5 text-xs sm:text-sm">
-            <GraduationCap className="h-3.5 w-3.5" />Results
+          <TabsTrigger value="results" className="text-xs sm:text-sm">
+            Results
           </TabsTrigger>
-          <TabsTrigger value="reports" className="gap-1.5 text-xs sm:text-sm">
-            <Download className="h-3.5 w-3.5" />Reports
+          <TabsTrigger value="reports" className="text-xs sm:text-sm">
+            Report Cards
           </TabsTrigger>
-          <TabsTrigger value="school" className="gap-1.5 text-xs sm:text-sm">
-            <School className="h-3.5 w-3.5" />School
+          <TabsTrigger value="school" className="text-xs sm:text-sm">
+            School Info
           </TabsTrigger>
         </TabsList>
 

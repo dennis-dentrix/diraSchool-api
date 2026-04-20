@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { sendSuccess, sendError } from '../../utils/response.js';
 
-const BASE_FEE = 7500;
+const BASE_FEE = 8500;
 const PER_STUDENT_RATE = 40;
 const VAT_RATE = 0.16;
 const SCHOOL_FEE_ASSUMPTION = 10000; // KES per student per term (for % calc)

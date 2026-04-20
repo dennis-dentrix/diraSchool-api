@@ -23,7 +23,7 @@ import Link from 'next/link';
 const BILLING_ROLES = ['school_admin', 'director', 'headteacher'];
 
 // ── Pricing constants ────────────────────────────────────────────────────────
-const BASE_FEE = 7500;
+const BASE_FEE = 8500;
 const PER_STUDENT = 40;
 const VAT = 0.16;
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
@@ -135,7 +135,7 @@ function BillingCalculator({ currentStudents }) {
         {/* Breakdown */}
         <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
           <div className="flex justify-between text-muted-foreground">
-            <span>Base fee</span><span className="font-mono">KES 7,500</span>
+            <span>Base fee</span><span className="font-mono">KES 8,500</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
             <span>{students.toLocaleString()} × KES 40</span>
@@ -412,7 +412,7 @@ export default function BillingPage() {
             <div>
               <p className="text-sm font-semibold">How your bill is calculated</p>
               <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                ( KES 7,500 base + enrolled students × KES 40 ) × 1.16 VAT = term cost
+                ( KES 8,500 base + enrolled students × KES 40 ) × 1.16 VAT = term cost
               </p>
             </div>
             <div className="sm:ml-auto flex gap-2 shrink-0">

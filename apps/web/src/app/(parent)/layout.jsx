@@ -1,39 +1,72 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useAuth, useLogout } from '@/hooks/use-auth';
+import { settingsApi } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { Home, LogOut } from 'lucide-react';
-
-function NavLink({ href, children }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const target = href.split('?tab=')[1];
-  const activeTab = searchParams.get('tab') || 'fees';
-  const isActive = pathname === '/portal' && target ? activeTab === target : pathname === href;
-  return (
-    <Link
-      href={href}
-      className={cn(
-        'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-        isActive
-          ? 'bg-blue-600 text-white'
-          : 'text-slate-600 hover:bg-slate-100',
-      )}
-    >
-      {children}
-    </Link>
-  );
-}
+import { LogOut } from 'lucide-react';
 
 export default function ParentLayout({ children }) {
   const { user, isLoading } = useAuth();
   const { logout } = useLogout();
   const router = useRouter();
+  const schoolName = user?.school?.name ?? (typeof user?.schoolId === 'object' ? user?.schoolId?.name : '');
+
+  const { data: settingsData } = useQuery({
+    queryKey: ['parent-header-settings'],
+    queryFn: async () => {
+      const res = await settingsApi.get();
+      return res.data?.settings ?? res.data?.data ?? res.data;
+    },
+    enabled: !!user,
+    staleTime: 60 * 1000,
+  });
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const terms = settingsData?.terms ?? [];
+  const holidays = settingsData?.holidays ?? [];
+  const currentAcademicYear = settingsData?.currentAcademicYear;
+
+  const currentTerm = terms.find((t) => {
+    const start = String(t?.startDate ?? '').slice(0, 10);
+    const end = String(t?.endDate ?? '').slice(0, 10);
+    return start && end && todayIso >= start && todayIso <= end;
+  });
+
+  const todayHoliday = holidays.find((h) => String(h?.date ?? '').slice(0, 10) === todayIso);
+  const nextTerm = [...terms]
+    .filter((t) => String(t?.startDate ?? '').slice(0, 10) > todayIso)
+    .sort((a, b) => String(a?.startDate ?? '').localeCompare(String(b?.startDate ?? '')))[0];
+  const previousTerm = [...terms]
+    .filter((t) => String(t?.endDate ?? '').slice(0, 10) < todayIso)
+    .sort((a, b) => String(b?.endDate ?? '').localeCompare(String(a?.endDate ?? '')))[0];
+
+  const isMidterm = todayHoliday && /mid\s*term/i.test(`${todayHoliday.name ?? ''} ${todayHoliday.description ?? ''}`);
+
+  const formatIso = (value) => {
+    if (!value) return '';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return String(value).slice(0, 10);
+    return dt.toLocaleDateString('en-KE', { day: 'numeric', month: 'short' });
+  };
+
+  const breakWindow = (!currentTerm && nextTerm && previousTerm)
+    ? `${formatIso(previousTerm.endDate)} - ${formatIso(nextTerm.startDate)}`
+    : null;
+
+  const schoolDayStatus = todayHoliday
+    ? (isMidterm ? `Midterm break: ${todayHoliday.name}` : `Holiday: ${todayHoliday.name}`)
+    : (!currentTerm && nextTerm
+      ? `On break${breakWindow ? ` (${breakWindow})` : ''} · Next term starts ${formatIso(nextTerm.startDate)}`
+      : null);
+
+  const termLabel = currentTerm
+    ? `${currentTerm.name}${currentAcademicYear ? ` · ${currentAcademicYear}` : ''}`
+    : (currentAcademicYear ? `Academic Year ${currentAcademicYear}` : null);
 
   useEffect(() => {
     if (!isLoading && user && user.role !== 'parent') {
@@ -58,7 +91,7 @@ export default function ParentLayout({ children }) {
     <div className="min-h-screen bg-slate-50">
       {/* Top nav */}
       <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-600">
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -79,15 +112,17 @@ export default function ParentLayout({ children }) {
             </Button>
           </div>
         </div>
-        <div className="max-w-4xl mx-auto px-4 pb-3 overflow-x-auto">
-          <nav className="flex items-center gap-2 min-w-max">
-            <NavLink href="/portal?tab=fees"><Home className="h-4 w-4" />Fees</NavLink>
-            <NavLink href="/portal?tab=attendance">Attendance</NavLink>
-            <NavLink href="/portal?tab=results">Results</NavLink>
-            <NavLink href="/portal?tab=reports">Report Cards</NavLink>
-            <NavLink href="/portal?tab=school">School Info</NavLink>
-          </nav>
-        </div>
+        {(schoolName || termLabel || schoolDayStatus) && (
+          <div className="max-w-4xl mx-auto px-4 pb-2.5">
+            <p className="text-xs text-muted-foreground truncate">
+              {schoolName}
+              {schoolName && termLabel ? ' · ' : ''}
+              {termLabel}
+              {(schoolName || termLabel) && schoolDayStatus ? ' · ' : ''}
+              {schoolDayStatus}
+            </p>
+          </div>
+        )}
       </header>
 
       <div className="max-w-4xl mx-auto px-4 py-6">

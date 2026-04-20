@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const BASE_FEE = 7500;
+const BASE_FEE = 8500;
 const PER_STUDENT = 40;
 const VAT = 0.16;
 const SCHOOL_FEE_PER_STUDENT = 10000;
@@ -275,7 +275,7 @@ function PricingTable() {
                 {!plan.custom && (
                   <div className={cn('mt-4 rounded-lg p-3 text-xs space-y-1', plan.highlight ? 'bg-white/10' : 'bg-slate-50')}>
                     <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
-                      <span>Base fee</span><span>KES 7,500</span>
+                      <span>Base fee</span><span>KES 8,500</span>
                     </div>
                     <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
                       <span>{previewSize} × KES 40</span><span>{fmt(previewSize * 40)}</span>
@@ -310,7 +310,7 @@ function PricingTable() {
         <div className="mt-10 rounded-2xl bg-slate-50 border border-slate-200 p-6 text-center">
           <p className="text-sm text-slate-600 font-medium">The formula behind every plan</p>
           <p className="mt-2 text-slate-800 font-mono text-sm">
-            ( KES 7,500 base + students × KES 40 ) × 1.16 VAT = your term cost
+            ( KES 8,500 base + students × KES 40 ) × 1.16 VAT = your term cost
           </p>
           <p className="mt-2 text-xs text-slate-400">Linear scaling — no step increases, no surprises</p>
         </div>
@@ -412,7 +412,7 @@ function PriceCalculator() {
                 <div className="space-y-2.5 text-sm">
                   <div className="flex justify-between text-slate-400">
                     <span>Base fee</span>
-                    <span className="font-mono">KES 7,500</span>
+                    <span className="font-mono">KES 8,500</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>{students.toLocaleString()} × KES 40</span>

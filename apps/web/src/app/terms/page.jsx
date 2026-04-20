@@ -94,7 +94,7 @@ export default function TermsPage() {
             DiraSchool is billed per term (three terms per academic year). Pricing is calculated as:
           </p>
           <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm mt-2">
-            <p className="font-semibold text-slate-800">KES 7,500 base fee per term + KES 40 per enrolled student</p>
+            <p className="font-semibold text-slate-800">KES 8,500 base fee per term + KES 40 per enrolled student</p>
             <p className="mt-1 text-slate-500">Annual billing (3 terms paid upfront) receives a 15% discount.</p>
           </div>
           <p className="mt-3">

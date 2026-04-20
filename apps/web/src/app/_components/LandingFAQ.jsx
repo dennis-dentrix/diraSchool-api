@@ -12,7 +12,7 @@ const FAQS = [
   },
   {
     q: 'How does pricing work?',
-    a: 'You pay KES 7,500 base fee plus KES 40 per enrolled student per term — 3 times per year. Annual billing saves 15%. There are no tier limits, no feature locks, and no hidden fees. All schools use the same formula.',
+    a: 'You pay KES 8,500 base fee plus KES 40 per enrolled student per term — 3 times per year. Annual billing saves 15%. There are no tier limits, no feature locks, and no hidden fees. All schools use the same formula.',
   },
   {
     q: 'Can parents see their children\'s results and fees?',
