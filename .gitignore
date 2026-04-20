@@ -5,6 +5,10 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.development
+.env.test
+.env.production
+.env.staging
 
 # ── Logs (keep the directory, ignore the files) ──────────────
 apps/api/logs/*.log

@@ -39,11 +39,13 @@ Behavior:
 ## Deploy checklist
 
 1. Add env vars to your server/platform.
-2. Restart processes:
+2. Health-check the API on `/health` (not `/api/v1/health`).
+   - Example: `curl -s http://127.0.0.1:3000/health`
+3. Restart processes:
    - API: `pm2 restart diraschool-api --update-env`
    - Worker: `pm2 restart diraschool-worker --update-env`
    - Web: restart/build web process with new env.
-3. Trigger a test error in staging and confirm it appears in Sentry.
+4. Trigger a test error in staging and confirm it appears in Sentry.
 
 ## Safe test endpoint
 

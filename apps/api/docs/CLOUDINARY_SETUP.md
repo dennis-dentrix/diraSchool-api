@@ -38,8 +38,10 @@ Expected output:
 
 ## 4) Verify runtime health endpoint
 
+Use the API health route exactly as implemented: `/health` (not `/api/v1/health`).
+
 ```bash
-curl -s http://127.0.0.1:5000/health
+curl -s http://127.0.0.1:3000/health
 ```
 
 `services.cloudinary` should be `configured`.
