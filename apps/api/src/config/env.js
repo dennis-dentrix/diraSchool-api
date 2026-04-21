@@ -76,6 +76,23 @@ export const validateEnv = () => {
     );
     process.exit(1);
   }
+
+  const pesapalVars = [
+    'PESAPAL_CONSUMER_KEY',
+    'PESAPAL_CONSUMER_SECRET',
+    'PESAPAL_NOTIFICATION_ID',
+  ];
+  const configuredPesapalVars = pesapalVars.filter((key) => !!process.env[key]);
+  if (configuredPesapalVars.length > 0 && configuredPesapalVars.length < pesapalVars.length) {
+    writeStderr(
+      '\n[ENV ERROR] Partial Pesapal configuration detected.\n' +
+      'Set all variables or none:\n' +
+      '  PESAPAL_CONSUMER_KEY\n' +
+      '  PESAPAL_CONSUMER_SECRET\n' +
+      '  PESAPAL_NOTIFICATION_ID\n'
+    );
+    process.exit(1);
+  }
 };
 
 export const env = {
@@ -109,6 +126,14 @@ export const env = {
   CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
   // Monitoring — optional
   SENTRY_DSN: process.env.SENTRY_DSN,
+  // Pesapal — optional. If keys are set, checkout endpoints can be enabled.
+  PESAPAL_ENABLED: process.env.PESAPAL_ENABLED === 'true',
+  PESAPAL_ENV: process.env.PESAPAL_ENV || 'sandbox',
+  PESAPAL_BASE_URL: process.env.PESAPAL_BASE_URL,
+  PESAPAL_CONSUMER_KEY: process.env.PESAPAL_CONSUMER_KEY,
+  PESAPAL_CONSUMER_SECRET: process.env.PESAPAL_CONSUMER_SECRET,
+  PESAPAL_NOTIFICATION_ID: process.env.PESAPAL_NOTIFICATION_ID,
+  PESAPAL_CURRENCY: process.env.PESAPAL_CURRENCY || 'KES',
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV === 'development',
 };

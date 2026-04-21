@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format, differenceInDays } from 'date-fns';
 import {
   CalendarDays, TrendingUp,
   AlertTriangle, CheckCircle2, Clock, Ban,
-  ArrowRight, Mail, Calculator, Download,
+  ArrowRight, Mail, Calculator, Download, Loader2,
 } from 'lucide-react';
-import { schoolsApi, studentsApi, exportApi, downloadBlob } from '@/lib/api';
+import { schoolsApi, studentsApi, exportApi, downloadBlob, subscriptionsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/shared/page-header';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 // ── Only these roles can access billing ─────────────────────────────────────
 const BILLING_ROLES = ['school_admin', 'director', 'headteacher'];
@@ -180,6 +181,9 @@ const INVOICE_SCHEDULE = [
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function BillingPage() {
   const { user } = useAuthStore();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const [statusToastShown, setStatusToastShown] = useState(false);
 
   if (!BILLING_ROLES.includes(user?.role)) {
     return (
@@ -210,6 +214,59 @@ export default function BillingPage() {
   const planTier = school?.planTier ?? 'trial';
 
   const bill = studentCount > 0 ? calcBill(studentCount) : null;
+  const merchantReference = useMemo(
+    () =>
+      searchParams.get('OrderMerchantReference')
+      || searchParams.get('orderMerchantReference')
+      || searchParams.get('merchantReference'),
+    [searchParams]
+  );
+
+  const createCheckout = useMutation({
+    mutationFn: async () => {
+      const response = await subscriptionsApi.createPesapalCheckout({
+        billingCycle: 'per-term',
+        studentCount: Math.max(studentCount || 0, 1),
+        planTier: planTier === 'trial' ? 'standard' : planTier,
+      });
+      return response.data?.checkout ?? response.data?.data?.checkout;
+    },
+    onSuccess: (checkout) => {
+      if (!checkout?.redirectUrl) {
+        toast.error('Pesapal checkout URL was not returned.');
+        return;
+      }
+      window.location.assign(checkout.redirectUrl);
+    },
+    onError: (error) => {
+      const message = error?.response?.data?.message || 'Unable to start Pesapal checkout.';
+      toast.error(message);
+    },
+  });
+
+  const { data: paymentStatusData, isFetching: paymentStatusLoading } = useQuery({
+    queryKey: ['billing', 'pesapal-status', merchantReference],
+    enabled: Boolean(merchantReference),
+    queryFn: async () => {
+      const response = await subscriptionsApi.pesapalStatus(merchantReference);
+      return response.data?.payment ?? response.data?.data?.payment;
+    },
+  });
+
+  useEffect(() => {
+    if (statusToastShown || !paymentStatusData) return;
+    setStatusToastShown(true);
+    if (paymentStatusData.status === 'completed') {
+      toast.success('Subscription payment confirmed successfully.');
+      queryClient.invalidateQueries({ queryKey: ['school', 'me'] });
+      return;
+    }
+    if (paymentStatusData.status === 'failed' || paymentStatusData.status === 'cancelled') {
+      toast.error('Pesapal payment was not completed. Please try again.');
+      return;
+    }
+    toast.message('Payment is still processing. We will refresh status automatically.');
+  }, [paymentStatusData, queryClient, statusToastShown]);
 
   if (schoolLoading) {
     return (
@@ -358,10 +415,32 @@ export default function BillingPage() {
                 <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-0">
                   <a href="mailto:contact@diraschool.com">Email billing team</a>
                 </Button>
+                <Button
+                  type="button"
+                  onClick={() => createCheckout.mutate()}
+                  disabled={createCheckout.isPending || studentCount < 1}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white border-0"
+                >
+                  {createCheckout.isPending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Starting checkout...
+                    </>
+                  ) : (
+                    'Pay with Pesapal'
+                  )}
+                </Button>
                 <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 bg-transparent">
                   <Link href="/pricing" target="_blank">View pricing page</Link>
                 </Button>
               </div>
+              {(merchantReference || paymentStatusLoading) && (
+                <p className="text-xs text-slate-300">
+                  {paymentStatusLoading
+                    ? 'Checking latest Pesapal payment status...'
+                    : `Pesapal reference: ${merchantReference}`}
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>

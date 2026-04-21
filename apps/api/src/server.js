@@ -39,6 +39,7 @@ import emailRoutes from './features/email/email.routes.js';
 import pricingRoutes from './features/pricing/pricing.routes.js';
 import exportRoutes from './features/export/export.routes.js';
 import notificationRoutes from './features/notifications/notifications.routes.js';
+import subscriptionRoutes from './features/subscriptions/subscriptions.routes.js';
 
 // ── Startup diagnostic — always runs first, visible in Railway logs ──────────
 // This prints BEFORE validateEnv() so missing vars are visible even if we crash.
@@ -170,6 +171,7 @@ app.use('/api/v1/email', emailRoutes);
 app.use('/api/v1/pricing', pricingRoutes);
 app.use('/api/v1/export', exportRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/subscriptions', subscriptionRoutes);
 
 // ── 404 catch-all ────────────────────────────────────────────────────────────
 app.use((req, res) => {

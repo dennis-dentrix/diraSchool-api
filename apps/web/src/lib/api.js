@@ -259,6 +259,12 @@ export const pricingApi = {
   calculate: (params) => api.get('/pricing/calculate', { params }),
 };
 
+// ─── Subscription checkout ───────────────────────────────────────────────────
+export const subscriptionsApi = {
+  createPesapalCheckout: (data) => api.post('/subscriptions/pesapal/checkout', data),
+  pesapalStatus: (merchantReference) => api.get(`/subscriptions/pesapal/status/${merchantReference}`),
+};
+
 // ─── Audit ────────────────────────────────────────────────────────────────────
 export const auditApi = {
   list: (params) => api.get('/audit-logs', { params }),
