@@ -7,7 +7,8 @@ import { Plus, Trash2, Printer, ChevronDown, ChevronRight, Copy } from 'lucide-r
 import { useForm, useFieldArray } from 'react-hook-form';
 import { feesApi, classesApi, getErrorMessage } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import { ACADEMIC_YEARS, TERMS, CURRENT_YEAR } from '@/lib/constants';
+import { ACADEMIC_YEARS, TERMS, CURRENT_YEAR, ADMIN_ROLES } from '@/lib/constants';
+import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -96,7 +97,7 @@ function printStructure(structure) {
 }
 
 // ── Single structure card ─────────────────────────────────────────────────────
-function StructureCard({ structure, onDelete }) {
+function StructureCard({ structure, onDelete, canManageStructures }) {
   const grouped = groupByCategory(structure.items);
 
   return (
@@ -121,14 +122,16 @@ function StructureCard({ structure, onDelete }) {
             >
               <Printer className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              variant="ghost" size="icon"
-              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={onDelete}
-              title="Delete"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            {canManageStructures && (
+              <Button
+                variant="ghost" size="icon"
+                className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={onDelete}
+                title="Delete"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -162,7 +165,7 @@ function StructureCard({ structure, onDelete }) {
 }
 
 // ── Class group with collapsible structures ───────────────────────────────────
-function ClassGroup({ className, structures, onDelete }) {
+function ClassGroup({ className, structures, onDelete, canManageStructures }) {
   const [collapsed, setCollapsed] = useState(false);
   const Icon = collapsed ? ChevronRight : ChevronDown;
 
@@ -183,6 +186,7 @@ function ClassGroup({ className, structures, onDelete }) {
             <StructureCard
               key={s._id}
               structure={s}
+              canManageStructures={canManageStructures}
               onDelete={() => onDelete(s._id)}
             />
           ))}
@@ -194,6 +198,7 @@ function ClassGroup({ className, structures, onDelete }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function FeeStructuresPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [adaptOpen, setAdaptOpen] = useState(false);
@@ -207,6 +212,7 @@ export default function FeeStructuresPage() {
   const [adaptToTerm, setAdaptToTerm] = useState('Term 1');
   const [adaptClassId, setAdaptClassId] = useState('');
   const [adaptOverwrite, setAdaptOverwrite] = useState(false);
+  const canManageStructures = ADMIN_ROLES.includes(user?.role);
 
   const { register, handleSubmit, reset, setValue, control, watch } = useForm({
     defaultValues: {
@@ -313,12 +319,16 @@ export default function FeeStructuresPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Fee Structures" description="Configure term fees per class">
-        <Button size="sm" variant="outline" onClick={() => setAdaptOpen(true)}>
-          <Copy className="h-4 w-4" /> Adapt from Previous Year
-        </Button>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" /> New Structure
-        </Button>
+        {canManageStructures && (
+          <>
+            <Button size="sm" variant="outline" onClick={() => setAdaptOpen(true)}>
+              <Copy className="h-4 w-4" /> Adapt from Previous Year
+            </Button>
+            <Button size="sm" onClick={() => setOpen(true)}>
+              <Plus className="h-4 w-4" /> New Structure
+            </Button>
+          </>
+        )}
       </PageHeader>
 
       {/* Filters */}
@@ -373,6 +383,7 @@ export default function FeeStructuresPage() {
               key={label}
               className={label}
               structures={classStructures}
+              canManageStructures={canManageStructures}
               onDelete={(id) => setConfirmDialog({ open: true, id })}
             />
           ))}
@@ -380,6 +391,7 @@ export default function FeeStructuresPage() {
       )}
 
       {/* Create dialog */}
+      {canManageStructures && (
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -504,7 +516,9 @@ export default function FeeStructuresPage() {
           </form>
         </DialogContent>
       </Dialog>
+      )}
 
+      {canManageStructures && (
       <Dialog open={adaptOpen} onOpenChange={setAdaptOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -586,7 +600,9 @@ export default function FeeStructuresPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
 
+      {canManageStructures && (
       <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -606,6 +622,7 @@ export default function FeeStructuresPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
     </div>
   );
 }

@@ -39,18 +39,16 @@ const canIssueReceipts = authorize(ROLES.SECRETARY, ROLES.ACCOUNTANT);
 // ── Fee Structures ────────────────────────────────────────────────────────────
 router
   .route('/structures')
-  .all(adminOnly)
-  .get(validateListFeeStructures, listFeeStructures)
-  .post(validateCreateFeeStructure, createFeeStructure);
+  .get(canManageFees, validateListFeeStructures, listFeeStructures)
+  .post(adminOnly, validateCreateFeeStructure, createFeeStructure);
 
 router.post('/structures/adapt', adminOnly, validateAdaptFeeStructures, adaptFeeStructures);
 
 router
   .route('/structures/:id')
-  .all(adminOnly)
-  .get(getFeeStructure)
-  .patch(validateUpdateFeeStructure, updateFeeStructure)
-  .delete(deleteFeeStructure);
+  .get(canManageFees, getFeeStructure)
+  .patch(adminOnly, validateUpdateFeeStructure, updateFeeStructure)
+  .delete(adminOnly, deleteFeeStructure);
 
 // ── Payments ──────────────────────────────────────────────────────────────────
 router
