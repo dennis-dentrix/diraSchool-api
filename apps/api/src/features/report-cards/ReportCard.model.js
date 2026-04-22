@@ -119,8 +119,10 @@ const reportCardSchema = new mongoose.Schema(
       trim: true,
       index: true,
       default: function () {
-        const year = this.academicYear || new Date().getFullYear();
-        const tail = this._id?.toString()?.slice(-6)?.toUpperCase() ?? '000000';
+        const year = this && this.academicYear ? this.academicYear : new Date().getFullYear();
+        const tail = this && this._id
+          ? this._id.toString().slice(-6).toUpperCase()
+          : '000000';
         return `RPT-${year}-${tail}`;
       },
     },
