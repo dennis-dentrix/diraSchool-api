@@ -12,6 +12,7 @@
  */
 import ReportCard from '../../features/report-cards/ReportCard.model.js';
 import School from '../../features/schools/School.model.js';
+import SchoolSettings from '../../features/settings/SchoolSettings.model.js';
 import { renderReportCardPdf } from '../helpers/renderReportCardPdf.js';
 import { uploadBuffer } from '../helpers/cloudinaryUpload.js';
 import logger from '../../config/logger.js';
@@ -32,12 +33,22 @@ export const processReportJob = async (job) => {
       throw new Error(`ReportCard ${reportCardId} not found for school ${schoolId}`);
     }
 
-    // Fetch school name for the PDF header
-    const school = await School.findById(schoolId).select('name');
+    // Fetch school profile + branding for the PDF header
+    const school = await School.findById(schoolId).select('name phone email address county');
     const schoolName = school?.name ?? 'School';
+    const settings = await SchoolSettings.findOne({ schoolId }).select('logo motto principalName physicalAddress');
 
     // 2. Render PDF
-    const pdfBuffer = await renderReportCardPdf(reportCard, schoolName);
+    const pdfBuffer = await renderReportCardPdf(reportCard, {
+      schoolName,
+      logoUrl: settings?.logo,
+      motto: settings?.motto,
+      principalName: settings?.principalName,
+      phone: school?.phone,
+      email: school?.email,
+      address: settings?.physicalAddress || school?.address,
+      county: school?.county,
+    });
 
     logger.info('[Report] PDF rendered', { jobId: job.id, bytes: pdfBuffer.length });
 

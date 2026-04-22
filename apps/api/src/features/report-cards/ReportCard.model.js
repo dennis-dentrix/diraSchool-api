@@ -113,6 +113,17 @@ const reportCardSchema = new mongoose.Schema(
     },
     pdfGeneratedAt: { type: Date },
     pdfError: { type: String, trim: true },
+    // Official document serial for traceability / validity checks
+    documentSerial: {
+      type: String,
+      trim: true,
+      index: true,
+      default: function () {
+        const year = this.academicYear || new Date().getFullYear();
+        const tail = this._id?.toString()?.slice(-6)?.toUpperCase() ?? '000000';
+        return `RPT-${year}-${tail}`;
+      },
+    },
     publishedAt: { type: Date },
     generatedAt: { type: Date, default: Date.now },
   },

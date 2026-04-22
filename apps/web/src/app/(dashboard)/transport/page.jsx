@@ -4,7 +4,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Bus, MoreHorizontal, Pencil, Users, Trash2, UserPlus, X, GripVertical, Search, Printer, Eye } from 'lucide-react';
-import { transportApi, studentsApi, schoolsApi, getErrorMessage } from '@/lib/api';
+import { transportApi, studentsApi, schoolsApi, settingsApi, getErrorMessage } from '@/lib/api';
+import { buildDocumentHeaderHtml, getDocumentHeaderCss, getDocumentHeaderData, escapeHtml } from '@/lib/document-print';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -302,6 +303,14 @@ function ViewStudentsDialog({ open, onClose, route }) {
     },
     enabled: open,
   });
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings', 'transport-print'],
+    queryFn: async () => {
+      const res = await settingsApi.get();
+      return res.data?.settings ?? res.data?.data ?? res.data;
+    },
+    enabled: open,
+  });
 
   const { data: routeDetail, isLoading } = useQuery({
     queryKey: ['transport-route-students', route?._id],
@@ -325,18 +334,8 @@ function ViewStudentsDialog({ open, onClose, route }) {
   const routeMeta = routeDetail?.route ?? route ?? {};
   const driverName = routeMeta?.driverName || '—';
   const driverPhone = routeMeta?.driverPhone || '—';
-  const schoolName = schoolData?.name || 'School';
-  const schoolPhone = schoolData?.phone || '';
-  const schoolAddress = schoolData?.address || '';
   const reportDate = new Date().toLocaleString();
-
-  const escapeHtml = (value) =>
-    String(value ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#39;');
+  const documentSerial = `TRL-${String(routeMeta?._id || route?._id || '').slice(-6).toUpperCase()}-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}`;
 
   const printList = () => {
     if (!route) return;
@@ -365,11 +364,19 @@ function ViewStudentsDialog({ open, onClose, route }) {
 
     const win = window.open('', '', 'width=1100,height=800');
     if (!win) return;
+    const header = getDocumentHeaderData({
+      school: schoolData || {},
+      settings: settingsData || {},
+      title: 'Transport',
+      subtitle: `Students List · ${routeMeta?.name ?? route?.name ?? 'Route'}`,
+      serial: documentSerial,
+      generatedAt: reportDate,
+    });
     win.document.write(`<!DOCTYPE html><html><head><title>Transport Students - ${escapeHtml(routeMeta?.name ?? route?.name ?? 'Route')}</title><style>
       body{font-family:Arial,sans-serif;padding:20px;color:#111}
-      h1{font-size:20px;margin:0}
-      .meta{color:#555;font-size:12px;margin:2px 0}
-      .header{border:1px solid #dfe3e8;border-radius:8px;padding:12px 14px;margin:0 0 14px;display:grid;grid-template-columns:1.3fr 1fr;gap:12px}
+      ${getDocumentHeaderCss()}
+      .meta{color:#555;font-size:12px;margin:2px 0 10px}
+      .header{border:1px solid #dfe3e8;border-radius:8px;padding:12px 14px;margin:0 0 14px;display:grid;grid-template-columns:1fr;gap:12px}
       .box-title{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:0 0 4px}
       .box-val{font-size:13px;margin:0 0 2px}
       table{width:100%;border-collapse:collapse;font-size:12px}
@@ -377,15 +384,8 @@ function ViewStudentsDialog({ open, onClose, route }) {
       th{background:#f3f4f6;font-weight:700}
       @media print { body{padding:0} }
     </style></head><body>
-      <h1>Transport Students List</h1>
-      <p class="meta">Generated on ${escapeHtml(reportDate)}</p>
+      ${buildDocumentHeaderHtml(header)}
       <div class="header">
-        <div>
-          <p class="box-title">School Details</p>
-          <p class="box-val"><strong>${escapeHtml(schoolName)}</strong></p>
-          ${schoolPhone ? `<p class="box-val">Phone: ${escapeHtml(schoolPhone)}</p>` : ''}
-          ${schoolAddress ? `<p class="box-val">Address: ${escapeHtml(schoolAddress)}</p>` : ''}
-        </div>
         <div>
           <p class="box-title">Route & Driver</p>
           <p class="box-val"><strong>Route:</strong> ${escapeHtml(routeMeta?.name ?? '—')}</p>
@@ -424,9 +424,13 @@ function ViewStudentsDialog({ open, onClose, route }) {
         <div className="rounded-md border bg-muted/20 p-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <div>
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 font-semibold">School Details</p>
-            <p className="font-semibold">{schoolName}</p>
-            {schoolPhone && <p className="text-muted-foreground">Phone: {schoolPhone}</p>}
-            {schoolAddress && <p className="text-muted-foreground">{schoolAddress}</p>}
+            <p className="font-semibold">{schoolData?.name || 'School'}</p>
+            {settingsData?.motto && <p className="text-muted-foreground italic">"{settingsData.motto}"</p>}
+            {schoolData?.phone && <p className="text-muted-foreground">Phone: {schoolData.phone}</p>}
+            {schoolData?.email && <p className="text-muted-foreground">Email: {schoolData.email}</p>}
+            {(settingsData?.physicalAddress || schoolData?.address) && (
+              <p className="text-muted-foreground">{settingsData?.physicalAddress || schoolData?.address}</p>
+            )}
           </div>
           <div>
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1 font-semibold">Route & Driver</p>

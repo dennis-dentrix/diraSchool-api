@@ -251,6 +251,10 @@ export const parentApi = {
 export const settingsApi = {
   get: () => api.get('/settings'),
   update: (data) => api.put('/settings', data),
+  uploadLogo: (formData) =>
+    api.post('/settings/logo', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   addHoliday: (data) => api.post('/settings/holidays', data),
   deleteHoliday: (id) => api.delete(`/settings/holidays/${id}`),
 };

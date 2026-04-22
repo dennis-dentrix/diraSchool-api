@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { protect, blockIfMustChangePassword, authorize } from '../../middleware/auth.js';
 import { ROLES } from '../../constants/index.js';
+import { uploadImage } from '../../middleware/upload.js';
 import {
   getSettings,
   updateSettings,
   addHoliday,
   deleteHoliday,
+  uploadSchoolLogo,
 } from './settings.controller.js';
 import {
   validateUpdateSettings,
@@ -22,6 +24,12 @@ router.put(
   authorize(ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER),
   validateUpdateSettings,
   updateSettings
+);
+router.post(
+  '/logo',
+  authorize(ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER),
+  uploadImage('logo'),
+  uploadSchoolLogo
 );
 
 router.post(

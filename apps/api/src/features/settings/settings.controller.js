@@ -3,6 +3,7 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { cacheGet, cacheSet, cacheDel } from '../../config/redis.js';
 import { CACHE_TTL } from '../../constants/index.js';
+import { uploadBuffer } from '../../jobs/helpers/cloudinaryUpload.js';
 
 const settingsCacheKey = (schoolId) => `settings:${schoolId}`;
 
@@ -84,4 +85,46 @@ export const deleteHoliday = asyncHandler(async (req, res) => {
 
   await cacheDel(settingsCacheKey(schoolId));
   return sendSuccess(res, { message: 'Holiday removed.' });
+});
+
+/**
+ * POST /api/v1/settings/logo
+ * Upload/update school logo for official document branding.
+ * Field name: "logo" (multipart/form-data)
+ */
+export const uploadSchoolLogo = asyncHandler(async (req, res) => {
+  const schoolId = req.user.schoolId;
+
+  const upload = await uploadBuffer(req.file.buffer, {
+    folder: `school-branding/${schoolId}`,
+    public_id: `school_logo_${schoolId}`,
+    resource_type: 'image',
+    overwrite: true,
+  });
+
+  if (!upload?.url) {
+    return sendError(
+      res,
+      'Logo upload unavailable. Configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.',
+      503
+    );
+  }
+
+  const settings = await SchoolSettings.findOneAndUpdate(
+    { schoolId },
+    {
+      $set: {
+        logo: upload.url,
+        logoPublicId: upload.publicId ?? undefined,
+      },
+    },
+    { upsert: true, new: true, runValidators: true }
+  );
+
+  await cacheDel(settingsCacheKey(schoolId));
+  return sendSuccess(res, {
+    message: 'School logo uploaded successfully.',
+    logo: settings.logo,
+    settings,
+  });
 });

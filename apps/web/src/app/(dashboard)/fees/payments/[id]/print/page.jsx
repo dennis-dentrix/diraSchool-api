@@ -4,8 +4,9 @@ import { useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { feesApi, schoolsApi } from '@/lib/api';
+import { feesApi, schoolsApi, settingsApi } from '@/lib/api';
 import { formatDate, formatCurrency, capitalize } from '@/lib/utils';
+import { SchoolDocumentHeader } from '@/components/shared/school-document-header';
 
 export default function PaymentReceiptPrintPage() {
   const params = useParams();
@@ -43,6 +44,14 @@ export default function PaymentReceiptPrintPage() {
     },
   });
 
+  const { data: settings } = useQuery({
+    queryKey: ['settings-receipt'],
+    queryFn: async () => {
+      const res = await settingsApi.get();
+      return res.data?.settings ?? res.data?.data ?? res.data;
+    },
+  });
+
   useEffect(() => {
     if (!id || isLoading || !payment || issuingReceipt || issuedPayment || issueFailed) return;
     issueReceipt();
@@ -75,7 +84,6 @@ export default function PaymentReceiptPrintPage() {
 
   const receipt = issuedPayment ?? payment;
   const student = receipt.studentId;
-  const schoolName = school?.name ?? 'School';
   const receiptDate = receipt.receiptIssuedAt ?? receipt.paymentDate ?? receipt.createdAt;
   const recorder = receipt.receiptIssuedByUserId
     ? `${receipt.receiptIssuedByUserId.firstName} ${receipt.receiptIssuedByUserId.lastName}`
@@ -129,10 +137,14 @@ export default function PaymentReceiptPrintPage() {
       </div>
 
       <div className="max-w-[520px] mx-auto p-4 bg-white" id="receipt-print-root">
-        <div className="bg-[#1e3a5f] text-white px-5 py-4 text-center rounded-t-md">
-          <h1 className="text-lg font-bold leading-tight">{schoolName}</h1>
-          <p className="text-sm opacity-85">Official Fee Payment Receipt</p>
-        </div>
+        <SchoolDocumentHeader
+          school={school}
+          settings={settings}
+          title="Finance"
+          subtitle="Fee Payment Receipt"
+          serial={receipt.receiptNumber ?? ''}
+          generatedAt={receiptDate ? formatDate(receiptDate) : ''}
+        />
         <div className="bg-blue-50 text-center py-2 text-xs font-bold tracking-widest border border-t-0 border-blue-200 uppercase">
           Fee Payment Receipt
         </div>

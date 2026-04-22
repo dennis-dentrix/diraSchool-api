@@ -3,9 +3,10 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Printer, ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { Plus, Trash2, Printer, ChevronDown, ChevronRight, Copy, Pencil } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { feesApi, classesApi, getErrorMessage } from '@/lib/api';
+import { feesApi, classesApi, settingsApi, schoolsApi, getErrorMessage } from '@/lib/api';
+import { buildDocumentHeaderHtml, getDocumentHeaderCss, getDocumentHeaderData } from '@/lib/document-print';
 import { formatCurrency } from '@/lib/utils';
 import { ACADEMIC_YEARS, TERMS, CURRENT_YEAR, ADMIN_ROLES } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
@@ -45,11 +46,20 @@ function groupByCategory(items = []) {
 }
 
 // ── Print a single fee structure ──────────────────────────────────────────────
-function printStructure(structure) {
+function printStructure(structure, options = {}) {
   const className = typeof structure.classId === 'object'
     ? `${structure.classId.name}${structure.classId.stream ? ` ${structure.classId.stream}` : ''}`
     : '—';
   const grouped = groupByCategory(structure.items);
+  const serial = `FST-${structure.academicYear}-${structure.term.replace(/\s+/g, '').toUpperCase()}-${String(structure._id).slice(-6).toUpperCase()}`;
+  const header = getDocumentHeaderData({
+    school: options.school || {},
+    settings: options.settings || {},
+    title: 'Fee Structure',
+    subtitle: `${className} · ${structure.term} ${structure.academicYear}`,
+    serial,
+    generatedAt: new Date().toLocaleString(),
+  });
 
   const rows = Object.entries(grouped).map(([cat, items]) => `
     <tr><td colspan="2" class="cat">${cat}</td></tr>
@@ -66,6 +76,7 @@ function printStructure(structure) {
 <html><head><title>Fee Structure — ${className}</title>
 <style>
   body { font-family: Arial, sans-serif; font-size: 13px; margin: 32px; color: #111; }
+  ${getDocumentHeaderCss()}
   h2  { text-align: center; margin: 0 0 4px; font-size: 18px; }
   .sub { text-align: center; color: #555; font-size: 12px; margin-bottom: 24px; }
   table { width: 100%; border-collapse: collapse; }
@@ -77,6 +88,7 @@ function printStructure(structure) {
   .notes { margin-top: 20px; font-size: 11px; color: #555; background: #f8f8f8; padding: 10px 12px; border-radius: 4px; }
   @media print { body { margin: 16px; } }
 </style></head><body>
+  ${buildDocumentHeaderHtml(header)}
   <h2>${className}</h2>
   <p class="sub">Fee Structure · ${structure.term} · ${structure.academicYear}</p>
   <table>
@@ -97,7 +109,7 @@ function printStructure(structure) {
 }
 
 // ── Single structure card ─────────────────────────────────────────────────────
-function StructureCard({ structure, onDelete, canManageStructures }) {
+function StructureCard({ structure, onDelete, onEdit, canManageStructures, printOptions }) {
   const grouped = groupByCategory(structure.items);
 
   return (
@@ -117,20 +129,30 @@ function StructureCard({ structure, onDelete, canManageStructures }) {
           <div className="flex gap-1 shrink-0">
             <Button
               variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
-              onClick={() => printStructure(structure)}
+              onClick={() => printStructure(structure, printOptions)}
               title="Print fee structure"
             >
               <Printer className="h-3.5 w-3.5" />
             </Button>
             {canManageStructures && (
-              <Button
-                variant="ghost" size="icon"
-                className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={onDelete}
-                title="Delete"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+              <>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={onEdit}
+                  title="Edit"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={onDelete}
+                  title="Delete"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -165,7 +187,7 @@ function StructureCard({ structure, onDelete, canManageStructures }) {
 }
 
 // ── Class group with collapsible structures ───────────────────────────────────
-function ClassGroup({ className, structures, onDelete, canManageStructures }) {
+function ClassGroup({ className, structures, onDelete, onEdit, canManageStructures, printOptions }) {
   const [collapsed, setCollapsed] = useState(false);
   const Icon = collapsed ? ChevronRight : ChevronDown;
 
@@ -187,6 +209,8 @@ function ClassGroup({ className, structures, onDelete, canManageStructures }) {
               key={s._id}
               structure={s}
               canManageStructures={canManageStructures}
+              printOptions={printOptions}
+              onEdit={() => onEdit(s)}
               onDelete={() => onDelete(s._id)}
             />
           ))}
@@ -206,6 +230,7 @@ export default function FeeStructuresPage() {
   const [filterTerm,  setFilterTerm]  = useState('');
   const [filterClass, setFilterClass] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
+  const [editingStructure, setEditingStructure] = useState(null);
   const [adaptFromYear, setAdaptFromYear] = useState(String(CURRENT_YEAR - 1));
   const [adaptToYear, setAdaptToYear] = useState(String(CURRENT_YEAR));
   const [adaptFromTerm, setAdaptFromTerm] = useState('Term 1');
@@ -231,6 +256,29 @@ export default function FeeStructuresPage() {
   const items = watch('items');
   const total = items?.reduce((s, i) => s + (Number(i.amount) || 0), 0) ?? 0;
 
+  const editForm = useForm({
+    defaultValues: {
+      notes: '',
+      items: [{ category: 'School Fees', name: '', amount: '' }],
+    },
+  });
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEdit,
+    setValue: setEditValue,
+    control: controlEdit,
+    watch: watchEdit,
+  } = editForm;
+  const {
+    fields: editFields,
+    append: appendEdit,
+    remove: removeEdit,
+    replace: replaceEdit,
+  } = useFieldArray({ control: controlEdit, name: 'items' });
+  const editItems = watchEdit('items');
+  const editTotal = editItems?.reduce((s, i) => s + (Number(i.amount) || 0), 0) ?? 0;
+
   const { data, isLoading } = useQuery({
     queryKey: ['fee-structures', filterYear, filterTerm, filterClass],
     queryFn: async () => {
@@ -246,6 +294,22 @@ export default function FeeStructuresPage() {
   const { data: classesData } = useQuery({
     queryKey: ['classes'],
     queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; },
+  });
+
+  const { data: schoolData } = useQuery({
+    queryKey: ['school-me-structures'],
+    queryFn: async () => {
+      const res = await schoolsApi.me();
+      return res.data?.school ?? res.data?.data ?? res.data;
+    },
+  });
+
+  const { data: settingsData } = useQuery({
+    queryKey: ['settings-structures'],
+    queryFn: async () => {
+      const res = await settingsApi.get();
+      return res.data?.settings ?? res.data?.data ?? res.data;
+    },
   });
 
   const { mutate: createStructure, isPending } = useMutation({
@@ -268,6 +332,30 @@ export default function FeeStructuresPage() {
   const { mutate: deleteStructure } = useMutation({
     mutationFn: (id) => feesApi.deleteStructure(id),
     onSuccess: () => { toast.success('Deleted'); queryClient.invalidateQueries({ queryKey: ['fee-structures'] }); },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: updateStructure, isPending: updating } = useMutation({
+    mutationFn: ({ id, data }) =>
+      feesApi.updateStructure(id, {
+        items: (data.items || [])
+          .filter((i) => i.name && i.amount !== '' && i.amount !== null && i.amount !== undefined)
+          .map((i) => ({
+            category: i.category || 'School Fees',
+            name: i.name,
+            amount: Number(i.amount),
+          })),
+        notes: data.notes || undefined,
+      }),
+    onSuccess: () => {
+      toast.success('Fee structure updated');
+      queryClient.invalidateQueries({ queryKey: ['fee-structures'] });
+      setEditingStructure(null);
+      resetEdit({
+        notes: '',
+        items: [{ category: 'School Fees', name: '', amount: '' }],
+      });
+    },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
@@ -384,6 +472,18 @@ export default function FeeStructuresPage() {
               className={label}
               structures={classStructures}
               canManageStructures={canManageStructures}
+              printOptions={{ school: schoolData, settings: settingsData }}
+              onEdit={(structure) => {
+                replaceEdit(
+                  (structure.items || []).map((i) => ({
+                    category: i.category || 'School Fees',
+                    name: i.name || '',
+                    amount: i.amount ?? '',
+                  }))
+                );
+                setEditValue('notes', structure.notes || '');
+                setEditingStructure(structure);
+              }}
               onDelete={(id) => setConfirmDialog({ open: true, id })}
             />
           ))}
@@ -622,6 +722,101 @@ export default function FeeStructuresPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
+
+      {canManageStructures && (
+        <Dialog open={!!editingStructure} onOpenChange={(v) => !v && setEditingStructure(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Fee Structure</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Update fee items and notes. Class/year/term stay unchanged.
+              </p>
+            </DialogHeader>
+
+            <form
+              onSubmit={handleSubmitEdit((data) => {
+                if (!editingStructure?._id) return;
+                updateStructure({ id: editingStructure._id, data });
+              })}
+              className="space-y-5"
+            >
+              <div className="grid grid-cols-[1fr_1.5fr_6rem_2rem] gap-2 px-1">
+                <p className="text-xs font-medium text-muted-foreground">Category</p>
+                <p className="text-xs font-medium text-muted-foreground">Description</p>
+                <p className="text-xs font-medium text-muted-foreground text-right">Amount (KES)</p>
+                <span />
+              </div>
+
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                {editFields.map((field, i) => (
+                  <div key={field.id} className="grid grid-cols-[1fr_1.5fr_6rem_2rem] gap-2 items-center">
+                    <Select
+                      defaultValue={field.category || 'School Fees'}
+                      onValueChange={(v) => setEditValue(`items.${i}.category`, v)}
+                    >
+                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIES.map((c) => <SelectItem key={c} value={c} className="text-xs">{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      {...registerEdit(`items.${i}.name`)}
+                      placeholder="e.g. Tuition Fee"
+                      className="h-9 text-sm"
+                    />
+
+                    <Input
+                      {...registerEdit(`items.${i}.amount`)}
+                      placeholder="0"
+                      type="number"
+                      min="0"
+                      className="h-9 text-sm text-right"
+                    />
+
+                    {editFields.length > 1 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeEdit(i)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : <span />}
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center">
+                <Button type="button" size="sm" variant="outline" onClick={() => appendEdit({ category: 'School Fees', name: '', amount: '' })}>
+                  <Plus className="h-3 w-3" /> Add Row
+                </Button>
+                <div className="text-sm font-semibold flex gap-4">
+                  <span className="text-muted-foreground">Total Per Term:</span>
+                  <span className="text-blue-600 tabular-nums">{formatCurrency(editTotal)}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Notes / NB <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Textarea
+                  {...registerEdit('notes')}
+                  placeholder="e.g. Tuition fee inclusive of meals."
+                  rows={2}
+                  className="text-sm resize-none"
+                />
+              </div>
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditingStructure(null)}>Cancel</Button>
+                <Button type="submit" disabled={updating}>{updating ? 'Saving…' : 'Save Changes'}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

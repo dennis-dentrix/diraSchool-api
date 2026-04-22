@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Save, Plus, Trash2, Pencil, X, CalendarDays, School, Info } from 'lucide-react';
+import { Save, Plus, Trash2, Pencil, X, CalendarDays, School, Info, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { settingsApi, schoolsApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -40,6 +40,7 @@ export default function SettingsPage() {
   const [profileForm, setProfileForm] = useState(null);
   const [newHoliday, setNewHoliday] = useState({ name: '', date: '', description: '' });
   const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
+  const [logoFile, setLogoFile] = useState(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -83,6 +84,21 @@ export default function SettingsPage() {
       toast.success('Settings saved');
       queryClient.invalidateQueries({ queryKey: ['settings'] });
       setEditing(false);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: uploadLogo, isPending: uploadingLogo } = useMutation({
+    mutationFn: () => {
+      if (!logoFile) throw new Error('Select a logo file first.');
+      const fd = new FormData();
+      fd.append('logo', logoFile);
+      return settingsApi.uploadLogo(fd);
+    },
+    onSuccess: () => {
+      toast.success('School logo uploaded');
+      setLogoFile(null);
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -246,6 +262,51 @@ export default function SettingsPage() {
               <InfoRow label="Reg. Number" value={schoolData?.registrationNumber} />
               <InfoRow label="Address" value={schoolData?.address} />
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── School Logo ───────────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <School className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">School Logo</CardTitle>
+          </div>
+          <CardDescription>Used on official printed documents and generated PDFs.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {data?.logo ? (
+            <div className="w-28 h-28 border rounded-md flex items-center justify-center bg-white p-2">
+              <img src={data.logo} alt="School logo" className="max-w-full max-h-full object-contain" />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No logo uploaded yet.</p>
+          )}
+
+          {canEditSchoolDetails ? (
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+              <div className="space-y-1.5">
+                <Label>Upload New Logo</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => uploadLogo()}
+                disabled={!logoFile || uploadingLogo}
+              >
+                <Upload className="h-4 w-4" />
+                {uploadingLogo ? 'Uploading…' : 'Upload Logo'}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Only school admin, director, or headteacher can update the school logo.
+            </p>
           )}
         </CardContent>
       </Card>

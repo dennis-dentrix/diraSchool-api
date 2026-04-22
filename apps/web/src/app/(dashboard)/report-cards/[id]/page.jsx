@@ -160,6 +160,7 @@ export default function ReportCardDetailPage() {
   const student = rc.studentId;
   const cls = rc.classId;
   const isDraft = rc.status === 'draft';
+  const documentSerial = rc.documentSerial ?? `RPT-${rc.academicYear}-${String(rc._id).slice(-6).toUpperCase()}`;
 
   const principalName = settings?.principalName ?? school?.principalName ?? '';
 
@@ -279,6 +280,7 @@ export default function ReportCardDetailPage() {
             <InfoItem label="Gender" value={typeof student === 'object' ? student.gender : '—'} />
             <InfoItem label="Academic Year" value={rc.academicYear} />
             <InfoItem label="Term" value={rc.term} />
+            <InfoItem label="Document Serial" value={documentSerial} />
             <InfoItem label="Overall Grade" value={rc.overallGrade ?? '—'} />
             <InfoItem label="Average Points" value={rc.averagePoints?.toFixed(2) ?? '—'} />
           </div>

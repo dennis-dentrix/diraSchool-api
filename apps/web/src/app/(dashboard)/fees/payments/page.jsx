@@ -11,10 +11,12 @@ import {
   feesApi, studentsApi, classesApi, exportApi, settingsApi, schoolsApi,
   downloadBlob, getErrorMessage,
 } from '@/lib/api';
+import { buildDocumentHeaderHtml, getDocumentHeaderCss, getDocumentHeaderData, escapeHtml } from '@/lib/document-print';
 import { formatCurrency, formatDate, getStatusColor, capitalize } from '@/lib/utils';
 import { PAYMENT_METHODS, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/shared/page-header';
+import { SchoolDocumentHeader } from '@/components/shared/school-document-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,15 +51,19 @@ function ReceiptPreview({ data }) {
   const receiptRef = useRef(null);
 
   const handlePrint = () => {
-    const content = receiptRef.current?.innerHTML;
-    if (!content) return;
+    const header = getDocumentHeaderData({
+      school: data.school || {},
+      settings: data.settings || {},
+      title: 'Finance',
+      subtitle: 'Fee Payment Receipt',
+      serial: data.receiptNumber ?? '',
+      generatedAt: data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString()),
+    });
     const win = window.open('', '', 'width=700,height=950');
     win.document.write(`<!DOCTYPE html><html><head><title>Fee Receipt</title><style>
       *{margin:0;padding:0;box-sizing:border-box;}
       body{font-family:Arial,sans-serif;padding:24px;color:#111;}
-      .header{background:#1e3a5f;color:white;padding:20px;text-align:center;border-radius:6px 6px 0 0;}
-      .header h1{font-size:20px;font-weight:700;margin-bottom:4px;}
-      .header p{font-size:13px;opacity:.85;}
+      ${getDocumentHeaderCss()}
       .title-bar{background:#eef2f7;text-align:center;padding:10px;border:1px solid #ccd6e0;border-top:none;font-size:13px;font-weight:700;letter-spacing:1.5px;}
       .body{border:1px solid #ccd6e0;border-top:none;padding:20px;}
       .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;}
@@ -68,7 +74,31 @@ function ReceiptPreview({ data }) {
       .total .t-label{font-size:14px;font-weight:700;}
       .total .t-amount{font-size:18px;font-weight:800;color:#d97706;}
       .footer{border:1px solid #ccd6e0;border-top:1px solid #eee;border-radius:0 0 6px 6px;padding:12px;text-align:center;font-size:11px;color:#888;}
-    </style></head><body>${content}</body></html>`);
+    </style></head><body>
+      ${buildDocumentHeaderHtml(header)}
+      <div class="title-bar">Fee Payment Receipt</div>
+      <div class="body">
+        ${[
+          ['Student', data.studentName],
+          ['Admission No.', data.admissionNumber],
+          ['Class', data.className],
+          ['Academic Year', data.academicYear],
+          ['Term', data.term],
+          ['Payment Method', capitalize(data.method)],
+          data.reference ? ['Reference / Code', data.reference] : null,
+          data.notes ? ['Notes', data.notes] : null,
+          ['Issued By', data.recordedBy],
+        ]
+          .filter(Boolean)
+          .map(([label, value]) => `<div class="row"><span class="lbl">${escapeHtml(label)}</span><span class="val">${escapeHtml(value)}</span></div>`)
+          .join('')}
+        <div class="total">
+          <span class="t-label">TOTAL PAID</span>
+          <span class="t-amount">${escapeHtml(formatCurrency(data.amount))}</span>
+        </div>
+      </div>
+      <div class="footer">This is an official receipt. Please retain for your records. Powered by Diraschool</div>
+    </body></html>`);
     win.document.close();
     win.print();
     win.close();
@@ -77,10 +107,14 @@ function ReceiptPreview({ data }) {
   return (
     <div>
       <div ref={receiptRef}>
-        <div className="bg-[#1e3a5f] text-white p-5 text-center rounded-t-md">
-          <h1 className="text-lg font-bold">{data.schoolName || 'School'}</h1>
-          <p className="text-sm opacity-85">Official Fee Payment Receipt</p>
-        </div>
+        <SchoolDocumentHeader
+          school={data.school}
+          settings={data.settings}
+          title="Finance"
+          subtitle="Fee Payment Receipt"
+          serial={data.receiptNumber ?? ''}
+          generatedAt={data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())}
+        />
         <div className="bg-blue-50 text-center py-2 text-xs font-bold tracking-widest border border-t-0 border-blue-200 uppercase">
           Fee Payment Receipt
         </div>
@@ -250,7 +284,7 @@ export default function PaymentsPage() {
     queryKey: ['settings'],
     queryFn: async () => {
       const res = await settingsApi.get();
-      return res.data.data ?? res.data;
+      return res.data?.settings ?? res.data?.data ?? res.data;
     },
   });
 
@@ -372,6 +406,8 @@ export default function PaymentsPage() {
           ? `${fromTable.recordedByUserId.firstName} ${fromTable.recordedByUserId.lastName}`
           : '—',
         schoolName: schoolData?.name ?? '',
+        school: schoolData ?? {},
+        settings: settingsData ?? {},
       };
     }
     const student = (studentsData?.data ?? []).find((s) => s._id === values.studentId);
@@ -389,6 +425,8 @@ export default function PaymentsPage() {
       notes: values.notes ?? '',
       recordedBy: user ? `${user.firstName} ${user.lastName}` : '—',
       schoolName: schoolData?.name ?? '',
+      school: schoolData ?? {},
+      settings: settingsData ?? {},
     };
   };
 

@@ -13,13 +13,30 @@
 import PDFDocument from 'pdfkit';
 import Payment from '../../features/fees/Payment.model.js';
 import School from '../../features/schools/School.model.js';
+import SchoolSettings from '../../features/settings/SchoolSettings.model.js';
 import { uploadBuffer } from '../helpers/cloudinaryUpload.js';
 import logger from '../../config/logger.js';
 
 // ── PDF renderer ──────────────────────────────────────────────────────────────
 
-const renderReceiptPdf = (payment, schoolName) =>
-  new Promise((resolve, reject) => {
+const renderReceiptPdf = async (payment, branding) => {
+  const schoolName = branding?.schoolName ?? 'School';
+  const logoUrl = branding?.logoUrl;
+  const motto = branding?.motto ?? '';
+  const address = branding?.address ?? '';
+  const county = branding?.county ?? '';
+  const phone = branding?.phone ?? '';
+  const email = branding?.email ?? '';
+  let logoBuffer = null;
+  if (logoUrl) {
+    try {
+      const res = await fetch(logoUrl);
+      if (res.ok) logoBuffer = Buffer.from(await res.arrayBuffer());
+    } catch {
+      // non-fatal
+    }
+  }
+  return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A5', margin: 40 });
     const chunks = [];
 
@@ -31,21 +48,43 @@ const renderReceiptPdf = (payment, schoolName) =>
     const W = 420; // A5 content width
 
     // Header
-    doc.rect(0, 0, W + 80, 70).fill('#1a3c6e');
+    doc.rect(0, 0, W + 80, 96).fill('#1a3c6e');
     doc.fillColor('white').font('Helvetica-Bold').fontSize(16)
-      .text(schoolName, 40, 14, { width: W, align: 'center' });
+      .text(schoolName, 40, 10, { width: W, align: 'center' });
+    const contactBits = [phone, email].filter(Boolean).join('  •  ');
+    const addressLine = [address, county].filter(Boolean).join(', ');
+    if (contactBits) {
+      doc.font('Helvetica').fontSize(8)
+        .text(contactBits, 40, 30, { width: W, align: 'center' });
+    }
+    if (addressLine) {
+      doc.font('Helvetica').fontSize(8)
+        .text(addressLine, 40, 40, { width: W, align: 'center' });
+    }
+    if (motto) {
+      doc.font('Helvetica-Oblique').fontSize(7.5)
+        .text(`"${motto}"`, 40, 50, { width: W, align: 'center' });
+    }
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, 44, 12, { fit: [44, 44] });
+      } catch {
+        // ignore bad image data
+      }
+    }
     doc.font('Helvetica').fontSize(10)
-      .text('FEE PAYMENT RECEIPT', 40, 36, { width: W, align: 'center' });
+      .text('FEE PAYMENT RECEIPT', 40, 64, { width: W, align: 'center' });
     const receiptDate = new Date(payment.paymentDate ?? payment.createdAt);
     doc.fontSize(8).text(
       `Payment Date: ${receiptDate.toLocaleDateString('en-KE', { dateStyle: 'long' })}`,
-      40, 54, { width: W, align: 'center' }
+      40, 80, { width: W, align: 'center' }
     );
 
-    let y = 84;
+    let y = 110;
 
     // Receipt details
     const rows = [
+      ['Receipt Serial', payment.receiptNumber || '—'],
       ['Student Name',   `${student.firstName} ${student.lastName}`],
       ['Admission No',   student.admissionNumber],
       ['Academic Year',  payment.academicYear],
@@ -80,6 +119,7 @@ const renderReceiptPdf = (payment, schoolName) =>
 
     doc.end();
   });
+};
 
 // ── Worker handler ────────────────────────────────────────────────────────────
 
@@ -96,10 +136,18 @@ export const processReceiptJob = async (job) => {
     throw new Error(`Payment ${paymentId} not found for school ${schoolId}`);
   }
 
-  const school = await School.findById(schoolId).select('name');
-  const schoolName = school?.name ?? 'School';
+  const school = await School.findById(schoolId).select('name phone email address county');
+  const settings = await SchoolSettings.findOne({ schoolId }).select('logo motto physicalAddress');
 
-  const pdfBuffer = await renderReceiptPdf(payment, schoolName);
+  const pdfBuffer = await renderReceiptPdf(payment, {
+    schoolName: school?.name ?? 'School',
+    logoUrl: settings?.logo,
+    motto: settings?.motto,
+    phone: school?.phone,
+    email: school?.email,
+    address: settings?.physicalAddress || school?.address,
+    county: school?.county,
+  });
 
   const student = payment.studentId;
   const publicId = `receipts/${schoolId}/${student.admissionNumber}_${payment.academicYear}_${payment.term.replace(/\s+/g, '-')}_${payment._id}`;

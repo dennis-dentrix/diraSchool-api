@@ -51,6 +51,7 @@ const schoolSettingsSchema = new mongoose.Schema(
     },
     // Branding / report card header data
     logo:          { type: String },       // Cloudinary URL
+    logoPublicId:  { type: String, trim: true },
     motto:         { type: String, trim: true },
     principalName: { type: String, trim: true },
     // Override the address stored on the School record (optional)
