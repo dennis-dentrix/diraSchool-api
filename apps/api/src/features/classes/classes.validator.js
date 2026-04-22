@@ -36,6 +36,7 @@ const validate = (schema) => (req, res, next) => {
 
 const promoteClassSchema = z.object({
   targetClassId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid target class ID'),
+  eligibilityMode: z.enum(['all', 'cbc_recommended']).optional(),
 });
 
 export const validateCreateClass = validate(createClassSchema);

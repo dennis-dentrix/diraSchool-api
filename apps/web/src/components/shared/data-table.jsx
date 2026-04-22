@@ -79,7 +79,8 @@ export function DataTable({ columns, data, loading, error, pageCount, onPageChan
   return (
     <div className="space-y-4">
       <div className="rounded-md border overflow-hidden">
-        <Table>
+        <div className="w-full overflow-x-auto">
+          <Table className="min-w-[760px]">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="bg-muted/50">
@@ -118,12 +119,13 @@ export function DataTable({ columns, data, loading, error, pageCount, onPageChan
               </TableRow>
             )}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
 
       {/* Pagination */}
       {(pageCount > 1 || table.getPageCount() > 1) && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-sm text-muted-foreground">
           <p>
             {onPageChange
               ? `Page ${currentPage ?? 1} of ${pageCount}`

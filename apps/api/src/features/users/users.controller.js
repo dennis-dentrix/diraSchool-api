@@ -5,7 +5,7 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
-import { JOB_NAMES, AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
+import { JOB_NAMES, AUDIT_ACTIONS, AUDIT_RESOURCES, ROLES } from '../../constants/index.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { sendInviteEmail } from '../../services/email.service.js';
 import { emailQueue } from '../../jobs/queues.js';
@@ -149,8 +149,21 @@ export const updateUser = asyncHandler(async (req, res) => {
     return sendError(res, 'Use /auth/change-password to update your own account.', 400);
   }
 
-  const { firstName, lastName, phone, role, isActive, staffId, tscNumber, reason } = req.body;
+  const { firstName, lastName, email, phone, role, isActive, staffId, tscNumber, reason } = req.body;
   const previousIsActive = user.isActive;
+
+  if (email !== undefined) {
+    const nextEmail = email.toLowerCase().trim();
+    if (nextEmail !== user.email) {
+      const duplicate = await User.findOne({
+        schoolId: req.user.schoolId,
+        email: nextEmail,
+        _id: { $ne: user._id },
+      });
+      if (duplicate) return sendError(res, 'A user with this email already exists in this school.', 409);
+      user.email = nextEmail;
+    }
+  }
   if (firstName  !== undefined) user.firstName  = firstName;
   if (lastName   !== undefined) user.lastName   = lastName;
   if (phone      !== undefined) user.phone      = normalisePhone(phone);
@@ -175,6 +188,37 @@ export const updateUser = asyncHandler(async (req, res) => {
   }
 
   return sendSuccess(res, { user: user.toSafeObject() });
+});
+
+/**
+ * DELETE /api/v1/users/:id
+ * Permanently deletes a staff account in this school.
+ */
+export const deleteUser = asyncHandler(async (req, res) => {
+  const user = await User.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
+  if (!user) return sendError(res, 'User not found.', 404);
+
+  if (user._id.equals(req.user._id)) {
+    return sendError(res, 'You cannot delete your own account.', 400);
+  }
+  if (user.role === ROLES.PARENT) {
+    return sendError(res, 'Parent accounts cannot be deleted from staff management.', 400);
+  }
+
+  await user.deleteOne();
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.DELETE,
+    resource: AUDIT_RESOURCES.USER,
+    resourceId: user._id,
+    meta: {
+      targetName: `${user.firstName} ${user.lastName}`,
+      role: user.role,
+      email: user.email,
+    },
+  });
+
+  return sendSuccess(res, { message: 'User deleted successfully.' });
 });
 
 /**

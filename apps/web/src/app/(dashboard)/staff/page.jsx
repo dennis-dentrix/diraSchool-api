@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, MoreHorizontal, Mail, KeyRound, PauseCircle, PlayCircle, UserCheck, UserX, AlertTriangle } from 'lucide-react';
+import { Plus, Search, MoreHorizontal, Mail, KeyRound, PauseCircle, PlayCircle, UserCheck, UserX, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -36,7 +36,7 @@ const schema = z.object({
   tscNumber: z.string().optional(),
 });
 
-const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseRequest }) => [
+const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseRequest, onEdit, onDeleteRequest }) => [
   {
     id: 'name',
     header: 'Staff Member',
@@ -102,6 +102,9 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseReque
                 <Mail className="h-4 w-4 mr-2" /> Resend Invite
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem onClick={() => onEdit(u)}>
+              <Pencil className="h-4 w-4 mr-2" /> Edit Details
+            </DropdownMenuItem>
             {!u.invitePending && (
               <DropdownMenuItem onClick={() => onResetPassword(u._id)}>
                 <KeyRound className="h-4 w-4 mr-2" /> Send Password Reset
@@ -123,6 +126,13 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseReque
                 <PlayCircle className="h-4 w-4 mr-2" /> Reactivate Account
               </DropdownMenuItem>
             )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-red-600 focus:text-red-600"
+              onClick={() => onDeleteRequest(u)}
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Delete User
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       );
@@ -139,6 +149,9 @@ export default function StaffPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [pauseTarget, setPauseTarget] = useState(null);
   const [pauseReason, setPauseReason] = useState('');
+  const [editTarget, setEditTarget] = useState(null);
+  const [editValues, setEditValues] = useState({ firstName: '', lastName: '', email: '', role: '', phone: '', tscNumber: '' });
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const debouncedSearch = useDebounce(search, 400);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
@@ -205,6 +218,26 @@ export default function StaffPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const { mutate: updateUser, isPending: updatingUser } = useMutation({
+    mutationFn: ({ id, data }) => usersApi.update(id, data),
+    onSuccess: () => {
+      toast.success('User details updated');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setEditTarget(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: deleteUser, isPending: deletingUser } = useMutation({
+    mutationFn: (id) => usersApi.delete(id),
+    onSuccess: () => {
+      toast.success('User deleted');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      setDeleteTarget(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   const handleConfirmPause = () => {
     if (!pauseTarget) return;
     toggleActive({ id: pauseTarget._id, isActive: false, reason: pauseReason || undefined });
@@ -217,6 +250,18 @@ export default function StaffPage() {
     onResetPassword: (id) => resetPassword(id),
     onToggleActive: (id, isActive) => toggleActive({ id, isActive }),
     onPauseRequest: (user) => { setPauseTarget(user); setPauseReason(''); },
+    onEdit: (user) => {
+      setEditTarget(user);
+      setEditValues({
+        firstName: user.firstName ?? '',
+        lastName: user.lastName ?? '',
+        email: user.email ?? '',
+        role: user.role ?? '',
+        phone: user.phone ?? '',
+        tscNumber: user.tscNumber ?? '',
+      });
+    },
+    onDeleteRequest: (user) => setDeleteTarget(user),
   };
 
   return (
@@ -231,7 +276,7 @@ export default function StaffPage() {
       </PageHeader>
 
       {/* ── Summary cards ────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="flex items-center gap-3 py-4 px-5">
             <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
@@ -306,6 +351,93 @@ export default function StaffPage() {
         currentPage={page}
         onPageChange={setPage}
       />
+
+      <Dialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Edit Staff Details</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>First Name</Label>
+                <Input value={editValues.firstName} onChange={(e) => setEditValues((p) => ({ ...p, firstName: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Last Name</Label>
+                <Input value={editValues.lastName} onChange={(e) => setEditValues((p) => ({ ...p, lastName: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email Address</Label>
+              <Input type="email" value={editValues.email} onChange={(e) => setEditValues((p) => ({ ...p, email: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <Select value={editValues.role} onValueChange={(v) => setEditValues((p) => ({ ...p, role: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
+                  <SelectContent>
+                    {STAFF_ROLES.map((r) => (
+                      <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={editValues.phone} onChange={(e) => setEditValues((p) => ({ ...p, phone: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>TSC Number</Label>
+              <Input value={editValues.tscNumber} onChange={(e) => setEditValues((p) => ({ ...p, tscNumber: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+            <Button
+              disabled={updatingUser}
+              onClick={() => updateUser({
+                id: editTarget._id,
+                data: {
+                  firstName: editValues.firstName,
+                  lastName: editValues.lastName,
+                  email: editValues.email,
+                  role: editValues.role,
+                  phone: editValues.phone || undefined,
+                  tscNumber: editValues.tscNumber || undefined,
+                },
+              })}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              This will permanently remove this staff account from your school.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-sm">
+            <strong>{deleteTarget?.firstName} {deleteTarget?.lastName}</strong>
+            <p className="text-muted-foreground">{deleteTarget?.email}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              disabled={deletingUser}
+              onClick={() => deleteUser(deleteTarget._id)}
+            >
+              Delete User
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Pause confirmation dialog ─────────────────────────────────────────── */}
       <Dialog open={!!pauseTarget} onOpenChange={(v) => { if (!v) { setPauseTarget(null); setPauseReason(''); } }}>

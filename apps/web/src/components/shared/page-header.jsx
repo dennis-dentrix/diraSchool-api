@@ -3,11 +3,11 @@ import { cn } from '@/lib/utils';
 export function PageHeader({ title, description, children, className }) {
   return (
     <div className={cn('flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between mb-6', className)}>
-      <div>
-        <h1 className="text-2xl font-bold">{title}</h1>
+      <div className="min-w-0">
+        <h1 className="text-xl sm:text-2xl font-bold break-words">{title}</h1>
         {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
       </div>
-      {children && <div className="flex items-center gap-2 mt-2 sm:mt-0 shrink-0">{children}</div>}
+      {children && <div className="flex flex-wrap items-center gap-2 mt-2 sm:mt-0">{children}</div>}
     </div>
   );
 }

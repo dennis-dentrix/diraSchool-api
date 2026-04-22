@@ -109,6 +109,10 @@ const studentSchema = new mongoose.Schema(
       dropOffPoint: { type: String, trim: true },
       assignedAt: { type: Date },
     },
+    // Guards against accidental double-promotion within the same cycle
+    // Format: "<academicYear>:<term>" (e.g. "2026:Term 1")
+    lastPromotionCycle: { type: String, trim: true },
+    lastPromotedAt: { type: Date },
   },
   { timestamps: true }
 );

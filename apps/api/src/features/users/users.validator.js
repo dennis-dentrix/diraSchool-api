@@ -30,9 +30,12 @@ const createUserSchema = z.object({
 const updateUserSchema = z.object({
   firstName: z.string().trim().min(1).optional(),
   lastName: z.string().trim().min(1).optional(),
+  email: z.string().trim().email('Invalid email address').optional(),
   phone: z.string().trim().regex(phoneRegex, 'Invalid phone number').optional(),
   role: z.enum(ASSIGNABLE_ROLES, { message: `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}` }).optional(),
   isActive: z.boolean().optional(),
+  staffId: z.string().trim().optional(),
+  tscNumber: z.string().trim().optional(),
 }).strict();
 
 const validate = (schema) => (req, res, next) => {

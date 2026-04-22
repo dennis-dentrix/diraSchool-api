@@ -21,7 +21,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from '@/components/ui/skeleton';
 
 // ── Report Cards tab columns ──────────────────────────────────────────────────
-function buildRcColumns(onPublish, onView, onPrint, onDownloadPdf) {
+function buildRcColumns(onPublish, onView, onPrint) {
   return [
     {
       id: 'student',
@@ -56,19 +56,6 @@ function buildRcColumns(onPublish, onView, onPrint, onDownloadPdf) {
     { accessorKey: 'overallGrade', header: 'Grade',   cell: ({ row }) => <span className="font-bold">{row.original.overallGrade ?? '—'}</span> },
     { accessorKey: 'averagePoints', header: 'Avg Pts', cell: ({ row }) => <span>{row.original.averagePoints?.toFixed(1) ?? '—'}</span> },
     {
-      id: 'pdf',
-      header: 'PDF',
-      cell: ({ row }) => {
-        const status = row.original.pdfStatus ?? 'not_requested';
-        if (status === 'ready' && row.original.pdfUrl) {
-          return <span className="text-xs font-medium text-green-700">Ready</span>;
-        }
-        if (status === 'failed') return <span className="text-xs font-medium text-red-700">Failed</span>;
-        if (status === 'queued' || status === 'processing') return <span className="text-xs font-medium text-amber-700">Processing</span>;
-        return <span className="text-xs text-muted-foreground">Not generated</span>;
-      },
-    },
-    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => (
@@ -87,7 +74,6 @@ function buildRcColumns(onPublish, onView, onPrint, onDownloadPdf) {
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onView(row.original._id)}>View / Edit</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onPrint(row.original._id)}>Print</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDownloadPdf(row.original)}>Download PDF</DropdownMenuItem>
             {row.original.status === 'draft' && (
               <DropdownMenuItem onClick={() => onPublish(row.original._id)}>Publish</DropdownMenuItem>
             )}
@@ -145,14 +131,6 @@ function ReportCardsTab({ classesData, studentsData }) {
     onSuccess: () => { toast.success('Published'); queryClient.invalidateQueries({ queryKey: ['report-cards'] }); },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
-  const { mutate: queuePdf } = useMutation({
-    mutationFn: (id) => reportCardsApi.generatePdf(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['report-cards'] });
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -211,14 +189,6 @@ function ReportCardsTab({ classesData, studentsData }) {
           (id) => { if (confirm('Publish this report card? This cannot be undone.')) publish(id); },
           (id) => router.push(`/report-cards/${id}`),
           (id) => window.open(`/report-cards/${id}/print`, '_blank'),
-          (row) => {
-            if (row.pdfStatus === 'ready' && row.pdfUrl) {
-              window.open(row.pdfUrl, '_blank');
-              return;
-            }
-            queuePdf(row._id);
-            toast.success('PDF generation started in background');
-          },
         )}
         data={data?.data}
         loading={isLoading}

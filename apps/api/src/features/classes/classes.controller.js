@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Class from './Class.model.js';
 import Student from '../students/Student.model.js';
+import ReportCard from '../report-cards/ReportCard.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
@@ -255,7 +256,7 @@ export const deleteClass = asyncHandler(async (req, res) => {
  *  - studentCount is updated on both classes atomically.
  */
 export const promoteClass = asyncHandler(async (req, res) => {
-  const { targetClassId } = req.body;
+  const { targetClassId, eligibilityMode = 'all' } = req.body;
   const sourceClassId = req.params.id;
 
   if (sourceClassId === targetClassId) {
@@ -270,18 +271,76 @@ export const promoteClass = asyncHandler(async (req, res) => {
   if (!source) return sendError(res, 'Source class not found.', 404);
   if (!target) return sendError(res, 'Target class not found.', 404);
 
+  const promotionCycle = `${source.academicYear}:${source.term}`;
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Move all active students
+    const baseFilter = {
+      classId: sourceClassId,
+      schoolId: req.user.schoolId,
+      status: STUDENT_STATUSES.ACTIVE,
+      $or: [
+        { lastPromotionCycle: { $exists: false } },
+        { lastPromotionCycle: { $ne: promotionCycle } },
+      ],
+    };
+
+    const eligibleCount = await Student.countDocuments(baseFilter).session(session);
+
+    let promotionFilter = baseFilter;
+    let notEligibleCount = 0;
+
+    if (eligibilityMode === 'cbc_recommended') {
+      const candidates = await Student.find(baseFilter).select('_id').session(session).lean();
+      const candidateIds = candidates.map((s) => s._id);
+
+      const cards = await ReportCard.find({
+        schoolId: req.user.schoolId,
+        studentId: { $in: candidateIds },
+        academicYear: source.academicYear,
+        term: source.term,
+      })
+        .select('studentId overallGrade attendanceSummary')
+        .session(session)
+        .lean();
+
+      const cardMap = new Map(cards.map((c) => [String(c.studentId), c]));
+      const isPromotable = (card) => {
+        if (!card) return false;
+        const grade = String(card.overallGrade || '').toUpperCase();
+        const isBelowExpectation = ['BE', 'BE1', 'BE2'].includes(grade);
+        const totalDays = card.attendanceSummary?.totalDays ?? 0;
+        const present = card.attendanceSummary?.present ?? 0;
+        const attendanceRate = totalDays > 0 ? present / totalDays : 1;
+        return !isBelowExpectation && attendanceRate >= 0.7;
+      };
+
+      const promotableIds = candidateIds.filter((id) => isPromotable(cardMap.get(String(id))));
+      notEligibleCount = Math.max(0, candidateIds.length - promotableIds.length);
+
+      promotionFilter = {
+        _id: { $in: promotableIds },
+        schoolId: req.user.schoolId,
+      };
+    }
+
+    // Move active students who have not already been promoted in this cycle.
     const result = await Student.updateMany(
-      { classId: sourceClassId, schoolId: req.user.schoolId, status: STUDENT_STATUSES.ACTIVE },
-      { $set: { classId: targetClassId } },
+      promotionFilter,
+      {
+        $set: {
+          classId: targetClassId,
+          lastPromotionCycle: promotionCycle,
+          lastPromotedAt: new Date(),
+        },
+      },
       { session }
     );
 
     const movedCount = result.modifiedCount;
+    const skippedCount = Math.max(0, eligibleCount - movedCount);
 
     // Sync studentCount on both classes
     await Class.updateOne(
@@ -301,6 +360,10 @@ export const promoteClass = asyncHandler(async (req, res) => {
     return sendSuccess(res, {
       message: `${movedCount} student(s) promoted from ${source.name} to ${target.name}.`,
       movedCount,
+      skippedCount,
+      notEligibleCount,
+      eligibilityMode,
+      promotionCycle,
       sourceClass: { _id: source._id, name: source.name },
       targetClass: { _id: target._id, name: target.name },
     });

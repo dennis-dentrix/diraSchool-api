@@ -94,6 +94,7 @@ export const usersApi = {
   create: (data) => api.post('/users', data),
   get: (id) => api.get(`/users/${id}`),
   update: (id, data) => api.patch(`/users/${id}`, data),
+  delete: (id) => api.delete(`/users/${id}`),
   resendInvite: (id) => api.post(`/users/${id}/resend-invite`),
   resetPassword: (id) => api.post(`/users/${id}/reset-password`),
   toggleActive: (id, isActive, reason) => api.patch(`/users/${id}`, { isActive, ...(reason ? { reason } : {}) }),

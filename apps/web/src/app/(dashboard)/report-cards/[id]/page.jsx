@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -58,7 +58,6 @@ export default function ReportCardDetailPage() {
   const [editing, setEditing] = useState(false);
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
-  const [downloadRequested, setDownloadRequested] = useState(false);
   const [remarks, setRemarks] = useState({ teacherRemarks: '', principalRemarks: '' });
   const [subjectRemarks, setSubjectRemarks] = useState({});
   const [savingSubject, setSavingSubject] = useState(null);
@@ -80,7 +79,6 @@ export default function ReportCardDetailPage() {
       return card;
     },
     enabled: !!id,
-    refetchInterval: downloadRequested ? 2500 : false,
   });
 
   const { data: school } = useQuery({
@@ -134,29 +132,6 @@ export default function ReportCardDetailPage() {
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
-  const { mutate: queuePdf, isPending: queueingPdf } = useMutation({
-    mutationFn: () => reportCardsApi.generatePdf(id),
-    onSuccess: () => {
-      toast.success('PDF generation started in background');
-      queryClient.invalidateQueries({ queryKey: ['report-card', id] });
-      queryClient.invalidateQueries({ queryKey: ['report-cards'] });
-    },
-    onError: (err) => {
-      setDownloadRequested(false);
-      toast.error(getErrorMessage(err));
-    },
-  });
-
-  useEffect(() => {
-    if (!downloadRequested) return;
-    if (rc?.pdfStatus === 'ready' && rc?.pdfUrl) {
-      window.open(rc.pdfUrl, '_blank');
-      setDownloadRequested(false);
-    }
-    if (rc?.pdfStatus === 'failed') {
-      setDownloadRequested(false);
-    }
-  }, [downloadRequested, rc?.pdfStatus, rc?.pdfUrl]);
 
   async function saveSubjectRemark(subjectId, remark) {
     setSavingSubject(subjectId);
@@ -192,15 +167,6 @@ export default function ReportCardDetailPage() {
 
   const principalName = settings?.principalName ?? school?.principalName ?? '';
 
-  const handleDownloadPdf = () => {
-    if (rc?.pdfStatus === 'ready' && rc?.pdfUrl) {
-      window.open(rc.pdfUrl, '_blank');
-      return;
-    }
-    setDownloadRequested(true);
-    queuePdf();
-  };
-
   return (
     <div className="space-y-5 max-w-4xl">
       {/* Header */}
@@ -227,16 +193,6 @@ export default function ReportCardDetailPage() {
           >
             <Printer className="h-4 w-4 mr-1" /> Print
           </Button>
-
-          {/* PDF DOWNLOAD AND REGENERATION */}
-          {/* <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadPdf}
-            disabled={queueingPdf || downloadRequested}
-          >
-            {(queueingPdf || downloadRequested) ? 'Preparing PDF…' : 'Download PDF'}
-          </Button>
           {isDraft && (
             <Button
               variant="outline"
@@ -248,7 +204,7 @@ export default function ReportCardDetailPage() {
               <RefreshCw className={`h-4 w-4 mr-1 ${regenerating ? 'animate-spin' : ''}`} />
               {regenerating ? 'Regenerating…' : 'Regenerate'}
             </Button>
-          )} */}
+          )}
 
           {isDraft && (
             <Button
@@ -261,21 +217,6 @@ export default function ReportCardDetailPage() {
           )}
         </div>
       </div>
-
-      {!!rc?.pdfStatus && rc.pdfStatus !== 'ready' && (
-        <Card>
-          <CardContent className="pt-4 pb-4 text-sm">
-            <p className="font-medium">
-              PDF status: <span className="capitalize">{String(rc.pdfStatus).replaceAll('_', ' ')}</span>
-            </p>
-            {rc?.pdfError && (
-              <p className="text-destructive mt-1">
-                PDF generation failed. Please try "Download PDF" again.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Student Info Card */}
       <Card>
