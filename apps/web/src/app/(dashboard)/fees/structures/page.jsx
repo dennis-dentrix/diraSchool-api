@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Trash2, Printer, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Printer, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { feesApi, classesApi, getErrorMessage } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
@@ -196,10 +196,17 @@ function ClassGroup({ className, structures, onDelete }) {
 export default function FeeStructuresPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [adaptOpen, setAdaptOpen] = useState(false);
   const [filterYear,  setFilterYear]  = useState(String(CURRENT_YEAR));
   const [filterTerm,  setFilterTerm]  = useState('');
   const [filterClass, setFilterClass] = useState('');
   const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
+  const [adaptFromYear, setAdaptFromYear] = useState(String(CURRENT_YEAR - 1));
+  const [adaptToYear, setAdaptToYear] = useState(String(CURRENT_YEAR));
+  const [adaptFromTerm, setAdaptFromTerm] = useState('Term 1');
+  const [adaptToTerm, setAdaptToTerm] = useState('Term 1');
+  const [adaptClassId, setAdaptClassId] = useState('');
+  const [adaptOverwrite, setAdaptOverwrite] = useState(false);
 
   const { register, handleSubmit, reset, setValue, control, watch } = useForm({
     defaultValues: {
@@ -258,6 +265,31 @@ export default function FeeStructuresPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const { mutate: adaptStructures, isPending: adapting } = useMutation({
+    mutationFn: () =>
+      feesApi.adaptStructures({
+        fromAcademicYear: adaptFromYear,
+        toAcademicYear: adaptToYear,
+        fromTerm: adaptFromTerm,
+        toTerm: adaptToTerm,
+        classId: adaptClassId || undefined,
+        overwrite: adaptOverwrite,
+      }),
+    onSuccess: (res) => {
+      const summary = res?.data?.summary ?? res?.data?.data?.summary;
+      toast.success(
+        summary
+          ? `Adapted: ${summary.created} created, ${summary.updated} updated, ${summary.skippedExisting} skipped.`
+          : 'Fee structures adapted successfully.'
+      );
+      queryClient.invalidateQueries({ queryKey: ['fee-structures'] });
+      setAdaptOpen(false);
+      setAdaptOverwrite(false);
+      setAdaptClassId('');
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   const structures = data?.data ?? [];
   const classes = classesData?.data ?? classesData?.classes ?? [];
 
@@ -281,6 +313,9 @@ export default function FeeStructuresPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Fee Structures" description="Configure term fees per class">
+        <Button size="sm" variant="outline" onClick={() => setAdaptOpen(true)}>
+          <Copy className="h-4 w-4" /> Adapt from Previous Year
+        </Button>
         <Button size="sm" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" /> New Structure
         </Button>
@@ -467,6 +502,88 @@ export default function FeeStructuresPage() {
               <Button type="submit" disabled={isPending}>{isPending ? 'Creating…' : 'Create Structure'}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={adaptOpen} onOpenChange={setAdaptOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adapt Fee Structures</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Copy fee structures from one year/term into another for easy rollover.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>From Year</Label>
+                <Select value={adaptFromYear} onValueChange={setAdaptFromYear}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>To Year</Label>
+                <Select value={adaptToYear} onValueChange={setAdaptToYear}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>From Term</Label>
+                <Select value={adaptFromTerm} onValueChange={setAdaptFromTerm}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>To Term</Label>
+                <Select value={adaptToTerm} onValueChange={setAdaptToTerm}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Class <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Select value={adaptClassId || '__all__'} onValueChange={(v) => setAdaptClassId(v === '__all__' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="All classes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All classes</SelectItem>
+                  {classes.map((c) => (
+                    <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={adaptOverwrite}
+                onChange={(e) => setAdaptOverwrite(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                Overwrite existing target structures
+                <span className="block text-xs text-muted-foreground">
+                  Existing targets with recorded payments are protected and will not be overwritten.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdaptOpen(false)}>Cancel</Button>
+            <Button onClick={() => adaptStructures()} disabled={adapting}>
+              {adapting ? 'Adapting…' : 'Adapt Structures'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

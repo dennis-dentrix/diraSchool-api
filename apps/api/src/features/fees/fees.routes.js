@@ -10,6 +10,7 @@ import {
   validateListPayments,
   validateBalanceQuery,
   validateFinanceDashboardSummaryQuery,
+  validateAdaptFeeStructures,
 } from './fees.validator.js';
 import {
   createFeeStructure,
@@ -18,6 +19,7 @@ import {
   updateFeeStructure,
   deleteFeeStructure,
   createPayment,
+  adaptFeeStructures,
   listPayments,
   getPayment,
   reversePayment,
@@ -40,6 +42,8 @@ router
   .all(adminOnly)
   .get(validateListFeeStructures, listFeeStructures)
   .post(validateCreateFeeStructure, createFeeStructure);
+
+router.post('/structures/adapt', adminOnly, validateAdaptFeeStructures, adaptFeeStructures);
 
 router
   .route('/structures/:id')

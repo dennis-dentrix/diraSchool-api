@@ -39,6 +39,120 @@ export const createFeeStructure = asyncHandler(async (req, res) => {
 });
 
 /**
+ * POST /api/v1/fees/structures/adapt
+ * Copies fee structures from one academic year/term into a new year/term.
+ *
+ * Supports:
+ *  - class-specific adaptation (classId provided), or
+ *  - all classes in the school (classId omitted)
+ *  - optional overwrite of existing target structures (blocked if payments exist)
+ */
+export const adaptFeeStructures = asyncHandler(async (req, res) => {
+  const {
+    fromAcademicYear,
+    toAcademicYear,
+    fromTerm,
+    toTerm,
+    classId,
+    overwrite = false,
+  } = req.body;
+
+  const targetTerm = toTerm || fromTerm;
+
+  if (fromAcademicYear === toAcademicYear && fromTerm === targetTerm) {
+    return sendError(res, 'Source and target period are the same.', 400);
+  }
+
+  const sourceFilter = {
+    schoolId: req.user.schoolId,
+    academicYear: fromAcademicYear,
+    term: fromTerm,
+  };
+  if (classId) sourceFilter.classId = classId;
+
+  const sourceStructures = await FeeStructure.find(sourceFilter).lean();
+  if (sourceStructures.length === 0) {
+    return sendError(res, 'No source fee structures found for the selected period.', 404);
+  }
+
+  let created = 0;
+  let updated = 0;
+  let skippedExisting = 0;
+  let blockedWithPayments = 0;
+
+  for (const source of sourceStructures) {
+    const targetFilter = {
+      schoolId: req.user.schoolId,
+      classId: source.classId,
+      academicYear: toAcademicYear,
+      term: targetTerm,
+    };
+
+    const existing = await FeeStructure.findOne(targetFilter);
+
+    if (existing && !overwrite) {
+      skippedExisting += 1;
+      continue;
+    }
+
+    if (existing && overwrite) {
+      const paymentCount = await Payment.countDocuments({
+        schoolId: req.user.schoolId,
+        classId: source.classId,
+        academicYear: toAcademicYear,
+        term: targetTerm,
+        status: PAYMENT_STATUSES.COMPLETED,
+      });
+
+      if (paymentCount > 0) {
+        blockedWithPayments += 1;
+        continue;
+      }
+
+      existing.items = source.items.map((item) => ({
+        category: item.category || 'School Fees',
+        name: item.name,
+        amount: item.amount,
+      }));
+      existing.notes = source.notes;
+      await existing.save();
+      updated += 1;
+      continue;
+    }
+
+    await FeeStructure.create({
+      schoolId: req.user.schoolId,
+      classId: source.classId,
+      academicYear: toAcademicYear,
+      term: targetTerm,
+      items: source.items.map((item) => ({
+        category: item.category || 'School Fees',
+        name: item.name,
+        amount: item.amount,
+      })),
+      notes: source.notes,
+    });
+    created += 1;
+  }
+
+  return sendSuccess(res, {
+    message: 'Fee structure adaptation completed.',
+    summary: {
+      sourceCount: sourceStructures.length,
+      created,
+      updated,
+      skippedExisting,
+      blockedWithPayments,
+      overwrite,
+      fromAcademicYear,
+      fromTerm,
+      toAcademicYear,
+      toTerm: targetTerm,
+    },
+  });
+});
+
+/**
  * GET /api/v1/fees/structures
  */
 export const listFeeStructures = asyncHandler(async (req, res) => {

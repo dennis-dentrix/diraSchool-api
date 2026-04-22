@@ -8,6 +8,8 @@ import { getRedis } from '../../config/redis.js';
 import {
   AUDIT_ACTIONS,
   AUDIT_RESOURCES,
+  FEATURE_ADDON_PRICING,
+  FEATURE_ADDONS,
   PLAN_TIERS,
   SUBSCRIPTION_STATUSES,
 } from '../../constants/index.js';
@@ -32,12 +34,29 @@ const pick = (obj, keys, fallback = null) => {
   return fallback;
 };
 
-const calcAmount = ({ studentCount, billingCycle }) => {
-  const subtotal = BASE_FEE + studentCount * PER_STUDENT_RATE;
+const normalizeAddOns = (addOns = {}) => ({
+  [FEATURE_ADDONS.LIBRARY]: Boolean(addOns?.[FEATURE_ADDONS.LIBRARY]),
+  [FEATURE_ADDONS.TRANSPORT]: Boolean(addOns?.[FEATURE_ADDONS.TRANSPORT]),
+  [FEATURE_ADDONS.SMS]: Boolean(addOns?.[FEATURE_ADDONS.SMS]),
+});
+
+const calcAmount = ({ studentCount, billingCycle, addOns }) => {
+  const normalized = normalizeAddOns(addOns);
+  const addOnsPerTerm = Object.entries(normalized).reduce(
+    (sum, [key, enabled]) => (enabled ? sum + (FEATURE_ADDON_PRICING[key] ?? 0) : sum),
+    0
+  );
+  const subtotal = BASE_FEE + studentCount * PER_STUDENT_RATE + addOnsPerTerm;
   const multiplier = MULTIPLIERS[billingCycle] ?? 1;
   const exVat = Math.round(subtotal * multiplier);
   const vat = Math.round(exVat * VAT_RATE);
-  return { subtotalExVat: exVat, vatAmount: vat, total: exVat + vat };
+  return {
+    addOns: normalized,
+    addOnsPerTerm,
+    subtotalExVat: exVat,
+    vatAmount: vat,
+    total: exVat + vat,
+  };
 };
 
 const merchantRef = (schoolId) =>
@@ -119,8 +138,8 @@ export const createPesapalCheckout = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId);
   if (!school) return sendError(res, 'School not found.', 404);
 
-  const { studentCount, billingCycle, planTier, description } = req.body;
-  const amounts = calcAmount({ studentCount, billingCycle });
+  const { studentCount, billingCycle, planTier, description, addOns } = req.body;
+  const amounts = calcAmount({ studentCount, billingCycle, addOns });
   const reference = merchantRef(school._id);
 
   const callbackUrl = `${env.CLIENT_URL.replace(/\/+$/, '')}/billing?provider=pesapal`;
@@ -131,6 +150,8 @@ export const createPesapalCheckout = asyncHandler(async (req, res) => {
     status: 'pending',
     billingCycle,
     studentCount,
+    addOns: amounts.addOns,
+    addOnsPerTerm: amounts.addOnsPerTerm,
     amount: amounts.total,
     subtotalExVat: amounts.subtotalExVat,
     vatAmount: amounts.vatAmount,
@@ -173,6 +194,8 @@ export const createPesapalCheckout = asyncHandler(async (req, res) => {
         merchantReference: payment.merchantReference,
         orderTrackingId: payment.orderTrackingId ?? null,
         amount: payment.amount,
+        addOns: payment.addOns,
+        addOnsPerTerm: payment.addOnsPerTerm,
       },
     });
 
@@ -183,6 +206,8 @@ export const createPesapalCheckout = asyncHandler(async (req, res) => {
         orderTrackingId: payment.orderTrackingId,
         amount: payment.amount,
         currency: payment.currency,
+        addOns: payment.addOns,
+        addOnsPerTerm: payment.addOnsPerTerm,
         redirectUrl: payment.checkoutUrl,
       },
     });
@@ -222,6 +247,8 @@ export const getPesapalCheckoutStatus = asyncHandler(async (req, res) => {
       currency: payment.currency,
       billingCycle: payment.billingCycle,
       studentCount: payment.studentCount,
+      addOns: payment.addOns,
+      addOnsPerTerm: payment.addOnsPerTerm,
       checkoutUrl: payment.checkoutUrl,
       paidAt: payment.paidAt,
       pesapalStatusCode: payment.pesapalStatusCode,

@@ -51,6 +51,16 @@ const subscriptionPaymentSchema = new mongoose.Schema(
       required: true,
       min: 1,
     },
+    addOns: {
+      library: { type: Boolean, default: false },
+      transport: { type: Boolean, default: false },
+      sms: { type: Boolean, default: false },
+    },
+    addOnsPerTerm: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
     subtotalExVat: {
       type: Number,
       required: true,

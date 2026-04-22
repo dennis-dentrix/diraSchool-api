@@ -108,7 +108,7 @@ const FAQS = [
   },
   {
     q: 'Are all features available at every plan level?',
-    a: 'No. Features unlock by plan: Basic includes report cards + parent portal + timetable. Standard adds library + transport + bulk import + audit logs. Premium adds SMS and all remaining features.',
+    a: 'Core platform pricing is the same for all schools. Optional add-ons are billed per term: Library (KES 500), Transport (KES 500), and Bulk SMS (KES 1,000).',
   },
 ];
 
@@ -166,7 +166,7 @@ function Hero() {
           {[
             ['Under 1% of a student\'s term fees', 'for the whole management system'],
             ['Billed at term start', 'when schools collect fees'],
-            ['Tiered feature access', 'upgrade as operations grow'],
+            ['Optional add-ons', 'library, transport, bulk SMS'],
           ].map(([bold, sub]) => (
             <div key={bold} className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10">
               <span className="font-semibold text-white">{bold}</span>
@@ -199,7 +199,7 @@ function PricingTable() {
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">One formula, four plans</h2>
           <p className="mt-3 text-slate-500 max-w-lg mx-auto">
-            All plans use the same pricing formula. Plan names help you find your fit — not dictate your features.
+            All plans use the same base formula. Optional features can be added as billed add-ons.
           </p>
           {/* Example size toggle */}
           <div className="mt-6 inline-flex items-center gap-2 bg-slate-100 rounded-xl p-1">

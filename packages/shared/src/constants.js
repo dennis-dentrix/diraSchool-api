@@ -34,6 +34,18 @@ export const PLAN_TIERS = {
   PREMIUM: 'premium',
 };
 
+export const FEATURE_ADDONS = {
+  LIBRARY: 'library',
+  TRANSPORT: 'transport',
+  SMS: 'sms',
+};
+
+export const FEATURE_ADDON_PRICING = {
+  [FEATURE_ADDONS.LIBRARY]: 500,
+  [FEATURE_ADDONS.TRANSPORT]: 500,
+  [FEATURE_ADDONS.SMS]: 1000,
+};
+
 export const DAYS_OF_WEEK = [
   'monday',
   'tuesday',

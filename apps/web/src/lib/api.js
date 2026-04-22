@@ -203,6 +203,7 @@ export const resultsApi = {
 export const feesApi = {
   listStructures: (params) => api.get('/fees/structures', { params }),
   createStructure: (data) => api.post('/fees/structures', data),
+  adaptStructures: (data) => api.post('/fees/structures/adapt', data),
   getStructure: (id) => api.get(`/fees/structures/${id}`),
   updateStructure: (id, data) => api.patch(`/fees/structures/${id}`, data),
   deleteStructure: (id) => api.delete(`/fees/structures/${id}`),

@@ -8,7 +8,7 @@ import { objectIdRegex, yearRegex } from '@diraschool/shared/schemas';
 const feeItemSchema = z.object({
   category: z.string().trim().optional(),
   name: z.string().trim().min(1, 'Fee item name is required'),
-  amount: z.number().min(0, 'Fee item amount cannot be negative'),
+  amount: z.coerce.number().min(0, 'Fee item amount cannot be negative'),
 });
 
 const createFeeStructureSchema = z.object({
@@ -38,13 +38,22 @@ const createPaymentSchema = z.object({
   studentId: z.string().regex(objectIdRegex, 'Invalid student ID'),
   academicYear: z.string().regex(yearRegex, 'Academic year must be a 4-digit year'),
   term: z.enum(TERMS, { message: `Term must be one of: ${TERMS.join(', ')}` }),
-  amount: z.number().min(1, 'Payment amount must be at least 1'),
+  amount: z.coerce.number().min(1, 'Payment amount must be at least 1'),
   method: z.enum(Object.values(PAYMENT_METHODS), {
     message: `Method must be one of: ${Object.values(PAYMENT_METHODS).join(', ')}`,
   }),
   reference: z.string().trim().optional(),
   notes: z.string().trim().optional(),
   paymentDate: z.string().optional(),
+}).strict();
+
+const adaptFeeStructuresSchema = z.object({
+  fromAcademicYear: z.string().regex(yearRegex, 'Source academic year must be a 4-digit year'),
+  toAcademicYear: z.string().regex(yearRegex, 'Target academic year must be a 4-digit year'),
+  fromTerm: z.enum(TERMS, { message: `Source term must be one of: ${TERMS.join(', ')}` }),
+  toTerm: z.enum(TERMS, { message: `Target term must be one of: ${TERMS.join(', ')}` }).optional(),
+  classId: z.string().regex(objectIdRegex, 'Invalid class ID').optional(),
+  overwrite: z.coerce.boolean().optional().default(false),
 }).strict();
 
 const reversePaymentSchema = z.object({
@@ -92,6 +101,7 @@ const validateQuery = (schema) => (req, res, next) => {
 export const validateCreateFeeStructure = validateBody(createFeeStructureSchema);
 export const validateUpdateFeeStructure = validateBody(updateFeeStructureSchema);
 export const validateListFeeStructures = validateQuery(listFeeStructuresSchema);
+export const validateAdaptFeeStructures = validateBody(adaptFeeStructuresSchema);
 
 export const validateCreatePayment = validateBody(createPaymentSchema);
 export const validateReversePayment = validateBody(reversePaymentSchema);

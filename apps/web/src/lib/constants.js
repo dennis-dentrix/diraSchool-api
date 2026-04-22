@@ -4,6 +4,8 @@ import {
   TERMS,
   LEVEL_CATEGORIES as LEVEL_CATEGORIES_MAP,
   PLAN_TIERS as PLAN_TIERS_MAP,
+  FEATURE_ADDONS as FEATURE_ADDONS_MAP,
+  FEATURE_ADDON_PRICING as FEATURE_ADDON_PRICING_MAP,
 } from '@diraschool/shared/constants';
 
 export { ROLES, ADMIN_ROLES, TERMS };
@@ -15,6 +17,8 @@ export const EXAM_TYPES = ['opener', 'midterm', 'endterm', 'sba'];
 export const ATTENDANCE_STATUSES = ['present', 'absent', 'late', 'excused'];
 export const SUBSCRIPTION_STATUSES = ['trial', 'active', 'suspended', 'expired'];
 export const PLAN_TIERS = Object.values(PLAN_TIERS_MAP);
+export const FEATURE_ADDONS = FEATURE_ADDONS_MAP;
+export const FEATURE_ADDON_PRICING = FEATURE_ADDON_PRICING_MAP;
 export const STUDENT_STATUSES = ['active', 'transferred', 'graduated', 'withdrawn'];
 export const WORKING_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 

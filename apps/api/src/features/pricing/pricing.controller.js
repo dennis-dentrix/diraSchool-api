@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { sendSuccess, sendError } from '../../utils/response.js';
+import { FEATURE_ADDONS, FEATURE_ADDON_PRICING } from '../../constants/index.js';
 
 const BASE_FEE = 8500;
 const PER_STUDENT_RATE = 40;
@@ -16,7 +17,18 @@ const schema = z.object({
   students: z.coerce.number().int().min(1).max(10000),
   option: z.enum(['per-term', 'annual', 'multi-year']).default('per-term'),
   includeVAT: z.coerce.boolean().default(true),
+  addOns: z.string().optional(), // csv: library,transport,sms
 });
+
+const parseAddOns = (rawAddOns) => {
+  if (!rawAddOns) return [];
+  return String(rawAddOns)
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .filter((value, index, arr) => arr.indexOf(value) === index)
+    .filter((value) => Object.values(FEATURE_ADDONS).includes(value));
+};
 
 /**
  * GET /api/v1/pricing/calculate
@@ -34,9 +46,14 @@ export const calculatePrice = (req, res) => {
   }
 
   const { students, option, includeVAT } = parsed.data;
+  const selectedAddOns = parseAddOns(parsed.data.addOns);
   const multiplier = MULTIPLIERS[option];
 
-  const subtotalExVAT = BASE_FEE + students * PER_STUDENT_RATE;
+  const addOnsPerTerm = selectedAddOns.reduce(
+    (sum, addOn) => sum + (FEATURE_ADDON_PRICING[addOn] ?? 0),
+    0
+  );
+  const subtotalExVAT = BASE_FEE + students * PER_STUDENT_RATE + addOnsPerTerm;
   const periodSubtotal = subtotalExVAT * multiplier;
   const vatAmount = Math.round(periodSubtotal * VAT_RATE);
   const totalIncVAT = periodSubtotal + vatAmount;
@@ -52,6 +69,11 @@ export const calculatePrice = (req, res) => {
     breakdown: {
       baseFee: BASE_FEE,
       perStudentCost: students * PER_STUDENT_RATE,
+      addOnsPerTerm,
+      addOns: selectedAddOns.map((name) => ({
+        name,
+        pricePerTerm: FEATURE_ADDON_PRICING[name] ?? 0,
+      })),
       subtotalExVAT: Math.round(subtotalExVAT),
       multiplier,
       periodSubtotalExVAT: Math.round(periodSubtotal),

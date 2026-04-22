@@ -10,6 +10,7 @@ import {
   ArrowRight, Mail, Calculator, Download, Loader2,
 } from 'lucide-react';
 import { schoolsApi, studentsApi, exportApi, downloadBlob, subscriptionsApi } from '@/lib/api';
+import { FEATURE_ADDONS, FEATURE_ADDON_PRICING } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth.store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,12 +30,22 @@ const PER_STUDENT = 40;
 const VAT = 0.16;
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 
-function calcBill(students, option = 'per-term') {
-  const subtotal = BASE_FEE + students * PER_STUDENT;
+const ADD_ON_OPTIONS = [
+  { key: FEATURE_ADDONS.LIBRARY, label: 'Library', price: FEATURE_ADDON_PRICING[FEATURE_ADDONS.LIBRARY] },
+  { key: FEATURE_ADDONS.TRANSPORT, label: 'Transport', price: FEATURE_ADDON_PRICING[FEATURE_ADDONS.TRANSPORT] },
+  { key: FEATURE_ADDONS.SMS, label: 'Bulk SMS', price: FEATURE_ADDON_PRICING[FEATURE_ADDONS.SMS] },
+];
+
+function calcBill(students, option = 'per-term', addOns = {}) {
+  const addOnsPerTerm = ADD_ON_OPTIONS.reduce(
+    (sum, item) => sum + (addOns?.[item.key] ? item.price : 0),
+    0
+  );
+  const subtotal = BASE_FEE + students * PER_STUDENT + addOnsPerTerm;
   const multiplier = option === 'annual' ? 2.98 : option === 'multi-year' ? 2.4 : 1;
   const base = subtotal * multiplier;
   const vat = Math.round(base * VAT);
-  return { subtotal, base, vat, total: base + vat, multiplier };
+  return { subtotal, base, vat, total: base + vat, multiplier, addOnsPerTerm };
 }
 
 // ── Status config ────────────────────────────────────────────────────────────
@@ -77,12 +88,12 @@ function StatusBadge({ status }) {
 }
 
 // ── Mini Calculator ──────────────────────────────────────────────────────────
-function BillingCalculator({ currentStudents }) {
+function BillingCalculator({ currentStudents, addOns, setAddOns }) {
   const [students, setStudents] = useState(currentStudents || 100);
   const [option, setOption] = useState('per-term');
 
-  const p = calcBill(students, option);
-  const perTermTotal = calcBill(students, 'per-term').total;
+  const p = calcBill(students, option, addOns);
+  const perTermTotal = calcBill(students, 'per-term', addOns).total;
   const saving = option === 'annual' ? Math.round(perTermTotal * 3 - p.total) : null;
 
   return (
@@ -133,6 +144,29 @@ function BillingCalculator({ currentStudents }) {
           ))}
         </div>
 
+        {/* Add-ons */}
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Optional Add-ons (per term)</label>
+          <div className="grid gap-2">
+            {ADD_ON_OPTIONS.map((addOn) => (
+              <label key={addOn.key} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+                <span className="font-medium">{addOn.label}</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-muted-foreground">{fmt(addOn.price)}</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(addOns?.[addOn.key])}
+                    onChange={(e) => setAddOns((prev) => ({ ...prev, [addOn.key]: e.target.checked }))}
+                  />
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Bulk SMS billing is ready here; message delivery feature rollout can be activated later.
+          </p>
+        </div>
+
         {/* Breakdown */}
         <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
           <div className="flex justify-between text-muted-foreground">
@@ -141,6 +175,10 @@ function BillingCalculator({ currentStudents }) {
           <div className="flex justify-between text-muted-foreground">
             <span>{students.toLocaleString()} × KES 40</span>
             <span className="font-mono">{fmt(students * PER_STUDENT)}</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Add-ons total</span>
+            <span className="font-mono">{fmt(p.addOnsPerTerm)}</span>
           </div>
           <div className="flex justify-between text-muted-foreground text-xs pt-1 border-t">
             <span>Subtotal (ex-VAT)</span>
@@ -184,6 +222,11 @@ export default function BillingPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [statusToastShown, setStatusToastShown] = useState(false);
+  const [addOns, setAddOns] = useState({
+    [FEATURE_ADDONS.LIBRARY]: false,
+    [FEATURE_ADDONS.TRANSPORT]: false,
+    [FEATURE_ADDONS.SMS]: false,
+  });
 
   if (!BILLING_ROLES.includes(user?.role)) {
     return (
@@ -213,7 +256,7 @@ export default function BillingPage() {
   const daysLeft = trialExpiry ? differenceInDays(trialExpiry, new Date()) : null;
   const planTier = school?.planTier ?? 'trial';
 
-  const bill = studentCount > 0 ? calcBill(studentCount) : null;
+  const bill = studentCount > 0 ? calcBill(studentCount, 'per-term', addOns) : null;
   const merchantReference = useMemo(
     () =>
       searchParams.get('OrderMerchantReference')
@@ -228,6 +271,7 @@ export default function BillingPage() {
         billingCycle: 'per-term',
         studentCount: Math.max(studentCount || 0, 1),
         planTier: planTier === 'trial' ? 'standard' : planTier,
+        addOns,
       });
       return response.data?.checkout ?? response.data?.data?.checkout;
     },
@@ -327,7 +371,7 @@ export default function BillingPage() {
           <CardContent className="p-5 space-y-2">
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Plan</p>
             <p className="text-2xl font-bold capitalize">{planTier === 'trial' ? 'Free Trial' : planTier}</p>
-            <p className="text-xs text-muted-foreground">All features included on every plan</p>
+            <p className="text-xs text-muted-foreground">Base + selected add-ons</p>
           </CardContent>
         </Card>
 
@@ -369,7 +413,7 @@ export default function BillingPage() {
 
       {/* ── Main content grid ─────────────────────────────────────────────── */}
       <div className="grid gap-5 lg:grid-cols-2">
-        <BillingCalculator currentStudents={studentCount || 100} />
+        <BillingCalculator currentStudents={studentCount || 100} addOns={addOns} setAddOns={setAddOns} />
 
         {/* Billing schedule + contact */}
         <div className="space-y-5">
@@ -441,6 +485,11 @@ export default function BillingPage() {
                     : `Pesapal reference: ${merchantReference}`}
                 </p>
               )}
+              <p className="text-xs text-slate-400">
+                Selected add-ons:
+                {' '}
+                {ADD_ON_OPTIONS.filter((item) => addOns?.[item.key]).map((item) => item.label).join(', ') || 'None'}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -491,7 +540,7 @@ export default function BillingPage() {
             <div>
               <p className="text-sm font-semibold">How your bill is calculated</p>
               <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                ( KES 8,500 base + enrolled students × KES 40 ) × 1.16 VAT = term cost
+                ( KES 8,500 base + enrolled students × KES 40 + selected add-ons ) × 1.16 VAT = term cost
               </p>
             </div>
             <div className="sm:ml-auto flex gap-2 shrink-0">

@@ -382,7 +382,7 @@ export default function PaymentsPage() {
       className: cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—',
       academicYear: values.academicYear,
       term: values.term,
-      amount: values.amount,
+      amount: Number(values.amount),
       method: values.method,
       reference: values.reference ?? '',
       paymentDate: values.paymentDate ?? todayIso,
@@ -399,7 +399,7 @@ export default function PaymentsPage() {
     const preview = buildReceiptData(values);
     const payload = {
       studentId: values.studentId,
-      amount: values.amount,
+      amount: Number(values.amount),
       method: values.method,
       reference: values.reference || undefined,
       paymentDate: values.paymentDate || undefined,
@@ -497,7 +497,7 @@ export default function PaymentsPage() {
             onSubmit={handleSubmit((values) =>
               createPayment({
                 studentId: values.studentId,
-                amount: values.amount,
+                amount: Number(values.amount),
                 method: values.method,
                 reference: values.reference || undefined,
                 paymentDate: values.paymentDate || undefined,

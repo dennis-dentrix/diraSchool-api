@@ -8,9 +8,20 @@ import {
   LEVEL_CATEGORIES,
   DAYS_OF_WEEK,
   PLAN_TIERS,
+  FEATURE_ADDONS,
+  FEATURE_ADDON_PRICING,
 } from '@diraschool/shared/constants';
 
-export { ROLES, ADMIN_ROLES, TERMS, LEVEL_CATEGORIES, DAYS_OF_WEEK, PLAN_TIERS };
+export {
+  ROLES,
+  ADMIN_ROLES,
+  TERMS,
+  LEVEL_CATEGORIES,
+  DAYS_OF_WEEK,
+  PLAN_TIERS,
+  FEATURE_ADDONS,
+  FEATURE_ADDON_PRICING,
+};
 
 // All roles scoped to a specific school (not superadmin)
 export const SCHOOL_ROLES = Object.values(ROLES).filter((r) => r !== ROLES.SUPERADMIN);
