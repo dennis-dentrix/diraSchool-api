@@ -34,7 +34,7 @@ const resolveTeacherIds = async (schoolId, teacherIds = []) => {
   const teachers = await User.find({
     _id: { $in: teacherIds },
     schoolId,
-    role: ROLES.TEACHER,
+    role: { $in: [ROLES.TEACHER, ROLES.DEPARTMENT_HEAD] },
     isActive: true,
   }).select('_id');
 
@@ -54,10 +54,16 @@ const resolveHodId = async (schoolId, hodId) => {
   const hod = await User.findOne({
     _id: hodId,
     schoolId,
+    role: { $in: [ROLES.TEACHER, ROLES.DEPARTMENT_HEAD] },
     isActive: true,
-  }).select('_id');
+  });
 
   if (!hod) return { error: { message: 'Head of Department user not found or inactive.', statusCode: 404 } };
+  // Promote teacher to Department Head when assigned as HOD.
+  if (hod.role === ROLES.TEACHER) {
+    hod.role = ROLES.DEPARTMENT_HEAD;
+    await hod.save();
+  }
   return { id: hod._id };
 };
 
@@ -111,7 +117,7 @@ export const listSubjects = asyncHandler(async (req, res) => {
   if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
 
   // Teachers see only their own subjects unless ?all=true is requested (for self-assignment browsing)
-  if (req.user.role === ROLES.TEACHER && req.query.all !== 'true') {
+  if ([ROLES.TEACHER, ROLES.DEPARTMENT_HEAD].includes(req.user.role) && req.query.all !== 'true') {
     filter.teacherIds = req.user._id;
   }
 

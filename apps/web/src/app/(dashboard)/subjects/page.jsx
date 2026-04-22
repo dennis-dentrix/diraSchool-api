@@ -214,7 +214,7 @@ export default function SubjectsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const adminUser = isAdmin(user);
-  const isTeacher = user?.role === 'teacher';
+  const isTeacher = ['teacher', 'department_head'].includes(user?.role);
 
   const [open, setOpen]                             = useState(false);
   const [assignTarget, setAssignTarget]             = useState(null);
@@ -266,7 +266,7 @@ export default function SubjectsPage() {
 
   const { data: teachersData } = useQuery({
     queryKey: ['users', 'teachers'],
-    queryFn: async () => { const res = await usersApi.list({ role: 'teacher', limit: 100 }); return res.data; },
+    queryFn: async () => { const res = await usersApi.list({ role: 'teacher,department_head', limit: 100 }); return res.data; },
     enabled: adminUser,
   });
 

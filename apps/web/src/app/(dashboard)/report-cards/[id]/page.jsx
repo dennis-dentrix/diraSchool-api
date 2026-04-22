@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -14,6 +14,16 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const gradeColors = {
   EE: 'bg-green-100 text-green-800',
@@ -46,6 +56,9 @@ export default function ReportCardDetailPage() {
   const queryClient = useQueryClient();
 
   const [editing, setEditing] = useState(false);
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
+  const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
+  const [downloadRequested, setDownloadRequested] = useState(false);
   const [remarks, setRemarks] = useState({ teacherRemarks: '', principalRemarks: '' });
   const [subjectRemarks, setSubjectRemarks] = useState({});
   const [savingSubject, setSavingSubject] = useState(null);
@@ -67,6 +80,7 @@ export default function ReportCardDetailPage() {
       return card;
     },
     enabled: !!id,
+    refetchInterval: downloadRequested ? 2500 : false,
   });
 
   const { data: school } = useQuery({
@@ -123,12 +137,26 @@ export default function ReportCardDetailPage() {
   const { mutate: queuePdf, isPending: queueingPdf } = useMutation({
     mutationFn: () => reportCardsApi.generatePdf(id),
     onSuccess: () => {
-      toast.success('PDF generation queued');
+      toast.success('PDF generation started in background');
       queryClient.invalidateQueries({ queryKey: ['report-card', id] });
       queryClient.invalidateQueries({ queryKey: ['report-cards'] });
     },
-    onError: (err) => toast.error(getErrorMessage(err)),
+    onError: (err) => {
+      setDownloadRequested(false);
+      toast.error(getErrorMessage(err));
+    },
   });
+
+  useEffect(() => {
+    if (!downloadRequested) return;
+    if (rc?.pdfStatus === 'ready' && rc?.pdfUrl) {
+      window.open(rc.pdfUrl, '_blank');
+      setDownloadRequested(false);
+    }
+    if (rc?.pdfStatus === 'failed') {
+      setDownloadRequested(false);
+    }
+  }, [downloadRequested, rc?.pdfStatus, rc?.pdfUrl]);
 
   async function saveSubjectRemark(subjectId, remark) {
     setSavingSubject(subjectId);
@@ -164,6 +192,15 @@ export default function ReportCardDetailPage() {
 
   const principalName = settings?.principalName ?? school?.principalName ?? '';
 
+  const handleDownloadPdf = () => {
+    if (rc?.pdfStatus === 'ready' && rc?.pdfUrl) {
+      window.open(rc.pdfUrl, '_blank');
+      return;
+    }
+    setDownloadRequested(true);
+    queuePdf();
+  };
+
   return (
     <div className="space-y-5 max-w-4xl">
       {/* Header */}
@@ -190,29 +227,19 @@ export default function ReportCardDetailPage() {
           >
             <Printer className="h-4 w-4 mr-1" /> Print
           </Button>
-          {rc?.pdfUrl ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => window.open(rc.pdfUrl, '_blank')}
-            >
-              Download PDF
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => queuePdf()}
-              disabled={queueingPdf}
-            >
-              {queueingPdf ? 'Queueing…' : 'Generate PDF'}
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadPdf}
+            disabled={queueingPdf || downloadRequested}
+          >
+            {(queueingPdf || downloadRequested) ? 'Preparing PDF…' : 'Download PDF'}
+          </Button>
           {isDraft && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => { if (confirm('Regenerate this report card with the latest results? Your remarks will be preserved.')) regenerate(); }}
+              onClick={() => setRegenerateConfirmOpen(true)}
               disabled={regenerating}
               title="Re-pulls all exam results and rebuilds subject grades. Remarks are kept."
             >
@@ -223,7 +250,7 @@ export default function ReportCardDetailPage() {
           {isDraft && (
             <Button
               size="sm"
-              onClick={() => { if (confirm('Publish this report card? This cannot be undone.')) publish(); }}
+              onClick={() => setPublishConfirmOpen(true)}
               disabled={publishing}
             >
               <CheckCircle className="h-4 w-4 mr-1" /> Publish
@@ -232,13 +259,17 @@ export default function ReportCardDetailPage() {
         </div>
       </div>
 
-      {rc?.pdfStatus && rc.pdfStatus !== 'ready' && (
+      {!!rc?.pdfStatus && rc.pdfStatus !== 'ready' && (
         <Card>
           <CardContent className="pt-4 pb-4 text-sm">
             <p className="font-medium">
-              PDF status: <span className="capitalize">{rc.pdfStatus.replace('_', ' ')}</span>
+              PDF status: <span className="capitalize">{String(rc.pdfStatus).replaceAll('_', ' ')}</span>
             </p>
-            {rc?.pdfError && <p className="text-destructive mt-1">{rc.pdfError}</p>}
+            {rc?.pdfError && (
+              <p className="text-destructive mt-1">
+                PDF generation failed. Please try "Download PDF" again.
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -524,6 +555,41 @@ export default function ReportCardDetailPage() {
           ))}
         </CardContent>
       </Card>
+
+      <AlertDialog open={regenerateConfirmOpen} onOpenChange={setRegenerateConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regenerate Report Card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This rebuilds the report card using latest results. Existing remarks will be preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => regenerate()} disabled={regenerating}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={publishConfirmOpen} onOpenChange={setPublishConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish Report Card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Once published, this report card can no longer be edited.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => publish()} disabled={publishing}>
+              Publish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }

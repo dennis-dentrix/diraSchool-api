@@ -27,7 +27,7 @@ router.use(protect, blockIfMustChangePassword);
 // Read access: all school staff (secretary, accountant, and teachers need to view students)
 const canRead = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT, ROLES.TEACHER
+  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD
 );
 
 router.get('/', canRead, listStudents);

@@ -18,6 +18,13 @@ import { uploadBuffer } from '../helpers/cloudinaryUpload.js';
 import logger from '../../config/logger.js';
 import { notifyUser } from '../../utils/notify.js';
 
+const slugifyPart = (value) =>
+  String(value ?? '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'na';
+
 export const processReportJob = async (job) => {
   const { reportCardId, schoolId, requestedByUserId } = job.data;
   try {
@@ -54,7 +61,10 @@ export const processReportJob = async (job) => {
 
     // 3. Upload to Cloudinary
     const student = reportCard.studentId;
-    const publicId = `report-cards/${schoolId}/${student.admissionNumber}_${reportCard.academicYear}_${reportCard.term.replace(/\s+/g, '-')}`;
+    const admission = slugifyPart(student.admissionNumber);
+    const year = slugifyPart(reportCard.academicYear);
+    const term = slugifyPart(reportCard.term);
+    const publicId = `${admission}_${year}_${term}`;
 
     const upload = await uploadBuffer(pdfBuffer, {
       folder: `report-cards/${schoolId}`,

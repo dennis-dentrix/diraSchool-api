@@ -104,7 +104,13 @@ export const createUser = asyncHandler(async (req, res) => {
  */
 export const listUsers = asyncHandler(async (req, res) => {
   const filter = { schoolId: req.user.schoolId };
-  if (req.query.role) filter.role = req.query.role;
+  if (req.query.role) {
+    const roles = String(req.query.role)
+      .split(',')
+      .map((r) => r.trim())
+      .filter(Boolean);
+    filter.role = roles.length > 1 ? { $in: roles } : roles[0];
+  }
   if (req.query.isActive !== undefined) filter.isActive = req.query.isActive !== 'false';
   if (req.query.invitePending !== undefined) filter.invitePending = req.query.invitePending !== 'false';
   if (req.query.search) {

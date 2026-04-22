@@ -21,13 +21,13 @@ router.use(protect, blockIfMustChangePassword);
 // Read: all school staff can view attendance
 const canRead = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT, ROLES.TEACHER
+  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD
 );
 
 // Write: only admin roles and teachers — secretaries and accountants cannot take/edit attendance
 const canWrite = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER
+  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD
 );
 
 router.get('/registers', canRead, validateListAttendanceRegisters, listAttendanceRegisters);

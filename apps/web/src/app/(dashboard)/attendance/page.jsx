@@ -542,7 +542,7 @@ export default function AttendancePage() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const adminView = isAdmin(user);
-  const isTeacher = user?.role === 'teacher';
+  const isTeacher = ['teacher', 'department_head'].includes(user?.role);
 
   const { data: schoolSettings } = useQuery({
     queryKey: ['school-settings'],

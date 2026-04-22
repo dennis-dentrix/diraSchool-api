@@ -242,7 +242,7 @@ export default function StudentDetailPage() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const adminUser = isAdmin(user);
-  const isTeacher = user?.role === 'teacher';
+  const isTeacher = ['teacher', 'department_head'].includes(user?.role);
 
   const [editOpen, setEditOpen] = useState(false);
   const [guardianDialogOpen, setGuardianDialogOpen] = useState(false);

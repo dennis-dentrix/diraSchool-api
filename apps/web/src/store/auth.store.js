@@ -40,7 +40,7 @@ export function isParent(user) {
 }
 
 export function isTeacher(user) {
-  return user?.role === 'teacher';
+  return ['teacher', 'department_head'].includes(user?.role);
 }
 
 export function canAccess(user, roles) {

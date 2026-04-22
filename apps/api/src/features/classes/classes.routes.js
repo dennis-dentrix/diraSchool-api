@@ -17,12 +17,12 @@ const router = express.Router();
 router.use(protect, blockIfMustChangePassword);
 
 // Teacher-facing: "My Class" — the class where they are the class teacher
-router.get('/my-class', authorize(ROLES.TEACHER), myClass);
+router.get('/my-class', authorize(ROLES.TEACHER, ROLES.DEPARTMENT_HEAD), myClass);
 
 // Read access: admins + teachers can see class list (teacher sees their own in practice)
 const canRead = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT, ROLES.TEACHER
+  ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD
 );
 
 router.get('/', canRead, listClasses);

@@ -20,7 +20,7 @@ router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.LIBR
 // Book catalogue — read access to all school staff
 const canRead = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.SECRETARY, ROLES.ACCOUNTANT
+  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD, ROLES.SECRETARY, ROLES.ACCOUNTANT
 );
 
 router.get('/books',      canRead, validateListBooks, listBooks);
@@ -33,7 +33,7 @@ router.patch('/books/:id',   adminOnly, validateUpdateBook, updateBook);
 // Loans — admins + teachers + secretary
 const canLoan = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.SECRETARY
+  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD, ROLES.SECRETARY
 );
 
 router.post('/loans',                    canLoan, validateIssueLoan, issueLoan);

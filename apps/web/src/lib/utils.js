@@ -43,6 +43,7 @@ export function getRoleBadgeColor(role) {
     secretary: 'bg-green-100 text-green-800',
     accountant: 'bg-yellow-100 text-yellow-800',
     teacher: 'bg-orange-100 text-orange-800',
+    department_head: 'bg-amber-100 text-amber-800',
     parent: 'bg-pink-100 text-pink-800',
   };
   return map[role] ?? 'bg-gray-100 text-gray-800';

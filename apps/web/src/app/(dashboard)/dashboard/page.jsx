@@ -627,7 +627,7 @@ export default function DashboardPage() {
   const [adminDetail, setAdminDetail] = useState(null);
   const isAdmin   = ADMIN_ROLES.includes(user?.role);
   const isFinance = FINANCE_ROLES.includes(user?.role);
-  const isTeacher = user?.role === 'teacher';
+  const isTeacher = ['teacher', 'department_head'].includes(user?.role);
   const isFinanceOps = ['secretary', 'accountant'].includes(user?.role);
 
   // Teachers get their own focused dashboard

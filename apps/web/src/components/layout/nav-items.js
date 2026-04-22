@@ -21,8 +21,8 @@ import {
 // Role groups
 const ADMIN     = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
 const FINANCE   = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'accountant', 'secretary'];
-const ACADEMIC  = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'secretary'];
-const ALL_STAFF = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'secretary', 'accountant'];
+const ACADEMIC  = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'department_head', 'secretary'];
+const ALL_STAFF = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'department_head', 'secretary', 'accountant'];
 // Transport: operational staff who manage student pickups
 const TRANSPORT_ACCESS = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'];
 // Audit logs: senior leadership only (no deputy)

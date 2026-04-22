@@ -78,7 +78,7 @@ export default function ClassesPage() {
   const { data: teachers } = useQuery({
     queryKey: ['users', 'teachers'],
     queryFn: async () => {
-      const res = await usersApi.list({ role: 'teacher', limit: 100 });
+      const res = await usersApi.list({ role: 'teacher,department_head', limit: 100 });
       return res.data;
     },
     enabled: adminUser,

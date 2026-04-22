@@ -65,8 +65,15 @@ export const renderReportCardPdf = async (reportCard, options = {}) => {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const student = reportCard.studentId;
-    const cls = reportCard.classId;
+    const student = reportCard.studentId ?? {};
+    const cls = reportCard.classId ?? {};
+    const classYear = cls.academicYear ?? reportCard.academicYear ?? '—';
+    const classTerm = cls.term ?? reportCard.term ?? '—';
+    const className = cls.name ?? '—';
+    const classStream = cls.stream ? ` (${cls.stream})` : '';
+    const classLevel = cls.levelCategory ?? '—';
+    const studentName = `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || '—';
+    const admissionNumber = student.admissionNumber ?? '—';
 
     // Header band
     fillRect(doc, 0, 0, PAGE_WIDTH, 108, COLORS.primary);
@@ -108,7 +115,7 @@ export const renderReportCardPdf = async (reportCard, options = {}) => {
 
     doc
       .fontSize(9)
-      .text(`${cls.academicYear}  •  ${cls.term}  •  Serial: ${documentSerial}`, MARGIN, 90, {
+      .text(`${classYear}  •  ${classTerm}  •  Serial: ${documentSerial}`, MARGIN, 90, {
         width: CONTENT_WIDTH,
         align: 'center',
       });
@@ -126,10 +133,10 @@ export const renderReportCardPdf = async (reportCard, options = {}) => {
     doc.rect(MARGIN, y, CONTENT_WIDTH, 50).strokeColor(COLORS.border).lineWidth(0.5).stroke();
 
     const infoItems = [
-      ['Student', `${student.firstName} ${student.lastName}`],
-      ['Adm. No', student.admissionNumber],
-      ['Class', cls.stream ? `${cls.name} (${cls.stream})` : cls.name],
-      ['Level', cls.levelCategory],
+      ['Student', studentName],
+      ['Adm. No', admissionNumber],
+      ['Class', `${className}${classStream}`],
+      ['Level', classLevel],
     ];
 
     const colW = CONTENT_WIDTH / infoItems.length;

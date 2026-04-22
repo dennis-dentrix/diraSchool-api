@@ -135,7 +135,7 @@ export default function StudentsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const isTeacher = user?.role === 'teacher';
+  const isTeacher = ['teacher', 'department_head'].includes(user?.role);
 
   const [search, setSearch]               = useState('');
   const [page, setPage]                   = useState(1);

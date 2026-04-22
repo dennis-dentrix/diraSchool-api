@@ -420,7 +420,7 @@ function ClassTimetableTab({ canWrite }) {
   const { data: teachers } = useQuery({
     queryKey: ['users', 'teachers-list'],
     queryFn: async () => {
-      const res = await usersApi.list({ role: 'teacher', limit: 200 });
+      const res = await usersApi.list({ role: 'teacher,department_head', limit: 200 });
       return firstArray(
         res.data?.data,
         res.data?.users,
@@ -809,7 +809,7 @@ function SchoolCalendarTab() {
 export default function TimetablePage() {
   const { user } = useAuthStore();
   const adminView = isAdmin(user);
-  const isTeacher = user?.role === 'teacher';
+  const isTeacher = ['teacher', 'department_head'].includes(user?.role);
   const canWrite = adminView || user?.role === 'deputy_headteacher';
 
   const defaultTab = isTeacher ? 'my-schedule' : 'class';

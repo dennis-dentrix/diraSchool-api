@@ -45,6 +45,7 @@ export const ROLE_LABELS = {
   secretary: 'Secretary',
   accountant: 'Accountant',
   teacher: 'Teacher',
+  department_head: 'Department Head',
   parent: 'Parent',
 };
 

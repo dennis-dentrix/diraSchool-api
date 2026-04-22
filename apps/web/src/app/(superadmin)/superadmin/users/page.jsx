@@ -22,6 +22,7 @@ const ROLE_OPTIONS = [
   { value: 'secretary', label: 'Secretary' },
   { value: 'accountant', label: 'Accountant' },
   { value: 'teacher', label: 'Teacher' },
+  { value: 'department_head', label: 'Department Head' },
   { value: 'parent', label: 'Parent' },
 ];
 

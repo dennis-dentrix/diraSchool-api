@@ -18,6 +18,12 @@ import { uploadBuffer } from '../helpers/cloudinaryUpload.js';
 import logger from '../../config/logger.js';
 
 // ── PDF renderer ──────────────────────────────────────────────────────────────
+const slugifyPart = (value) =>
+  String(value ?? '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'na';
 
 const renderReceiptPdf = async (payment, branding) => {
   const schoolName = branding?.schoolName ?? 'School';
@@ -150,7 +156,10 @@ export const processReceiptJob = async (job) => {
   });
 
   const student = payment.studentId;
-  const publicId = `receipts/${schoolId}/${student.admissionNumber}_${payment.academicYear}_${payment.term.replace(/\s+/g, '-')}_${payment._id}`;
+  const admission = slugifyPart(student.admissionNumber);
+  const year = slugifyPart(payment.academicYear);
+  const term = slugifyPart(payment.term);
+  const publicId = `${admission}_${year}_${term}_${String(payment._id)}`;
 
   const upload = await uploadBuffer(pdfBuffer, {
     folder: `receipts/${schoolId}`,

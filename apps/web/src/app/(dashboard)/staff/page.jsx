@@ -24,7 +24,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 
 const STAFF_ROLES = [
   'school_admin', 'director', 'headteacher', 'deputy_headteacher',
-  'secretary', 'accountant', 'teacher',
+  'secretary', 'accountant', 'teacher', 'department_head',
 ];
 
 const schema = z.object({

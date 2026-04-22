@@ -72,7 +72,7 @@ const resolveSubstituteMeta = async (req, cls, substituteTeacherId) => {
   const substitute = await User.findOne({
     _id: substituteTeacherId,
     schoolId: req.user.schoolId,
-    role: ROLES.TEACHER,
+    role: { $in: [ROLES.TEACHER, ROLES.DEPARTMENT_HEAD] },
     isActive: true,
   }).select('_id');
 

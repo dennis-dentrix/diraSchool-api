@@ -27,6 +27,7 @@ const ROLE_LABELS = {
   secretary:          'Secretary',
   accountant:         'Accountant',
   teacher:            'Teacher',
+  department_head:    'Department Head',
   parent:             'Parent',
 };
 
@@ -71,7 +72,7 @@ export default function SuperadminDashboardPage() {
       {/* User KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Users"    value={isLoading ? '—' : totalUsers}          icon={Users}     color="purple" />
-        <StatCard title="Teachers"       value={isLoading ? '—' : (byRole.teacher ?? 0)} icon={UserCheck} color="blue" />
+        <StatCard title="Teaching Staff" value={isLoading ? '—' : ((byRole.teacher ?? 0) + (byRole.department_head ?? 0))} icon={UserCheck} color="blue" />
         <StatCard title="School Admins"  value={isLoading ? '—' : (byRole.school_admin ?? 0)} icon={UserCheck} color="green" />
         <StatCard title="Parents"        value={isLoading ? '—' : (byRole.parent ?? 0)} icon={Users}     color="orange" />
       </div>

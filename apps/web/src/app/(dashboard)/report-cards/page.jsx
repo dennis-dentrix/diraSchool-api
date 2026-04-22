@@ -21,7 +21,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from '@/components/ui/skeleton';
 
 // ── Report Cards tab columns ──────────────────────────────────────────────────
-function buildRcColumns(onPublish, onView, onPrint, onGeneratePdf, onDownloadPdf) {
+function buildRcColumns(onPublish, onView, onPrint, onDownloadPdf) {
   return [
     {
       id: 'student',
@@ -87,9 +87,7 @@ function buildRcColumns(onPublish, onView, onPrint, onGeneratePdf, onDownloadPdf
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => onView(row.original._id)}>View / Edit</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onPrint(row.original._id)}>Print</DropdownMenuItem>
-            {row.original.pdfUrl
-              ? <DropdownMenuItem onClick={() => onDownloadPdf(row.original)}>Download PDF</DropdownMenuItem>
-              : <DropdownMenuItem onClick={() => onGeneratePdf(row.original._id)}>Generate PDF</DropdownMenuItem>}
+            <DropdownMenuItem onClick={() => onDownloadPdf(row.original)}>Download PDF</DropdownMenuItem>
             {row.original.status === 'draft' && (
               <DropdownMenuItem onClick={() => onPublish(row.original._id)}>Publish</DropdownMenuItem>
             )}
@@ -150,7 +148,6 @@ function ReportCardsTab({ classesData, studentsData }) {
   const { mutate: queuePdf } = useMutation({
     mutationFn: (id) => reportCardsApi.generatePdf(id),
     onSuccess: () => {
-      toast.success('PDF generation queued');
       queryClient.invalidateQueries({ queryKey: ['report-cards'] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -214,8 +211,14 @@ function ReportCardsTab({ classesData, studentsData }) {
           (id) => { if (confirm('Publish this report card? This cannot be undone.')) publish(id); },
           (id) => router.push(`/report-cards/${id}`),
           (id) => window.open(`/report-cards/${id}/print`, '_blank'),
-          (id) => queuePdf(id),
-          (row) => window.open(row.pdfUrl, '_blank'),
+          (row) => {
+            if (row.pdfStatus === 'ready' && row.pdfUrl) {
+              window.open(row.pdfUrl, '_blank');
+              return;
+            }
+            queuePdf(row._id);
+            toast.success('PDF generation started in background');
+          },
         )}
         data={data?.data}
         loading={isLoading}
