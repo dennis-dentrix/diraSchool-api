@@ -15,6 +15,28 @@ import logger from '../../config/logger.js';
 const enqueueEmail = async (type, payload) =>
   emailQueue.add(type, { type, payload });
 
+const DEPUTY_ALLOWED_TARGET_ROLES = new Set([
+  ROLES.TEACHER,
+  ROLES.DEPARTMENT_HEAD,
+]);
+
+const isDeputy = (user) => user?.role === ROLES.DEPUTY_HEADTEACHER;
+
+const canManageSchoolAdminRecord = (actor, targetUser) =>
+  actor?.role === ROLES.SUPERADMIN || actor?._id?.equals?.(targetUser._id);
+
+const assertTargetManageable = (req, targetUser) => {
+  if (targetUser.role === ROLES.SCHOOL_ADMIN && !canManageSchoolAdminRecord(req.user, targetUser)) {
+    return 'School admin accounts can only be edited by superadmin or the owner account.';
+  }
+
+  if (isDeputy(req.user) && !DEPUTY_ALLOWED_TARGET_ROLES.has(targetUser.role)) {
+    return 'Deputy headteacher can only manage teacher accounts.';
+  }
+
+  return null;
+};
+
 // ── Controllers ───────────────────────────────────────────────────────────────
 
 /**
@@ -33,6 +55,9 @@ const enqueueEmail = async (type, payload) =>
  */
 export const createUser = asyncHandler(async (req, res) => {
   const { firstName, lastName, email, phone, role, staffId, tscNumber } = req.body;
+  if (isDeputy(req.user) && !DEPUTY_ALLOWED_TARGET_ROLES.has(role)) {
+    return sendError(res, 'Deputy headteacher can only invite teacher accounts.', 403);
+  }
 
   const school = await School.findById(req.user.schoolId).select('name').lean();
   const schoolName = school?.name ?? 'your school';
@@ -111,6 +136,18 @@ export const listUsers = asyncHandler(async (req, res) => {
       .filter(Boolean);
     filter.role = roles.length > 1 ? { $in: roles } : roles[0];
   }
+  if (isDeputy(req.user)) {
+    const allowed = [...DEPUTY_ALLOWED_TARGET_ROLES];
+    if (!filter.role) {
+      filter.role = { $in: allowed };
+    } else if (typeof filter.role === 'string') {
+      if (!allowed.includes(filter.role)) {
+        filter.role = { $in: [] };
+      }
+    } else if (filter.role?.$in) {
+      filter.role = { $in: filter.role.$in.filter((role) => allowed.includes(role)) };
+    }
+  }
   if (req.query.isActive !== undefined) filter.isActive = req.query.isActive !== 'false';
   if (req.query.invitePending !== undefined) filter.invitePending = req.query.invitePending !== 'false';
   if (req.query.search) {
@@ -135,6 +172,8 @@ export const listUsers = asyncHandler(async (req, res) => {
 export const getUser = asyncHandler(async (req, res) => {
   const user = await User.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
   if (!user) return sendError(res, 'User not found.', 404);
+  const restrictionError = assertTargetManageable(req, user);
+  if (restrictionError) return sendError(res, restrictionError, 403);
   return sendSuccess(res, { user: user.toSafeObject() });
 });
 
@@ -148,8 +187,13 @@ export const updateUser = asyncHandler(async (req, res) => {
   if (user._id.equals(req.user._id)) {
     return sendError(res, 'Use /auth/change-password to update your own account.', 400);
   }
+  const restrictionError = assertTargetManageable(req, user);
+  if (restrictionError) return sendError(res, restrictionError, 403);
 
   const { firstName, lastName, email, phone, role, isActive, staffId, tscNumber, reason } = req.body;
+  if (role !== undefined && isDeputy(req.user) && !DEPUTY_ALLOWED_TARGET_ROLES.has(role)) {
+    return sendError(res, 'Deputy headteacher can only assign teacher roles.', 403);
+  }
   const previousIsActive = user.isActive;
 
   if (email !== undefined) {
@@ -204,6 +248,8 @@ export const deleteUser = asyncHandler(async (req, res) => {
   if (user.role === ROLES.PARENT) {
     return sendError(res, 'Parent accounts cannot be deleted from staff management.', 400);
   }
+  const restrictionError = assertTargetManageable(req, user);
+  if (restrictionError) return sendError(res, restrictionError, 403);
 
   await user.deleteOne();
 
@@ -233,6 +279,8 @@ export const resendInvite = asyncHandler(async (req, res) => {
   if (user._id.equals(req.user._id)) {
     return sendError(res, 'Use /auth/forgot-password to reset your own password.', 400);
   }
+  const restrictionError = assertTargetManageable(req, user);
+  if (restrictionError) return sendError(res, restrictionError, 403);
 
   const school = await School.findById(req.user.schoolId).select('name').lean();
   const schoolName = school?.name ?? 'your school';
@@ -285,6 +333,8 @@ export const adminResetPassword = asyncHandler(async (req, res) => {
   if (user._id.equals(req.user._id)) {
     return sendError(res, 'Use /auth/change-password to reset your own password.', 400);
   }
+  const restrictionError = assertTargetManageable(req, user);
+  if (restrictionError) return sendError(res, restrictionError, 403);
 
   const { sendPasswordResetEmail } = await import('../../services/email.service.js');
 

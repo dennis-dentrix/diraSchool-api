@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { usersApi, getErrorMessage } from '@/lib/api';
 import { ROLE_LABELS } from '@/lib/constants';
 import { getRoleBadgeColor, formatDate } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ const STAFF_ROLES = [
   'school_admin', 'director', 'headteacher', 'deputy_headteacher',
   'secretary', 'accountant', 'teacher', 'department_head',
 ];
+const DEPUTY_MANAGEABLE_ROLES = ['teacher', 'department_head'];
 
 const schema = z.object({
   firstName: z.string().min(1, 'Required'),
@@ -36,7 +38,7 @@ const schema = z.object({
   tscNumber: z.string().optional(),
 });
 
-const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseRequest, onEdit, onDeleteRequest }) => [
+const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseRequest, onEdit, onDeleteRequest, viewerRole }) => [
   {
     id: 'name',
     header: 'Staff Member',
@@ -89,6 +91,8 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseReque
     id: 'actions',
     cell: ({ row }) => {
       const u = row.original;
+      const isSchoolAdminAccount = u.role === 'school_admin';
+      const canManageThisUser = !isSchoolAdminAccount;
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -97,42 +101,57 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseReque
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {u.invitePending && u.isActive && (
+            {u.invitePending && u.isActive && canManageThisUser && (
               <DropdownMenuItem onClick={() => onResendInvite(u._id)}>
                 <Mail className="h-4 w-4 mr-2" /> Resend Invite
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={() => onEdit(u)}>
+            {canManageThisUser && (
+              <DropdownMenuItem onClick={() => onEdit(u)}>
               <Pencil className="h-4 w-4 mr-2" /> Edit Details
-            </DropdownMenuItem>
-            {!u.invitePending && (
+              </DropdownMenuItem>
+            )}
+            {!u.invitePending && canManageThisUser && (
               <DropdownMenuItem onClick={() => onResetPassword(u._id)}>
                 <KeyRound className="h-4 w-4 mr-2" /> Send Password Reset
               </DropdownMenuItem>
             )}
-            <DropdownMenuSeparator />
-            {u.isActive ? (
-              <DropdownMenuItem
-                className="text-red-600 focus:text-red-600"
-                onClick={() => onPauseRequest(u)}
-              >
-                <PauseCircle className="h-4 w-4 mr-2" /> Pause Account
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem
-                className="text-green-700 focus:text-green-700"
-                onClick={() => onToggleActive(u._id, true)}
-              >
-                <PlayCircle className="h-4 w-4 mr-2" /> Reactivate Account
+            {canManageThisUser && (
+              <>
+                <DropdownMenuSeparator />
+                {u.isActive ? (
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600"
+                    onClick={() => onPauseRequest(u)}
+                  >
+                    <PauseCircle className="h-4 w-4 mr-2" /> Pause Account
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    className="text-green-700 focus:text-green-700"
+                    onClick={() => onToggleActive(u._id, true)}
+                  >
+                    <PlayCircle className="h-4 w-4 mr-2" /> Reactivate Account
+                  </DropdownMenuItem>
+                )}
+                {viewerRole !== 'deputy_headteacher' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-red-600 focus:text-red-600"
+                      onClick={() => onDeleteRequest(u)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Delete User
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </>
+            )}
+            {!canManageThisUser && (
+              <DropdownMenuItem disabled>
+                <span className="text-muted-foreground">School admin record is protected</span>
               </DropdownMenuItem>
             )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-red-600 focus:text-red-600"
-              onClick={() => onDeleteRequest(u)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" /> Delete User
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       );
@@ -142,6 +161,9 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseReque
 
 export default function StaffPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const isDeputy = user?.role === 'deputy_headteacher';
+  const roleOptions = isDeputy ? DEPUTY_MANAGEABLE_ROLES : STAFF_ROLES;
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
@@ -268,7 +290,7 @@ export default function StaffPage() {
     <div className="space-y-6">
       <PageHeader
         title={`Staff ${staffRows.length ? `(${pagination?.total ?? staffRows.length})` : ''}`}
-        description="Manage teaching and non-teaching staff"
+        description={isDeputy ? 'Manage teacher records' : 'Manage teaching and non-teaching staff'}
       >
         <Button size="sm" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" /> Invite Staff
@@ -327,7 +349,7 @@ export default function StaffPage() {
           <SelectTrigger className="w-44"><SelectValue placeholder="All roles" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">All roles</SelectItem>
-            {STAFF_ROLES.map((r) => (
+            {roleOptions.map((r) => (
               <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>
             ))}
           </SelectContent>
@@ -344,7 +366,7 @@ export default function StaffPage() {
       </div>
 
       <DataTable
-        columns={columns(actionHandlers)}
+        columns={columns({ ...actionHandlers, viewerRole: user?.role })}
         data={staffRows}
         loading={isLoading}
         pageCount={pagination?.totalPages}
@@ -376,7 +398,7 @@ export default function StaffPage() {
                 <Select value={editValues.role} onValueChange={(v) => setEditValues((p) => ({ ...p, role: v }))}>
                   <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                   <SelectContent>
-                    {STAFF_ROLES.map((r) => (
+                    {roleOptions.map((r) => (
                       <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>
                     ))}
                   </SelectContent>
@@ -510,7 +532,7 @@ export default function StaffPage() {
                 <Select onValueChange={(v) => setValue('role', v)}>
                   <SelectTrigger><SelectValue placeholder="Select role" /></SelectTrigger>
                   <SelectContent>
-                    {STAFF_ROLES.map((r) => (
+                    {roleOptions.map((r) => (
                       <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>
                     ))}
                   </SelectContent>

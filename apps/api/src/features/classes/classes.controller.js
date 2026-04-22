@@ -256,20 +256,22 @@ export const deleteClass = asyncHandler(async (req, res) => {
  *  - studentCount is updated on both classes atomically.
  */
 export const promoteClass = asyncHandler(async (req, res) => {
-  const { targetClassId, eligibilityMode = 'all' } = req.body;
+  const { targetClassId, eligibilityMode = 'all', action = 'promote' } = req.body;
   const sourceClassId = req.params.id;
 
-  if (sourceClassId === targetClassId) {
+  if (action === 'promote' && sourceClassId === targetClassId) {
     return sendError(res, 'Source and target class cannot be the same.', 400);
   }
 
   const [source, target] = await Promise.all([
     Class.findOne({ _id: sourceClassId, schoolId: req.user.schoolId }),
-    Class.findOne({ _id: targetClassId, schoolId: req.user.schoolId }),
+    action === 'promote'
+      ? Class.findOne({ _id: targetClassId, schoolId: req.user.schoolId })
+      : Promise.resolve(null),
   ]);
 
   if (!source) return sendError(res, 'Source class not found.', 404);
-  if (!target) return sendError(res, 'Target class not found.', 404);
+  if (action === 'promote' && !target) return sendError(res, 'Target class not found.', 404);
 
   const promotionCycle = `${source.academicYear}:${source.term}`;
 
@@ -326,46 +328,63 @@ export const promoteClass = asyncHandler(async (req, res) => {
       };
     }
 
-    // Move active students who have not already been promoted in this cycle.
+    const updates =
+      action === 'graduate'
+        ? {
+          $set: {
+            status: STUDENT_STATUSES.GRADUATED,
+            lastPromotionCycle: promotionCycle,
+            lastPromotedAt: new Date(),
+          },
+        }
+        : {
+          $set: {
+            classId: targetClassId,
+            lastPromotionCycle: promotionCycle,
+            lastPromotedAt: new Date(),
+          },
+        };
+
+    // Move (or graduate) active students who have not already been processed in this cycle.
     const result = await Student.updateMany(
       promotionFilter,
-      {
-        $set: {
-          classId: targetClassId,
-          lastPromotionCycle: promotionCycle,
-          lastPromotedAt: new Date(),
-        },
-      },
+      updates,
       { session }
     );
 
     const movedCount = result.modifiedCount;
     const skippedCount = Math.max(0, eligibleCount - movedCount);
 
-    // Sync studentCount on both classes
+    // Sync class counts.
     await Class.updateOne(
       { _id: sourceClassId },
       { $inc: { studentCount: -movedCount } },
       { session }
     );
-    await Class.updateOne(
-      { _id: targetClassId },
-      { $inc: { studentCount: movedCount } },
-      { session }
-    );
+    if (action === 'promote') {
+      await Class.updateOne(
+        { _id: targetClassId },
+        { $inc: { studentCount: movedCount } },
+        { session }
+      );
+    }
 
     await session.commitTransaction();
     await bustClassCache(req.user.schoolId);
 
+    const actionLabel = action === 'graduate' ? 'graduated' : 'promoted';
+    const targetName = action === 'graduate' ? 'Graduation list' : target.name;
+
     return sendSuccess(res, {
-      message: `${movedCount} student(s) promoted from ${source.name} to ${target.name}.`,
+      message: `${movedCount} student(s) ${actionLabel} from ${source.name} to ${targetName}.`,
       movedCount,
       skippedCount,
       notEligibleCount,
       eligibilityMode,
+      action,
       promotionCycle,
       sourceClass: { _id: source._id, name: source.name },
-      targetClass: { _id: target._id, name: target.name },
+      targetClass: action === 'promote' ? { _id: target._id, name: target.name } : null,
     });
   } catch (err) {
     if (session.inTransaction()) await session.abortTransaction();

@@ -41,7 +41,7 @@ const editSchema = z.object({
 });
 
 const CONFIRM_INIT = { open: false, title: '', description: '', onConfirm: null };
-const PROMOTE_INIT = { open: false, sourceClass: null, targetClassId: '' };
+const PROMOTE_INIT = { open: false, sourceClass: null, targetClassId: '', action: 'promote' };
 
 export default function ClassesPage() {
   const queryClient = useQueryClient();
@@ -154,7 +154,13 @@ export default function ClassesPage() {
   });
 
   const { mutate: promoteClass, isPending: isPromoting } = useMutation({
-    mutationFn: ({ id, targetClassId }) => classesApi.promote(id, { targetClassId }),
+    mutationFn: ({ id, targetClassId, action }) =>
+      classesApi.promote(
+        id,
+        action === 'graduate'
+          ? { action }
+          : { action, targetClassId },
+      ),
     onSuccess: (res) => {
       const msg = res?.data?.message ?? 'Students promoted successfully';
       toast.success(msg);
@@ -279,10 +285,10 @@ export default function ClassesPage() {
                             </>
                           )}
                           <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPromoteDialog({ open: true, sourceClass: cls, targetClassId: '' });
-                            }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPromoteDialog({ open: true, sourceClass: cls, targetClassId: '', action: 'promote' });
+                              }}
                           >
                             <GraduationCap className="h-3.5 w-3.5 mr-2" /> Promote students
                           </DropdownMenuItem>
@@ -378,7 +384,7 @@ export default function ClassesPage() {
                     size="sm"
                     variant="outline"
                     className="flex-1"
-                    onClick={() => setPromoteDialog({ open: true, sourceClass: selectedClass, targetClassId: '' })}
+                    onClick={() => setPromoteDialog({ open: true, sourceClass: selectedClass, targetClassId: '', action: 'promote' })}
                   >
                     <GraduationCap className="h-3.5 w-3.5 mr-1.5" /> Promote
                   </Button>
@@ -573,7 +579,13 @@ export default function ClassesPage() {
               <Label>Target Class</Label>
               <Select
                 value={promoteDialog.targetClassId}
-                onValueChange={(v) => setPromoteDialog((d) => ({ ...d, targetClassId: v }))}
+                onValueChange={(v) =>
+                  setPromoteDialog((d) => ({
+                    ...d,
+                    targetClassId: v,
+                    action: v === '__graduate__' ? 'graduate' : 'promote',
+                  }))
+                }
               >
                 <SelectTrigger><SelectValue placeholder="Select destination class" /></SelectTrigger>
                 <SelectContent>
@@ -584,27 +596,33 @@ export default function ClassesPage() {
                         {c.name}{c.stream ? ` — ${c.stream}` : ''} ({c.term} · {c.academicYear})
                       </SelectItem>
                     ))}
+                  <SelectItem value="__graduate__">Graduation List (mark as graduated)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {promoteDialog.targetClassId && (
+            {(promoteDialog.targetClassId || promoteDialog.action === 'graduate') && (
               <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                This will move all active students. This action cannot be undone.
+                {promoteDialog.action === 'graduate'
+                  ? 'This will mark all active students as graduated. This action cannot be undone.'
+                  : 'This will move all active students. This action cannot be undone.'}
               </p>
             )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPromoteDialog(PROMOTE_INIT)}>Cancel</Button>
             <Button
-              disabled={!promoteDialog.targetClassId || isPromoting}
+              disabled={(!promoteDialog.targetClassId && promoteDialog.action !== 'graduate') || isPromoting}
               onClick={() =>
                 promoteClass({
                   id: promoteDialog.sourceClass._id,
-                  targetClassId: promoteDialog.targetClassId,
+                  targetClassId: promoteDialog.targetClassId === '__graduate__' ? undefined : promoteDialog.targetClassId,
+                  action: promoteDialog.action,
                 })
               }
             >
-              {isPromoting ? 'Promoting…' : 'Promote Students'}
+              {isPromoting
+                ? (promoteDialog.action === 'graduate' ? 'Graduating…' : 'Promoting…')
+                : (promoteDialog.action === 'graduate' ? 'Graduate Students' : 'Promote Students')}
             </Button>
           </DialogFooter>
         </DialogContent>

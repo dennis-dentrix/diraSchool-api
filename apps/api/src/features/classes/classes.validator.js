@@ -35,8 +35,18 @@ const validate = (schema) => (req, res, next) => {
 };
 
 const promoteClassSchema = z.object({
-  targetClassId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid target class ID'),
+  action: z.enum(['promote', 'graduate']).optional(),
+  targetClassId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid target class ID').optional(),
   eligibilityMode: z.enum(['all', 'cbc_recommended']).optional(),
+}).superRefine((data, ctx) => {
+  const action = data.action ?? 'promote';
+  if (action === 'promote' && !data.targetClassId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Target class is required when action is promote.',
+      path: ['targetClassId'],
+    });
+  }
 });
 
 export const validateCreateClass = validate(createClassSchema);
