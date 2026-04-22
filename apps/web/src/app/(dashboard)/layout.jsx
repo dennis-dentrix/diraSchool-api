@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { NavigationProgress } from '@/components/layout/navigation-progress';
-import { Breadcrumbs } from '@/components/layout/breadcrumbs';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/use-auth';
 import { settingsApi } from '@/lib/api';
@@ -185,10 +184,6 @@ export default function DashboardLayout({ children }) {
           schoolDayStatus={schoolDayStatus}
         />
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <Breadcrumbs user={user} />
-          {schoolName && user?.role !== 'superadmin' && (
-            <p className="text-xs text-muted-foreground mb-3">{schoolName}</p>
-          )}
           {children}
         </main>
       </div>
