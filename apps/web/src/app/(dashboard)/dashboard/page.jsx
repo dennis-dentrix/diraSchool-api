@@ -35,10 +35,10 @@ function DashboardShell({ title, subtitle, rightMeta, children }) {
       <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40">
         <CardContent className="p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">{title}</h1>
-              <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
-            </div>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">{title}</h1>
+            {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
+          </div>
             <div className="text-sm text-slate-500 sm:text-right">{rightMeta}</div>
           </div>
         </CardContent>
@@ -88,24 +88,24 @@ function StatCard({
   );
 }
 
-// function SectionCard({ title, icon: Icon, action, children }) {
-//   return (
-//     <Card className="border-border/70 shadow-sm">
-//       <CardHeader className="pb-3">
-//         <div className="flex items-center justify-between gap-3">
-//           <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
-//             <span className="rounded-md bg-slate-100 p-1.5">
-//               <Icon className="h-4 w-4 text-slate-700" />
-//             </span>
-//             {title}
-//           </CardTitle>
-//           {action}
-//         </div>
-//       </CardHeader>
-//       <CardContent>{children}</CardContent>
-//     </Card>
-//   );
-// }
+function SectionCard({ title, icon: Icon, action, children }) {
+  return (
+    <Card className="border-border/70 shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
+            <span className="rounded-md bg-slate-100 p-1.5">
+              <Icon className="h-4 w-4 text-slate-700" />
+            </span>
+            {title}
+          </CardTitle>
+          {action}
+        </div>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
 
 function PrincipalDashboard({ user, summary, isLoading }) {
   const router = useRouter();
@@ -161,7 +161,7 @@ function PrincipalDashboard({ user, summary, isLoading }) {
 
   return (
     <DashboardShell
-      title={`${user?.firstName || 'Admin'}, welcome back`}
+      title={`Welcome, ${user?.firstName || 'Admin'}`}
       rightMeta={new Date().toLocaleDateString('en-KE', { weekday: 'long', month: 'short', day: 'numeric' })}
     >
       {alerts.length > 0 ? (
@@ -312,8 +312,8 @@ function FinanceDashboard({ user, summary, isLoading }) {
 
   return (
     <DashboardShell
-      title="Finance dashboard"
-      subtitle={`${user?.firstName || ''} · ${summary?.school?.name || ''}`}
+      title={`Welcome, ${user?.firstName || 'Finance'}`}
+      subtitle="Finance overview"
       rightMeta="Collections and receipting"
     >
       {pendingReceipts > 0 ? (
