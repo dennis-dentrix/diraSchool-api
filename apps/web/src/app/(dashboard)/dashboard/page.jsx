@@ -32,7 +32,7 @@ const FINANCE_ROLES = [...ADMIN_ROLES, 'accountant', 'secretary'];
 function DashboardShell({ title, subtitle, rightMeta, children }) {
   return (
     <div className="space-y-6">
-      <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40">
+      {/* <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40">
         <CardContent className="p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -42,7 +42,7 @@ function DashboardShell({ title, subtitle, rightMeta, children }) {
             <div className="text-sm text-slate-500 sm:text-right">{rightMeta}</div>
           </div>
         </CardContent>
-      </Card>
+      </Card> */}
       {children}
     </div>
   );
