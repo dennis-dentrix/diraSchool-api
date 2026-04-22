@@ -88,24 +88,24 @@ function StatCard({
   );
 }
 
-function SectionCard({ title, icon: Icon, action, children }) {
-  return (
-    <Card className="border-border/70 shadow-sm">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
-            <span className="rounded-md bg-slate-100 p-1.5">
-              <Icon className="h-4 w-4 text-slate-700" />
-            </span>
-            {title}
-          </CardTitle>
-          {action}
-        </div>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
+// function SectionCard({ title, icon: Icon, action, children }) {
+//   return (
+//     <Card className="border-border/70 shadow-sm">
+//       <CardHeader className="pb-3">
+//         <div className="flex items-center justify-between gap-3">
+//           <CardTitle className="text-base font-semibold text-slate-900 flex items-center gap-2">
+//             <span className="rounded-md bg-slate-100 p-1.5">
+//               <Icon className="h-4 w-4 text-slate-700" />
+//             </span>
+//             {title}
+//           </CardTitle>
+//           {action}
+//         </div>
+//       </CardHeader>
+//       <CardContent>{children}</CardContent>
+//     </Card>
+//   );
+// }
 
 function PrincipalDashboard({ user, summary, isLoading }) {
   const router = useRouter();
@@ -162,7 +162,6 @@ function PrincipalDashboard({ user, summary, isLoading }) {
   return (
     <DashboardShell
       title={`${user?.firstName || 'Admin'}, welcome back`}
-      subtitle={summary?.school?.name || 'School Dashboard'}
       rightMeta={new Date().toLocaleDateString('en-KE', { weekday: 'long', month: 'short', day: 'numeric' })}
     >
       {alerts.length > 0 ? (
