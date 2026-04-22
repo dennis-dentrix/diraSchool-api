@@ -124,9 +124,9 @@ export default function ReportCardDetailPage() {
 
   const { mutate: regenerate, isPending: regenerating } = useMutation({
     mutationFn: () => reportCardsApi.generate({
-      studentId:    typeof rc?.studentId === 'object' ? rc.studentId._id : rc?.studentId,
+      studentId: typeof rc?.studentId === 'object' ? rc.studentId._id : rc?.studentId,
       academicYear: rc?.academicYear,
-      term:         rc?.term,
+      term: rc?.term,
     }),
     onSuccess: () => {
       toast.success('Report card regenerated with latest results');
@@ -227,7 +227,9 @@ export default function ReportCardDetailPage() {
           >
             <Printer className="h-4 w-4 mr-1" /> Print
           </Button>
-          <Button
+
+          {/* PDF DOWNLOAD AND REGENERATION */}
+          {/* <Button
             variant="outline"
             size="sm"
             onClick={handleDownloadPdf}
@@ -246,7 +248,8 @@ export default function ReportCardDetailPage() {
               <RefreshCw className={`h-4 w-4 mr-1 ${regenerating ? 'animate-spin' : ''}`} />
               {regenerating ? 'Regenerating…' : 'Regenerate'}
             </Button>
-          )}
+          )} */}
+
           {isDraft && (
             <Button
               size="sm"
