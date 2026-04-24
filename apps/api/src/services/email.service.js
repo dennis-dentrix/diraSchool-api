@@ -1,18 +1,21 @@
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { env } from '../config/env.js';
 import logger from '../config/logger.js';
 import EmailEvent from '../features/email/EmailEvent.model.js';
 
 const FROM = env.EMAIL_FROM ?? 'Diraschool <noreply@contact.diraschool.com>';
 
-let _transport = null;
+let _zeptoTransport = null;
+let _resend = null;
 
-const getTransport = () => {
-  if (!_transport) {
-    if (!env.ZEPTOMAIL_API_KEY) {
-      throw new Error('[Email] ZEPTOMAIL_API_KEY is not set.');
-    }
-    _transport = nodemailer.createTransport({
+const isZeptoConfigured = () => Boolean(env.ZEPTOMAIL_API_KEY);
+const isResendConfigured = () => Boolean(env.RESEND_API_KEY);
+
+const getZeptoTransport = () => {
+  if (!_zeptoTransport) {
+    if (!isZeptoConfigured()) throw new Error('[Email] ZEPTOMAIL_API_KEY is not set.');
+    _zeptoTransport = nodemailer.createTransport({
       host: env.ZEPTOMAIL_SERVER,
       port: 587,
       secure: false,
@@ -22,13 +25,27 @@ const getTransport = () => {
       },
     });
   }
-  return _transport;
+  return _zeptoTransport;
 };
+
+const getResendClient = () => {
+  if (!_resend) {
+    if (!isResendConfigured()) throw new Error('[Email] RESEND_API_KEY is not set.');
+    _resend = new Resend(env.RESEND_API_KEY);
+  }
+  return _resend;
+};
+
+const normalizeError = (err) => ({
+  message: err?.message ?? 'Unknown email delivery error',
+  code: err?.code ? String(err.code) : undefined,
+});
 
 const persistEmailEvent = async ({
   to,
   subject,
   template,
+  provider,
   status,
   providerStatus,
   providerMessageId,
@@ -36,6 +53,8 @@ const persistEmailEvent = async ({
   rejected = [],
   errorMessage,
   errorCode,
+  fallbackUsed = false,
+  attemptOrder = 1,
   meta = {},
 }) => {
   try {
@@ -43,7 +62,7 @@ const persistEmailEvent = async ({
       to,
       subject,
       template,
-      provider: 'zeptomail',
+      provider,
       status,
       providerStatus,
       providerMessageId,
@@ -51,6 +70,8 @@ const persistEmailEvent = async ({
       rejected,
       errorMessage,
       errorCode,
+      fallbackUsed,
+      attemptOrder,
       schoolId: meta.schoolId ?? undefined,
       userId: meta.userId ?? undefined,
       deliveredAt: status === 'delivered' ? new Date() : undefined,
@@ -58,54 +79,121 @@ const persistEmailEvent = async ({
       meta,
     });
   } catch (err) {
-    logger.error('[Email] Failed to persist EmailEvent', { to, template, err: err.message });
+    logger.error('[Email] Failed to persist EmailEvent', { to, template, provider, err: err.message });
   }
+};
+
+const sendViaZepto = async ({ to, subject, html }) => {
+  const info = await getZeptoTransport().sendMail({ from: FROM, to, subject, html });
+  return {
+    provider: 'zeptomail',
+    providerMessageId: info?.messageId,
+    accepted: Array.isArray(info?.accepted) ? info.accepted : [],
+    rejected: Array.isArray(info?.rejected) ? info.rejected : [],
+    providerStatus: info?.response ?? 'accepted',
+  };
+};
+
+const sendViaResend = async ({ to, subject, html }) => {
+  const resend = getResendClient();
+  const { data, error } = await resend.emails.send({ from: FROM, to: [to], subject, html });
+
+  if (error) {
+    const err = new Error(error.message || 'Resend API error');
+    err.code = error.name || error.statusCode || 'RESEND_ERROR';
+    throw err;
+  }
+
+  return {
+    provider: 'resend',
+    providerMessageId: data?.id,
+    accepted: [to],
+    rejected: [],
+    providerStatus: data?.id ? 'accepted' : 'unknown',
+  };
+};
+
+// ZeptoMail is always primary; Resend is fallback when configured.
+const getProviderOrder = () => {
+  const providers = ['zeptomail'];
+  if (isResendConfigured()) providers.push('resend');
+  return providers;
 };
 
 const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
-  try {
-    const info = await getTransport().sendMail({ from: FROM, to, subject, html });
+  const providers = getProviderOrder().filter((p) =>
+    p === 'zeptomail' ? isZeptoConfigured() : isResendConfigured()
+  );
 
-    await persistEmailEvent({
-      to,
-      subject,
-      template,
-      status: 'sent',
-      providerStatus: info?.response ?? 'accepted',
-      providerMessageId: info?.messageId,
-      accepted: Array.isArray(info?.accepted) ? info.accepted : [to],
-      rejected: Array.isArray(info?.rejected) ? info.rejected : [],
-      meta,
-    });
+  if (providers.length === 0) {
+    throw new Error('[Email] No provider configured. Set ZEPTOMAIL_API_KEY.');
+  }
 
-    logger.info('[Email] Sent email', { to, template, providerMessageId: info?.messageId });
+  const attempts = [];
 
-    return { providerMessageId: info?.messageId };
-  } catch (err) {
-    await persistEmailEvent({
-      to,
-      subject,
-      template,
-      status: 'failed',
-      errorMessage: err?.message ?? 'Unknown delivery error',
-      errorCode: err?.code ? String(err.code) : undefined,
-      meta,
-    });
+  for (let i = 0; i < providers.length; i += 1) {
+    const provider = providers[i];
+    const fallbackUsed = i > 0;
+    try {
+      const result =
+        provider === 'zeptomail'
+          ? await sendViaZepto({ to, subject, html })
+          : await sendViaResend({ to, subject, html });
 
-    logger.warn('[Email] Email provider failed', { to, template, err: err?.message });
+      await persistEmailEvent({
+        to, subject, template, ...result,
+        status: 'sent', fallbackUsed, attemptOrder: i + 1, meta,
+      });
 
+      logger.info('[Email] Sent email', {
+        to, template, provider, fallbackUsed,
+        providerMessageId: result.providerMessageId,
+      });
+
+      return result;
+    } catch (err) {
+      const normalized = normalizeError(err);
+      attempts.push({ provider, ...normalized });
+      await persistEmailEvent({
+        to, subject, template, provider,
+        status: 'failed',
+        errorMessage: normalized.message,
+        errorCode: normalized.code,
+        fallbackUsed, attemptOrder: i + 1, meta,
+      });
+      logger.warn('[Email] Email provider failed', {
+        to, template, provider, fallbackUsed, err: normalized.message,
+      });
+    }
+  }
+
+  const failureSummary = attempts.map((a) => `${a.provider}: ${a.message}`).join(' | ');
+  throw new Error(`[Email] All providers failed. ${failureSummary}`);
+};
+
+export const refreshResendDeliveryStatus = async (providerMessageId) => {
+  if (!providerMessageId) throw new Error('Missing providerMessageId.');
+  const resend = getResendClient();
+  const { data, error } = await resend.emails.get(providerMessageId);
+
+  if (error) {
+    const err = new Error(error.message || 'Resend status lookup failed');
+    err.code = error.name || error.statusCode || 'RESEND_STATUS_ERROR';
     throw err;
   }
+
+  const rawStatus = String(data?.last_event || data?.status || 'unknown').toLowerCase();
+  let normalizedStatus = 'sent';
+  if (rawStatus.includes('deliver')) normalizedStatus = 'delivered';
+  if (rawStatus.includes('bounce') || rawStatus.includes('complain') || rawStatus.includes('fail')) {
+    normalizedStatus = 'failed';
+  }
+
+  return { providerStatus: rawStatus, normalizedStatus, raw: data };
 };
 
 export const sendVerificationEmail = ({
-  to,
-  firstName,
-  schoolName,
-  code,
-  verifyUrl,
-  expiresInMinutes = 30,
-  meta = {},
+  to, firstName, schoolName, code, verifyUrl, expiresInMinutes = 30, meta = {},
 }) =>
   sendEmail({
     to,
@@ -116,13 +204,7 @@ export const sendVerificationEmail = ({
   });
 
 export const sendInviteEmail = ({
-  to,
-  firstName,
-  schoolName,
-  inviteUrl,
-  childName,
-  expiresInDays = 7,
-  meta = {},
+  to, firstName, schoolName, inviteUrl, childName, expiresInDays = 7, meta = {},
 }) =>
   sendEmail({
     to,
@@ -133,12 +215,7 @@ export const sendInviteEmail = ({
   });
 
 export const sendParentEnrollmentEmail = ({
-  to,
-  firstName,
-  schoolName,
-  childName,
-  isAdditionalChild = false,
-  meta = {},
+  to, firstName, schoolName, childName, isAdditionalChild = false, meta = {},
 }) =>
   sendEmail({
     to,
@@ -149,12 +226,7 @@ export const sendParentEnrollmentEmail = ({
   });
 
 export const sendNewSchoolNotification = ({
-  schoolName,
-  schoolEmail,
-  schoolPhone,
-  county,
-  adminName,
-  meta = {},
+  schoolName, schoolEmail, schoolPhone, county, adminName, meta = {},
 }) =>
   sendEmail({
     to: 'diraschadmin@diraschool.com',
@@ -165,11 +237,7 @@ export const sendNewSchoolNotification = ({
   });
 
 export const sendPasswordResetEmail = ({
-  to,
-  firstName,
-  resetUrl,
-  expiresInHours = 1,
-  meta = {},
+  to, firstName, resetUrl, expiresInHours = 1, meta = {},
 }) =>
   sendEmail({
     to,

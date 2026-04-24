@@ -1,7 +1,11 @@
 import express from 'express';
 import { protect, blockIfMustChangePassword, authorize } from '../../middleware/auth.js';
 import { ROLES } from '../../constants/index.js';
-import { listEmailEvents, getEmailEvent } from './email.controller.js';
+import {
+  listEmailEvents,
+  getEmailEvent,
+  refreshEmailDeliveryStatus,
+} from './email.controller.js';
 
 const router = express.Router();
 
@@ -17,5 +21,6 @@ router.use(protect, blockIfMustChangePassword, canReadEmailEvents);
 
 router.get('/events', listEmailEvents);
 router.get('/events/:id', getEmailEvent);
+router.post('/events/:id/refresh', refreshEmailDeliveryStatus);
 
 export default router;

@@ -9,6 +9,9 @@ const allowedOrigins = [
   // Production — browsers always include scheme, so both www and bare domain needed
   'https://diraschool.com',
   'https://www.diraschool.com',
+  // Temporary: direct IP access before DNS propagation
+  'https://159.89.230.170',
+  'https://159.89.230.170:443',
 ].filter(Boolean);
 
 export const corsOptions = {

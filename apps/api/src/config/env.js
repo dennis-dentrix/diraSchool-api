@@ -32,8 +32,10 @@ export const validateEnv = () => {
     process.exit(1);
   }
 
-  if (!process.env.ZEPTOMAIL_API_KEY) {
-    writeStderr('\n[ENV ERROR] ZEPTOMAIL_API_KEY is required for email delivery.\n');
+  if (!process.env.ZEPTOMAIL_API_KEY && !process.env.RESEND_API_KEY) {
+    writeStderr(
+      '\n[ENV ERROR] Configure at least one email provider: ZEPTOMAIL_API_KEY or RESEND_API_KEY.\n'
+    );
     process.exit(1);
   }
 
@@ -99,10 +101,12 @@ export const env = {
   AT_USERNAME: process.env.AT_USERNAME,
   AT_API_KEY: process.env.AT_API_KEY,
   AT_SENDER_ID: process.env.AT_SENDER_ID || 'SCHOOL',
+  // ZeptoMail is primary; Resend is automatic fallback when RESEND_API_KEY is set.
   EMAIL_FROM: process.env.EMAIL_FROM,
   ZEPTOMAIL_SERVER: process.env.ZEPTOMAIL_SERVER || 'smtp.zeptomail.com',
   ZEPTOMAIL_USERNAME: process.env.ZEPTOMAIL_USERNAME || 'emailapikey',
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
   // Cloudinary — optional, PDF uploads skipped when not set
   CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
   CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,

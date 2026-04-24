@@ -22,7 +22,7 @@ const emailEventSchema = new mongoose.Schema(
     },
     provider: {
       type: String,
-      enum: ['zeptomail'],
+      enum: ['zeptomail', 'resend'],
       required: true,
       index: true,
     },
