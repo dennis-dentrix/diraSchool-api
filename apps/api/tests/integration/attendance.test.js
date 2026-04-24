@@ -214,7 +214,7 @@ describe('PATCH /api/v1/attendance/registers/:id and submit', () => {
 
     const createRes = await agent.post('/api/v1/attendance/registers').send({
       classId: cls._id,
-      date: '2025-05-10',
+      date: '2025-05-12',
     });
     const registerId = createRes.body.register._id;
 
@@ -233,12 +233,12 @@ describe('GET /api/v1/attendance/registers and /:id', () => {
 
     const draftRes = await agent.post('/api/v1/attendance/registers').send({
       classId: cls._id,
-      date: '2025-05-11',
+      date: '2025-05-13',
     });
 
     const submittedRes = await agent.post('/api/v1/attendance/registers').send({
       classId: cls._id,
-      date: '2025-05-12',
+      date: '2025-05-14',
       entries: [{ studentId: student._id, status: 'present' }],
     });
     await agent.post(`/api/v1/attendance/registers/${submittedRes.body.register._id}/submit`);

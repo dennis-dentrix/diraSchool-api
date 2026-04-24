@@ -22,7 +22,7 @@ const updateSubjectSchema = z.object({
   department: z.string().trim().min(1).nullable().optional(),
   teacherIds: z.array(z.string().regex(objectIdRegex, 'Invalid teacher ID')).optional(),
   hodId:      z.string().regex(objectIdRegex, 'Invalid HOD ID').nullable().optional(),
-});
+}).strict();
 
 const assignTeachersSchema = z.object({
   // Full replacement of teacher list — send [] to clear all teachers

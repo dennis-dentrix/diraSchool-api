@@ -1,25 +1,18 @@
 import nodemailer from 'nodemailer';
-import { Resend } from 'resend';
 import { env } from '../config/env.js';
 import logger from '../config/logger.js';
 import EmailEvent from '../features/email/EmailEvent.model.js';
 
 const FROM = env.EMAIL_FROM ?? 'Diraschool <noreply@contact.diraschool.com>';
 
-let _zeptoTransport = null;
-let _resend = null;
+let _transport = null;
 
-const isZeptoConfigured = () => Boolean(env.ZEPTOMAIL_API_KEY);
-const isResendConfigured = () => Boolean(env.RESEND_API_KEY);
-const isProviderConfigured = (provider) =>
-  provider === 'zeptomail' ? isZeptoConfigured() : isResendConfigured();
-
-const getZeptoTransport = () => {
-  if (!_zeptoTransport) {
-    if (!isZeptoConfigured()) {
+const getTransport = () => {
+  if (!_transport) {
+    if (!env.ZEPTOMAIL_API_KEY) {
       throw new Error('[Email] ZEPTOMAIL_API_KEY is not set.');
     }
-    _zeptoTransport = nodemailer.createTransport({
+    _transport = nodemailer.createTransport({
       host: env.ZEPTOMAIL_SERVER,
       port: 587,
       secure: false,
@@ -29,29 +22,13 @@ const getZeptoTransport = () => {
       },
     });
   }
-  return _zeptoTransport;
+  return _transport;
 };
-
-const getResendClient = () => {
-  if (!_resend) {
-    if (!isResendConfigured()) {
-      throw new Error('[Email] RESEND_API_KEY is not set.');
-    }
-    _resend = new Resend(env.RESEND_API_KEY);
-  }
-  return _resend;
-};
-
-const normalizeError = (err) => ({
-  message: err?.message ?? 'Unknown email delivery error',
-  code: err?.code ? String(err.code) : undefined,
-});
 
 const persistEmailEvent = async ({
   to,
   subject,
   template,
-  provider,
   status,
   providerStatus,
   providerMessageId,
@@ -59,8 +36,6 @@ const persistEmailEvent = async ({
   rejected = [],
   errorMessage,
   errorCode,
-  fallbackUsed = false,
-  attemptOrder = 1,
   meta = {},
 }) => {
   try {
@@ -68,7 +43,7 @@ const persistEmailEvent = async ({
       to,
       subject,
       template,
-      provider,
+      provider: 'zeptomail',
       status,
       providerStatus,
       providerMessageId,
@@ -76,8 +51,6 @@ const persistEmailEvent = async ({
       rejected,
       errorMessage,
       errorCode,
-      fallbackUsed,
-      attemptOrder,
       schoolId: meta.schoolId ?? undefined,
       userId: meta.userId ?? undefined,
       deliveredAt: status === 'delivered' ? new Date() : undefined,
@@ -85,161 +58,44 @@ const persistEmailEvent = async ({
       meta,
     });
   } catch (err) {
-    logger.error('[Email] Failed to persist EmailEvent', {
-      to,
-      template,
-      provider,
-      err: err.message,
-    });
+    logger.error('[Email] Failed to persist EmailEvent', { to, template, err: err.message });
   }
-};
-
-const sendViaZepto = async ({ to, subject, html }) => {
-  const info = await getZeptoTransport().sendMail({ from: FROM, to, subject, html });
-  return {
-    provider: 'zeptomail',
-    providerMessageId: info?.messageId,
-    accepted: Array.isArray(info?.accepted) ? info.accepted : [],
-    rejected: Array.isArray(info?.rejected) ? info.rejected : [],
-    providerStatus: info?.response ?? 'accepted',
-  };
-};
-
-const sendViaResend = async ({ to, subject, html }) => {
-  const resend = getResendClient();
-  const { data, error } = await resend.emails.send({
-    from: FROM,
-    to: [to],
-    subject,
-    html,
-  });
-
-  if (error) {
-    const err = new Error(error.message || 'Resend API error');
-    err.code = error.name || error.statusCode || 'RESEND_ERROR';
-    throw err;
-  }
-
-  return {
-    provider: 'resend',
-    providerMessageId: data?.id,
-    accepted: [to],
-    rejected: [],
-    providerStatus: data?.id ? 'accepted' : 'unknown',
-  };
-};
-
-const getProviderOrder = () => {
-  const primary = env.EMAIL_PRIMARY_PROVIDER === 'resend' ? 'resend' : 'zeptomail';
-  if (!env.EMAIL_FAILOVER_ENABLED) return [primary];
-  return primary === 'zeptomail' ? ['zeptomail', 'resend'] : ['resend', 'zeptomail'];
 };
 
 const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
-  const attempts = [];
-  const providers = getProviderOrder().filter(isProviderConfigured);
+  try {
+    const info = await getTransport().sendMail({ from: FROM, to, subject, html });
 
-  if (providers.length === 0) {
-    const configured = [];
-    if (isZeptoConfigured()) configured.push('zeptomail');
-    if (isResendConfigured()) configured.push('resend');
-    const configuredText = configured.length > 0 ? configured.join(', ') : 'none';
-    throw new Error(
-      `[Email] No eligible providers for current config. primary=${env.EMAIL_PRIMARY_PROVIDER}, failover=${env.EMAIL_FAILOVER_ENABLED}, configured=${configuredText}.`
-    );
-  }
+    await persistEmailEvent({
+      to,
+      subject,
+      template,
+      status: 'sent',
+      providerStatus: info?.response ?? 'accepted',
+      providerMessageId: info?.messageId,
+      accepted: Array.isArray(info?.accepted) ? info.accepted : [to],
+      rejected: Array.isArray(info?.rejected) ? info.rejected : [],
+      meta,
+    });
 
-  for (let i = 0; i < providers.length; i += 1) {
-    const provider = providers[i];
-    const fallbackUsed = i > 0;
-    try {
-      const result =
-        provider === 'zeptomail'
-          ? await sendViaZepto({ to, subject, html })
-          : await sendViaResend({ to, subject, html });
+    logger.info('[Email] Sent email', { to, template, providerMessageId: info?.messageId });
 
-      await persistEmailEvent({
-        to,
-        subject,
-        template,
-        ...result,
-        status: 'sent',
-        fallbackUsed,
-        attemptOrder: i + 1,
-        meta,
-      });
+    return { providerMessageId: info?.messageId };
+  } catch (err) {
+    await persistEmailEvent({
+      to,
+      subject,
+      template,
+      status: 'failed',
+      errorMessage: err?.message ?? 'Unknown delivery error',
+      errorCode: err?.code ? String(err.code) : undefined,
+      meta,
+    });
 
-      logger.info('[Email] Sent email', {
-        to,
-        template,
-        provider,
-        fallbackUsed,
-        providerOrder: getProviderOrder(),
-        providerMessageId: result.providerMessageId,
-      });
+    logger.warn('[Email] Email provider failed', { to, template, err: err?.message });
 
-      return result;
-    } catch (err) {
-      const normalized = normalizeError(err);
-      attempts.push({ provider, ...normalized });
-      await persistEmailEvent({
-        to,
-        subject,
-        template,
-        provider,
-        status: 'failed',
-        errorMessage: normalized.message,
-        errorCode: normalized.code,
-        fallbackUsed,
-        attemptOrder: i + 1,
-        meta,
-      });
-      logger.warn('[Email] Email provider failed', {
-        to,
-        template,
-        provider,
-        fallbackUsed,
-        err: normalized.message,
-      });
-    }
-  }
-
-  if (!isZeptoConfigured() && !isResendConfigured()) {
-    throw new Error('[Email] No provider configured. Set ZEPTOMAIL_API_KEY or RESEND_API_KEY.');
-  }
-
-  const failureSummary = attempts.map((a) => `${a.provider}: ${a.message}`).join(' | ');
-
-  throw new Error(`[Email] All providers failed. ${failureSummary}`);
-};
-
-export const refreshResendDeliveryStatus = async (providerMessageId) => {
-  if (!providerMessageId) throw new Error('Missing providerMessageId.');
-  const resend = getResendClient();
-  const { data, error } = await resend.emails.get(providerMessageId);
-
-  if (error) {
-    const err = new Error(error.message || 'Resend status lookup failed');
-    err.code = error.name || error.statusCode || 'RESEND_STATUS_ERROR';
     throw err;
   }
-
-  const rawStatus = String(data?.last_event || data?.status || 'unknown').toLowerCase();
-  let normalizedStatus = 'sent';
-  if (rawStatus.includes('deliver')) normalizedStatus = 'delivered';
-  if (
-    rawStatus.includes('bounce') ||
-    rawStatus.includes('complain') ||
-    rawStatus.includes('fail')
-  ) {
-    normalizedStatus = 'failed';
-  }
-
-  return {
-    providerStatus: rawStatus,
-    normalizedStatus,
-    raw: data,
-  };
 };
 
 export const sendVerificationEmail = ({

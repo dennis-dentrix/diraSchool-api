@@ -3,7 +3,6 @@ import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { ROLES } from '../../constants/index.js';
 import EmailEvent from './EmailEvent.model.js';
-import { refreshResendDeliveryStatus } from '../../services/email.service.js';
 
 export const listEmailEvents = asyncHandler(async (req, res) => {
   const filter = {};
@@ -42,50 +41,4 @@ export const getEmailEvent = asyncHandler(async (req, res) => {
   }
 
   return sendSuccess(res, { event });
-});
-
-export const refreshEmailDeliveryStatus = asyncHandler(async (req, res) => {
-  const event = await EmailEvent.findById(req.params.id);
-  if (!event) return sendError(res, 'Email event not found.', 404);
-
-  if (req.user.role !== ROLES.SUPERADMIN) {
-    if (!event.schoolId || String(event.schoolId) !== String(req.user.schoolId)) {
-      return sendError(res, 'Email event not found.', 404);
-    }
-  }
-
-  if (event.provider !== 'resend') {
-    return sendError(
-      res,
-      'Delivery refresh is currently supported for Resend events only.',
-      400
-    );
-  }
-
-  if (!event.providerMessageId) {
-    return sendError(res, 'Cannot refresh: missing providerMessageId.', 400);
-  }
-
-  const status = await refreshResendDeliveryStatus(event.providerMessageId);
-  event.providerStatus = status.providerStatus;
-  event.lastCheckedAt = new Date();
-
-  if (status.normalizedStatus === 'delivered') {
-    event.status = 'delivered';
-    event.deliveredAt = new Date();
-    event.errorMessage = undefined;
-    event.errorCode = undefined;
-  } else if (status.normalizedStatus === 'failed') {
-    event.status = 'failed';
-  } else if (event.status !== 'delivered') {
-    event.status = 'sent';
-  }
-
-  await event.save({ validateBeforeSave: false });
-
-  return sendSuccess(res, {
-    event: event.toObject(),
-    providerStatus: status.providerStatus,
-    normalizedStatus: status.normalizedStatus,
-  });
 });
