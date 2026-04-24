@@ -5,6 +5,7 @@ import {
   login,
   logout,
   getMe,
+  updateMe,
   changePassword,
   forgotPassword,
   resetPassword,
@@ -22,6 +23,7 @@ import {
   validateAcceptInvite,
   validateResendVerification,
   validateVerifyEmail,
+  validateUpdateProfile,
 } from './auth.validator.js';
 import { protect, blockIfMustChangePassword } from '../../middleware/auth.js';
 
@@ -53,6 +55,7 @@ router.post('/resend-verification', authLimiter, validateResendVerification, res
 // ── Protected routes ──────────────────────────────────────────────────────────
 router.post('/logout', protect, logout);
 router.get('/me', protect, blockIfMustChangePassword, getMe);
+router.patch('/me', protect, blockIfMustChangePassword, validateUpdateProfile, updateMe);
 
 // Change-password is accessible even when mustChangePassword = true (that's the point)
 router.post('/change-password', protect, validateChangePassword, changePassword);

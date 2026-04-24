@@ -8,13 +8,13 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "worker": "node src/jobs/worker.entry.js",
-    "verify:cloudinary": "node scripts/verify-cloudinary.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src/",
     "seed": "node scripts/seed.js",
-    "seed:reset": "node scripts/seed.js --reset"
+    "seed:reset": "node scripts/seed.js --reset",
+    "verify:cloudinary": "node scripts/verify-cloudinary.js"
   },
   "dependencies": {
     "@diraschool/shared": "1.0.0",

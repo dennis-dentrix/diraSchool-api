@@ -22,7 +22,7 @@ const createFeeStructureSchema = z.object({
 const updateFeeStructureSchema = z.object({
   items: z.array(feeItemSchema).min(1, 'At least one fee item is required').optional(),
   notes: z.string().trim().optional(),
-});
+}).strict();
 
 const listFeeStructuresSchema = z.object({
   classId: z.string().regex(objectIdRegex).optional(),

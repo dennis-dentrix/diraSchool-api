@@ -93,11 +93,6 @@ const studentSchema = new mongoose.Schema(
     photo: {
       type: String, // URL / path — populated later
     },
-    // Transport route assigned to this student (optional)
-    routeId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'TransportRoute',
-    },
     transportAssignment: {
       routeId: {
         type: mongoose.Schema.Types.ObjectId,

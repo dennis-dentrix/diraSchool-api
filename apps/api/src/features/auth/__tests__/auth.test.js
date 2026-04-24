@@ -28,6 +28,7 @@ vi.mock('../../../services/email.service.js', () => ({
   sendVerificationEmail: vi.fn().mockResolvedValue({}),
   sendPasswordResetEmail: vi.fn().mockResolvedValue({}),
   sendInviteEmail: vi.fn().mockResolvedValue({}),
+  sendNewSchoolNotification: vi.fn().mockResolvedValue({}),
 }));
 
 const BASE = '/api/v1/auth';

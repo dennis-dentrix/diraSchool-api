@@ -49,6 +49,8 @@ const auditLogSchema = new mongoose.Schema(
 auditLogSchema.index({ schoolId: 1, createdAt: -1 });
 // Support filtering by resource type + id
 auditLogSchema.index({ schoolId: 1, resource: 1, resourceId: 1 });
+// Auto-delete entries older than 1 year
+auditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 365 * 24 * 60 * 60 });
 
 export default mongoose.models.AuditLog ||
   mongoose.model('AuditLog', auditLogSchema);

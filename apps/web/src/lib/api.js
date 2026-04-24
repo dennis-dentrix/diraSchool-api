@@ -86,6 +86,7 @@ export const authApi = {
   resendVerification: (email) => api.post('/auth/resend-verification', { email }),
   acceptInvite: (token, data) => api.post(`/auth/accept-invite/${token}`, data),
   changePassword: (data) => api.post('/auth/change-password', data),
+  updateMe: (data) => api.patch('/auth/me', data),
 };
 
 // ─── Users / Staff ────────────────────────────────────────────────────────────

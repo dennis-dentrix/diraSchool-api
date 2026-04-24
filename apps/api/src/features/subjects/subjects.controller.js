@@ -4,7 +4,17 @@ import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
-import { LEVEL_CATEGORIES, ROLES } from '../../constants/index.js';
+import { LEVEL_CATEGORIES, ROLES, CACHE_TTL } from '../../constants/index.js';
+import { getRedis } from '../../config/redis.js';
+
+const bustSubjectCache = async (schoolId) => {
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    const keys = await redis.keys(`school:subjects:${schoolId}:*`);
+    if (keys.length) await redis.del(...keys);
+  } catch { /* non-fatal */ }
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -102,6 +112,7 @@ export const createSubject = asyncHandler(async (req, res) => {
     hodId:      hodResult.id,
   });
 
+  await bustSubjectCache(req.user.schoolId);
   const populated = await populateSubject(Subject.findById(subject._id));
 
   return sendSuccess(res, { subject: populated }, 201);
@@ -116,9 +127,25 @@ export const listSubjects = asyncHandler(async (req, res) => {
   if (req.query.department)           filter.department = req.query.department;
   if (req.query.isActive !== undefined) filter.isActive = req.query.isActive === 'true';
 
+  const isTeacherRole = [ROLES.TEACHER, ROLES.DEPARTMENT_HEAD].includes(req.user.role);
+
   // Teachers see only their own subjects unless ?all=true is requested (for self-assignment browsing)
-  if ([ROLES.TEACHER, ROLES.DEPARTMENT_HEAD].includes(req.user.role) && req.query.all !== 'true') {
+  if (isTeacherRole && req.query.all !== 'true') {
     filter.teacherIds = req.user._id;
+  }
+
+  // Cache unfiltered admin queries (most frequent — sidebar, form selects)
+  const isSimpleQuery = !isTeacherRole && !req.query.classId && !req.query.department &&
+    req.query.isActive === undefined && (!req.query.page || req.query.page === '1') && !req.query.limit;
+
+  const cacheKey = `school:subjects:${req.user.schoolId}:all`;
+  const redis = getRedis();
+
+  if (isSimpleQuery && redis) {
+    try {
+      const cached = await redis.get(cacheKey);
+      if (cached) return sendSuccess(res, JSON.parse(cached));
+    } catch { /* cache miss */ }
   }
 
   const total = await Subject.countDocuments(filter);
@@ -128,7 +155,15 @@ export const listSubjects = asyncHandler(async (req, res) => {
     Subject.find(filter).sort({ name: 1 }).skip(skip).limit(limit)
   );
 
-  return sendSuccess(res, { subjects, meta });
+  const payload = { subjects, meta };
+
+  if (isSimpleQuery && redis) {
+    try {
+      await redis.set(cacheKey, JSON.stringify(payload), 'EX', CACHE_TTL.SUBJECT_LIST);
+    } catch { /* non-fatal */ }
+  }
+
+  return sendSuccess(res, payload);
 });
 
 /**
@@ -185,6 +220,7 @@ export const updateSubject = asyncHandler(async (req, res) => {
   if (department !== undefined) subject.department = department ? department.trim() : undefined;
 
   await subject.save();
+  await bustSubjectCache(req.user.schoolId);
 
   const populated = await populateSubject(Subject.findById(subject._id));
 
@@ -217,6 +253,7 @@ export const assignTeachers = asyncHandler(async (req, res) => {
   }
 
   await subject.save();
+  await bustSubjectCache(req.user.schoolId);
 
   const populated = await populateSubject(Subject.findById(subject._id));
 
@@ -235,6 +272,7 @@ export const deleteSubject = asyncHandler(async (req, res) => {
   if (!subject) return sendError(res, 'Subject not found.', 404);
 
   await subject.deleteOne();
+  await bustSubjectCache(req.user.schoolId);
   return sendSuccess(res, { message: 'Subject deleted.' });
 });
 
@@ -282,6 +320,7 @@ export const selfAssignSubject = asyncHandler(async (req, res) => {
   }
 
   await subject.save();
+  await bustSubjectCache(req.user.schoolId);
 
   const populated = await populateSubject(Subject.findById(subject._id));
   return sendSuccess(res, { subject: populated });

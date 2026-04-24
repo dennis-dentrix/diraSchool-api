@@ -63,7 +63,7 @@ const updateStudentSchema = z.object({
   enrollmentDate:         z.string().date().optional(),
   admissionNumber:        z.string().trim().min(1).optional(),
   guardians:              z.array(guardianUpdateSchema).optional(),
-});
+}).strict();
 
 const transferStudentSchema = z.object({
   newClassId: z.string().regex(objectIdRegex, 'Invalid class ID'),

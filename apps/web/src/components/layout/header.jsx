@@ -1,12 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Menu, Bell, LogOut, Settings, Loader2, CheckCheck } from 'lucide-react';
+import { Menu, Bell, LogOut, Settings, Loader2, CheckCheck, UserPen } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { authApi, notificationsApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,13 +18,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { getInitials } from '@/lib/utils';
 
 export function Header({ onMenuClick, title, schoolName, termLabel, schoolDayStatus }) {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { user, logout, setUser } = useAuthStore();
   const queryClient = useQueryClient();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '' });
   const isFetching = useIsFetching();
   const { data: unreadData } = useQuery({
     queryKey: ['notifications-unread-count'],
@@ -68,6 +74,18 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
       queryClient.invalidateQueries({ queryKey: ['notifications-list'] });
     },
+  });
+
+  const { mutate: saveProfile, isPending: savingProfile } = useMutation({
+    mutationFn: (data) => authApi.updateMe(data),
+    onSuccess: (res) => {
+      const updatedUser = res.data?.user ?? res.data?.data?.user;
+      if (updatedUser && setUser) setUser(updatedUser);
+      queryClient.invalidateQueries({ queryKey: ['auth-me'] });
+      toast.success('Profile updated');
+      setProfileOpen(false);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   return (
@@ -184,6 +202,13 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => {
+              setProfileForm({ firstName: user?.firstName ?? '', lastName: user?.lastName ?? '', phone: user?.phone ?? '' });
+              setProfileOpen(true);
+            }}>
+              <UserPen className="mr-2 h-4 w-4" />
+              Edit Profile
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push('/settings')}>
               <Settings className="mr-2 h-4 w-4" />
               Settings
@@ -196,6 +221,54 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>First Name</Label>
+                <Input
+                  value={profileForm.firstName}
+                  onChange={(e) => setProfileForm((f) => ({ ...f, firstName: e.target.value }))}
+                  placeholder="First name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Last Name</Label>
+                <Input
+                  value={profileForm.lastName}
+                  onChange={(e) => setProfileForm((f) => ({ ...f, lastName: e.target.value }))}
+                  placeholder="Last name"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Phone</Label>
+              <Input
+                value={profileForm.phone}
+                onChange={(e) => setProfileForm((f) => ({ ...f, phone: e.target.value }))}
+                placeholder="0712 345 678"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileOpen(false)}>Cancel</Button>
+            <Button
+              disabled={savingProfile}
+              onClick={() => saveProfile({
+                firstName: profileForm.firstName || undefined,
+                lastName: profileForm.lastName || undefined,
+                phone: profileForm.phone || undefined,
+              })}
+            >
+              {savingProfile ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

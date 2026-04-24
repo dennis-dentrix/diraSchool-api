@@ -30,6 +30,10 @@ Thumbs.db
 .vscode/settings.json
 .idea/
 
+# ── Local credentials / scratch files (never commit) ─────────
+logins.txt
+nixpacks.toml
+
 # ── MongoDB memory server binary cache ───────────────────────
 .mongodb-binaries/
 docs/__pycache__/
@@ -41,3 +45,8 @@ apps/api/scripts/*
 !apps/api/scripts/verify-cloudinary.js
 
 apps/web/.next
+
+# ── Playwright ────────────────────────────────────────────────────────────────
+apps/web/e2e/.auth/*.json
+apps/web/playwright-report/
+apps/web/test-results/

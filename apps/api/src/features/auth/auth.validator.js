@@ -71,6 +71,12 @@ const verifyEmailSchema = z.object({
     .regex(/^\d{6}$/, 'Verification code must be 6 digits'),
 });
 
+const updateProfileSchema = z.object({
+  firstName: z.string().trim().min(1, 'First name is required').optional(),
+  lastName:  z.string().trim().min(1, 'Last name is required').optional(),
+  phone:     z.string().trim().regex(phoneRegex, 'Invalid phone number').optional().or(z.literal('')),
+});
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validate = (schema) => (req, res, next) => {
@@ -91,3 +97,4 @@ export const validateResetPassword       = validate(resetPasswordSchema);
 export const validateAcceptInvite        = validate(acceptInviteSchema);
 export const validateResendVerification  = validate(resendVerificationSchema);
 export const validateVerifyEmail         = validate(verifyEmailSchema);
+export const validateUpdateProfile       = validate(updateProfileSchema);

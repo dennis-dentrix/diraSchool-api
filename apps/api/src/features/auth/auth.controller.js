@@ -589,6 +589,27 @@ export const resendVerification = asyncHandler(async (req, res) => {
 });
 
 /**
+ * PATCH /api/v1/auth/me
+ * Updates the authenticated user's own profile (name, phone).
+ * Protected route.
+ */
+export const updateMe = asyncHandler(async (req, res) => {
+  const { firstName, lastName, phone } = req.body;
+  const user = await User.findById(req.user._id);
+
+  if (firstName) user.firstName = firstName.trim();
+  if (lastName) user.lastName = lastName.trim();
+  if (phone !== undefined) user.phone = phone ? normalisePhone(phone) : undefined;
+
+  await user.save({ validateBeforeSave: false });
+
+  logAction(req, { action: 'update_profile', resource: 'Auth' });
+
+  const authUser = await buildAuthUser(user);
+  return sendSuccess(res, { user: authUser });
+});
+
+/**
  * POST /api/v1/auth/change-password
  * Changes the user's password and clears mustChangePassword.
  * Protected route — accessible even when mustChangePassword is true.

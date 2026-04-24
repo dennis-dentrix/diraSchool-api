@@ -5,10 +5,11 @@
   "scripts": {
     "dev": "next dev --port 5173",
     "build": "next build",
-    "start": "next start --port 3001",
+    "start": "next start --port 5173",
     "lint": "next lint",
     "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed"
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@diraschool/shared": "1.0.0",

@@ -76,7 +76,7 @@ describe('POST /api/v1/students', () => {
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('success');
     expect(res.body.student.firstName).toBe('James');
-    expect(res.body.student.classId).toBe(cls._id);
+    expect(res.body.student.classId._id).toBe(cls._id);
   });
 
   it('upper-cases admission number', async () => {

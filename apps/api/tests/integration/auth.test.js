@@ -87,7 +87,7 @@ describe('POST /api/v1/auth/register', () => {
 
     const res = await request(app)
       .post('/api/v1/auth/register')
-      .send({ ...validRegistration, email: 'other@greenfield.sc.ke' });
+      .send({ ...validRegistration, schoolName: 'Greenfield Two' });
 
     expect(res.status).toBe(409);
     expect(res.body.message).toBeDefined();
