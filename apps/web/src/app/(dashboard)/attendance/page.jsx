@@ -517,23 +517,8 @@ function SummaryTab({ classes }) {
 
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
-function checkSchoolClosedToday(settings) {
-  if (!settings) return null;
-  const today = new Date();
-  const dayName = DAY_NAMES[today.getDay()];
-  const workingDays = settings.workingDays ?? ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-  if (!workingDays.includes(dayName)) {
-    return `School does not operate on ${dayName}s.`;
-  }
-  if (settings.holidays?.length) {
-    const holiday = settings.holidays.find((h) => {
-      const hDate = new Date(h.date);
-      return hDate.getFullYear() === today.getFullYear() &&
-             hDate.getMonth()    === today.getMonth() &&
-             hDate.getDate()     === today.getDate();
-    });
-    if (holiday) return `School is closed today: ${holiday.name}.`;
-  }
+function checkSchoolClosedToday(_settings) {
+  // Demo mode: allow attendance on any day
   return null;
 }
 
