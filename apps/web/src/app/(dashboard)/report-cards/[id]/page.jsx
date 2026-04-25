@@ -63,135 +63,10 @@ function InfoItem({ label, value }) {
 }
 
 // ── PDF status card ───────────────────────────────────────────────────────────
-// Shows the right UI for every pdfStatus value and handles its own mutation so
-// the parent component stays clean.
-
+// Disabled until Cloudinary PDF download is confirmed working.
+// eslint-disable-next-line no-unused-vars
 function PdfStatusCard({ rc, reportCardId }) {
-  const queryClient = useQueryClient();
-  const { pdfStatus, pdfUrl, pdfError, pdfGeneratedAt } = rc;
-
-  const { mutate: requestPdf, isPending } = useMutation({
-    mutationFn: () => reportCardsApi.generatePdf(reportCardId),
-    onSuccess: () => {
-      toast.success('PDF generation queued — you\'ll be notified when it\'s ready.');
-      queryClient.invalidateQueries({ queryKey: ['report-card', reportCardId] });
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
-  // Generating
-  if (pdfStatus === 'queued' || pdfStatus === 'processing') {
-    return (
-      <Card>
-        <CardContent className="flex items-center gap-3 py-4">
-          <Loader2 className="h-5 w-5 animate-spin text-blue-600 shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Generating PDF…</p>
-            <p className="text-xs text-muted-foreground">
-              Usually takes 10–30 seconds. You'll receive a notification when it's ready.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Ready
-  if (pdfStatus === 'ready' && pdfUrl) {
-    return (
-      <Card className="border-green-200 bg-green-50/40 dark:bg-green-950/20">
-        <CardContent className="flex items-center justify-between gap-4 py-4 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <FileDown className="h-5 w-5 text-green-600 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-green-900 dark:text-green-200">PDF Ready</p>
-              {pdfGeneratedAt && (
-                <p className="text-xs text-muted-foreground">
-                  Generated {formatDate(pdfGeneratedAt)}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => requestPdf()}
-              disabled={isPending}
-            >
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              Regenerate
-            </Button>
-            <Button size="sm" asChild>
-              <a
-                href={pdfUrl?.replace('/raw/upload/', '/raw/upload/fl_attachment/')}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <FileDown className="h-4 w-4 mr-1.5" />
-                Download PDF
-              </a>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // Failed
-  if (pdfStatus === 'failed') {
-    return (
-      <Card className="border-destructive/30 bg-destructive/5">
-        <CardContent className="flex items-center justify-between gap-4 py-4 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0">
-            <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-destructive">PDF Generation Failed</p>
-              {pdfError && (
-                <p className="text-xs text-muted-foreground truncate max-w-sm">{pdfError}</p>
-              )}
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => requestPdf()}
-            disabled={isPending}
-            className="shrink-0"
-          >
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-            {isPending ? 'Queueing…' : 'Retry'}
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  // not_requested (default) — prompt admin to generate
-  return (
-    <Card>
-      <CardContent className="flex items-center justify-between gap-4 py-4 flex-wrap">
-        <div className="flex items-center gap-3 min-w-0">
-          <FileDown className="h-5 w-5 text-muted-foreground shrink-0" />
-          <div>
-            <p className="text-sm font-medium">PDF not generated</p>
-            <p className="text-xs text-muted-foreground">
-              Generate a downloadable PDF to share with parents.
-            </p>
-          </div>
-        </div>
-        <Button
-          size="sm"
-          onClick={() => requestPdf()}
-          disabled={isPending}
-          className="shrink-0"
-        >
-          <FileDown className="h-4 w-4 mr-1.5" />
-          {isPending ? 'Queueing…' : 'Generate PDF'}
-        </Button>
-      </CardContent>
-    </Card>
-  );
+  return null;
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -228,11 +103,6 @@ export default function ReportCardDetailPage() {
       return card;
     },
     enabled: !!id,
-    // Auto-poll while the worker is processing; stop once done.
-    refetchInterval: (query) => {
-      const status = query.state.data?.pdfStatus;
-      return status === 'queued' || status === 'processing' ? 5_000 : false;
-    },
   });
 
   const { data: school } = useQuery({

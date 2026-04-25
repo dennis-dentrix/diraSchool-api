@@ -268,22 +268,7 @@ function PrincipalDashboard({ user, summary, isLoading }) {
         </SectionCard>
 
         <SectionCard title="Upcoming Dates" icon={Clock}>
-          <div className="space-y-3">
-            {[
-              { date: 'Fri, Apr 5', event: 'Parent-Teacher meetings' },
-              { date: 'Mon, Apr 15', event: 'Mid-term exams begin' },
-              { date: 'Fri, May 3', event: 'Term 2 fee deadline' },
-              { date: 'Mon, May 12', event: 'Board of governors meeting' },
-            ].map((item, idx) => (
-              <div key={idx} className="flex items-start gap-3 rounded-lg border border-slate-200/70 p-3">
-                <Calendar className="mt-0.5 h-4 w-4 text-slate-500" />
-                <div>
-                  <p className="text-xs text-slate-500">{item.date}</p>
-                  <p className="text-sm font-medium text-slate-900">{item.event}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-slate-500">No upcoming events scheduled.</p>
         </SectionCard>
       </div>
 
@@ -372,28 +357,24 @@ function FinanceDashboard({ user, summary, isLoading }) {
         action={<Link href="/fees/payments" className="text-xs font-medium text-cyan-700 hover:underline">View all</Link>}
       >
         {isLoading ? (
-          <div className="space-y-2">{[...Array(6)].map((_, i) => <Skeleton key={i} className="h-11" />)}</div>
-        ) : (
+          <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-11" />)}</div>
+        ) : feeData.recentPayments?.length > 0 ? (
           <div className="space-y-2">
-            {[
-              { name: 'John Kipchoge', amount: 45000, method: 'M-Pesa', time: '10:45 AM', status: 'Completed' },
-              { name: 'Mary Wanjiru', amount: 35000, method: 'Bank', time: '09:20 AM', status: 'Completed' },
-              { name: 'Peter Okonkwo', amount: 50000, method: 'M-Pesa', time: '08:15 AM', status: 'Pending' },
-            ].map((payment, idx) => (
+            {feeData.recentPayments.map((payment, idx) => (
               <div key={idx} className="flex items-center justify-between rounded-lg border border-slate-200/80 p-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-900">{payment.name}</p>
-                  <p className="text-xs text-slate-600">{payment.method} · {payment.time}</p>
+                  <p className="text-xs text-slate-600 capitalize">{payment.method} · {payment.time}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-slate-900">{formatCurrency(payment.amount)}</p>
-                  <Badge variant={payment.status === 'Completed' ? 'default' : 'outline'} className="mt-1">
-                    {payment.status}
-                  </Badge>
+                  <Badge variant="default" className="mt-1 capitalize">{payment.status}</Badge>
                 </div>
               </div>
             ))}
           </div>
+        ) : (
+          <p className="text-sm text-slate-500">No payments recorded today.</p>
         )}
       </SectionCard>
 
@@ -418,103 +399,86 @@ function FinanceDashboard({ user, summary, isLoading }) {
 function TeacherDashboard({ user }) {
   const router = useRouter();
 
-  const myClass = { name: 'Form 1A', totalStudents: 45 };
-  const todayRegisterStatus = 'pending';
-  const weekAttendanceRate = 92;
-  const myLessonsThisWeek = 8;
+  const { data: classData, isLoading } = useQuery({
+    queryKey: ['my-class'],
+    queryFn: async () => {
+      const { classesApi } = await import('@/lib/api');
+      const res = await classesApi.myClass();
+      return res.data.data;
+    },
+    enabled: !!user?._id,
+  });
+
+  const cls = classData?.class;
+  const className = cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—';
+  const studentCount = classData?.students?.length ?? 0;
 
   return (
     <DashboardShell
       title={`Welcome, ${user?.firstName || 'Teacher'}`}
-      subtitle={`Class teacher · ${myClass.name}`}
+      subtitle={cls ? `Class teacher · ${className}` : 'Teacher'}
       rightMeta={`Current term: ${TERMS[0]}`}
       actions={<RefreshButton queryKeys={[['my-class']]} />}
     >
-      {todayRegisterStatus === 'pending' ? (
+      {cls && (
         <Card className="border-blue-200 bg-blue-50/60">
           <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <Clock className="h-5 w-5 text-blue-700 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-blue-900">Today&apos;s register is not submitted</p>
-                <p className="text-xs text-blue-800/80">Submit attendance for {myClass.name} before end of day.</p>
+                <p className="text-sm font-semibold text-blue-900">Mark today&apos;s attendance</p>
+                <p className="text-xs text-blue-800/80">Submit attendance for {className} before end of day.</p>
               </div>
             </div>
             <Button size="sm" onClick={() => router.push('/attendance')} className="bg-blue-700 hover:bg-blue-800">
-              Submit now
+              Go to Attendance
             </Button>
           </CardContent>
         </Card>
-      ) : null}
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard
-          label="My Class"
-          value={myClass.totalStudents}
-          hint={`${myClass.name} students`}
-          icon={Users}
-          tone="blue"
-        />
-        <StatCard
-          label="Weekly Attendance"
-          value={`${weekAttendanceRate}%`}
-          hint="Average attendance rate"
-          icon={Calendar}
-          tone="green"
-        />
-        <StatCard
-          label="Timetable"
-          value={myLessonsThisWeek}
-          hint="Lessons this week"
-          icon={BookOpen}
-          tone="violet"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {isLoading ? (
+          <>{[...Array(2)].map((_, i) => <Skeleton key={i} className="h-24" />)}</>
+        ) : cls ? (
+          <>
+            <StatCard
+              label="My Class"
+              value={studentCount}
+              hint={`${className} students`}
+              icon={Users}
+              tone="blue"
+              onClick={() => router.push('/students')}
+            />
+            <StatCard
+              label="Attendance"
+              value="View records"
+              hint="Check attendance history"
+              icon={CalendarCheck}
+              tone="green"
+              onClick={() => router.push('/attendance')}
+            />
+          </>
+        ) : (
+          <Card className="col-span-2 border-slate-200">
+            <CardContent className="p-5 text-sm text-slate-500">
+              You are not assigned as class teacher for any active class.
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <SectionCard title="My Timetable" icon={BookOpen}>
-          <div className="space-y-2">
-            {[
-              { day: 'Mon', period: 1, subject: 'English', class: 'Form 1A', time: '8:00-8:40' },
-              { day: 'Mon', period: 3, subject: 'History', class: 'Form 2B', time: '9:30-10:10' },
-              { day: 'Tue', period: 2, subject: 'English', class: 'Form 1A', time: '8:40-9:20' },
-              { day: 'Wed', period: 1, subject: 'English', class: 'Form 1A', time: '8:00-8:40' },
-            ].map((lesson, idx) => (
-              <div key={idx} className="flex items-center justify-between rounded-lg border border-slate-200/80 p-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-900">{lesson.subject}</p>
-                  <p className="text-xs text-slate-600">{lesson.class} · {lesson.day} period {lesson.period}</p>
-                </div>
-                <p className="text-xs font-medium text-slate-500">{lesson.time}</p>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <SectionCard title={`Recent Attendance · ${myClass.name}`} icon={CalendarCheck}>
-          <div className="space-y-2">
-            {[
-              { date: 'Today (Wed)', present: 42, absent: 3, status: 'Pending' },
-              { date: 'Tuesday', present: 44, absent: 1, status: 'Submitted' },
-              { date: 'Monday', present: 43, absent: 2, status: 'Submitted' },
-            ].map((record, idx) => (
-              <div key={idx} className="flex items-center justify-between rounded-lg border border-slate-200/80 p-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-900">{record.date}</p>
-                  <p className="text-xs text-slate-600">{record.present} present · {record.absent} absent</p>
-                </div>
-                <Badge variant={record.status === 'Submitted' ? 'default' : 'outline'}>
-                  {record.status}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => router.push('/attendance')} className="gap-2 bg-cyan-700 hover:bg-cyan-800">
+          <CalendarCheck className="h-4 w-4" /> Attendance
+        </Button>
+        <Button onClick={() => router.push('/exams')} variant="outline" className="gap-2">
+          <FileText className="h-4 w-4" /> Exams
+        </Button>
+        <Button onClick={() => router.push('/report-cards')} variant="outline" className="gap-2">
+          <BookOpen className="h-4 w-4" /> Report Cards
+        </Button>
       </div>
-
-      <Button onClick={() => router.push('/attendance')} className="w-full gap-2 bg-cyan-700 hover:bg-cyan-800">
-        <CalendarCheck className="h-4 w-4" /> Full Attendance View
-      </Button>
     </DashboardShell>
   );
 }

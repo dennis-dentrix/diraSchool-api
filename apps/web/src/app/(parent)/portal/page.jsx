@@ -42,11 +42,19 @@ function ChildSelector({ children, selected, onSelect }) {
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${
-                  active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-                }`}>
-                  {child.firstName?.[0]}{child.lastName?.[0]}
-                </span>
+                {child.photo ? (
+                  <img
+                    src={child.photo}
+                    alt={`${child.firstName} ${child.lastName}`}
+                    className="w-8 h-8 rounded-full object-cover border shrink-0"
+                  />
+                ) : (
+                  <span className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold shrink-0 ${
+                    active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {child.firstName?.[0]}{child.lastName?.[0]}
+                  </span>
+                )}
                 <div className="min-w-0">
                   <p className="text-sm font-semibold truncate">{child.firstName} {child.lastName}</p>
                   <p className={`text-[11px] truncate ${active ? 'text-blue-100' : 'text-muted-foreground'}`}>
