@@ -16,6 +16,7 @@ import { formatCurrency, formatDate, getStatusColor, capitalize } from '@/lib/ut
 import { PAYMENT_METHODS, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/shared/page-header';
+import { RefreshButton } from '@/components/shared/refresh-button';
 import { SchoolDocumentHeader } from '@/components/shared/school-document-header';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
@@ -460,6 +461,7 @@ export default function PaymentsPage() {
   return (
     <div>
       <PageHeader title="Payments" description="Record and manage fee payments">
+        <RefreshButton queryKeys={[['payments']]} />
         <Button variant="outline" size="sm" onClick={() => setBalanceOpen(true)}>
           <Wallet className="h-4 w-4 mr-1" /> Check Balance
         </Button>

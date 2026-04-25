@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   AlertTriangle,
@@ -23,13 +23,14 @@ import { formatCurrency } from '@/lib/utils';
 import { TERMS } from '@/lib/constants';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/shared/refresh-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ADMIN_ROLES = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
 const FINANCE_ROLES = [...ADMIN_ROLES, 'accountant', 'secretary'];
 
-function DashboardShell({ title, subtitle, rightMeta, children }) {
+function DashboardShell({ title, subtitle, rightMeta, actions, children }) {
   return (
     <div className="space-y-6">
       <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40">
@@ -39,7 +40,10 @@ function DashboardShell({ title, subtitle, rightMeta, children }) {
               <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900">{title}</h1>
               {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
             </div>
-            <div className="text-sm text-slate-500 sm:text-right">{rightMeta}</div>
+            <div className="flex items-center gap-2">
+              {actions}
+              <div className="text-sm text-slate-500 sm:text-right">{rightMeta}</div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -163,6 +167,7 @@ function PrincipalDashboard({ user, summary, isLoading }) {
     <DashboardShell
       title={`Welcome, ${user?.firstName || 'Admin'}`}
       rightMeta={new Date().toLocaleDateString('en-KE', { weekday: 'long', month: 'short', day: 'numeric' })}
+      actions={<RefreshButton queryKeys={[['dashboard-summary']]} />}
     >
       {alerts.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -315,6 +320,7 @@ function FinanceDashboard({ user, summary, isLoading }) {
       title={`Welcome, ${user?.firstName || 'Finance'}`}
       subtitle="Finance overview"
       rightMeta="Collections and receipting"
+      actions={<RefreshButton queryKeys={[['dashboard-summary']]} />}
     >
       {pendingReceipts > 0 ? (
         <Card className="border-rose-200 bg-rose-50/60">
@@ -422,6 +428,7 @@ function TeacherDashboard({ user }) {
       title={`Welcome, ${user?.firstName || 'Teacher'}`}
       subtitle={`Class teacher · ${myClass.name}`}
       rightMeta={`Current term: ${TERMS[0]}`}
+      actions={<RefreshButton queryKeys={[['my-class']]} />}
     >
       {todayRegisterStatus === 'pending' ? (
         <Card className="border-blue-200 bg-blue-50/60">

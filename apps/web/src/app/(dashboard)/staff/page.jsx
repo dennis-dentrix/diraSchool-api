@@ -12,6 +12,7 @@ import { ROLE_LABELS } from '@/lib/constants';
 import { getRoleBadgeColor, formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
+import { RefreshButton } from '@/components/shared/refresh-button';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -292,6 +293,7 @@ export default function StaffPage() {
         title={`Staff ${staffRows.length ? `(${pagination?.total ?? staffRows.length})` : ''}`}
         description={isDeputy ? 'Manage teacher records' : 'Manage teaching and non-teaching staff'}
       >
+        <RefreshButton queryKeys={[['users']]} />
         <Button size="sm" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" /> Invite Staff
         </Button>

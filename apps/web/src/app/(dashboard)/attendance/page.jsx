@@ -11,6 +11,7 @@ import { attendanceApi, classesApi, settingsApi, getErrorMessage } from '@/lib/a
 import { formatDate, capitalize } from '@/lib/utils';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
+import { RefreshButton } from '@/components/shared/refresh-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -599,7 +600,9 @@ export default function AttendancePage() {
       <PageHeader
         title="Attendance"
         description={`${formatDate(new Date())} · ${todayDone}/${classes.length} classes submitted today`}
-      />
+      >
+        <RefreshButton queryKeys={[['attendance-today'], ['attendance-records'], ['attendance-summary']]} />
+      </PageHeader>
 
       {/* Today quick stats (admin only) */}
       {adminView && allEntries.length > 0 && (

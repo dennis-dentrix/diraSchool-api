@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { formatDate, getStatusColor, capitalize } from '@/lib/utils';
 import { STUDENT_STATUSES } from '@/lib/constants';
 import { PageHeader } from '@/components/shared/page-header';
+import { RefreshButton } from '@/components/shared/refresh-button';
 import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -301,6 +302,7 @@ export default function StudentsPage() {
         title={`Students ${totalCount ? `(${totalCount})` : ''}`}
         description={isTeacher ? 'Students in your class' : 'Enroll and manage student records'}
       >
+        <RefreshButton queryKeys={[['students']]} />
         {!isTeacher && (
           <>
             <Button variant="outline" size="sm"

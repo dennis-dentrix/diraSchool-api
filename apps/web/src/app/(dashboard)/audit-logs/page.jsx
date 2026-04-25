@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { auditApi } from '@/lib/api';
 import { formatDate, capitalize } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
+import { RefreshButton } from '@/components/shared/refresh-button';
 import { DataTable } from '@/components/shared/data-table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -74,7 +75,9 @@ export default function AuditLogsPage() {
 
   return (
     <div>
-      <PageHeader title="Audit Logs" description="Immutable trail of all system actions" />
+      <PageHeader title="Audit Logs" description="Immutable trail of all system actions">
+        <RefreshButton queryKeys={[['audit-logs']]} />
+      </PageHeader>
 
       <div className="flex gap-3 mb-4">
         <Select value={actionFilter} onValueChange={(v) => setActionFilter(v === '__all__' ? '' : v)}>
