@@ -5,7 +5,6 @@ import {
   BookOpen,
   ClipboardList,
   BarChart2,
-  ListChecks,
   FileText,
   CreditCard,
   Calendar,
@@ -64,12 +63,6 @@ export const schoolNavItems = [
     label: 'Exams',
     href: '/exams',
     icon: FileText,
-    roles: ACADEMIC,
-  },
-  {
-    label: 'Results',
-    href: '/results',
-    icon: ListChecks,
     roles: ACADEMIC,
   },
   {

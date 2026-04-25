@@ -123,7 +123,11 @@ function PdfStatusCard({ rc, reportCardId }) {
               Regenerate
             </Button>
             <Button size="sm" asChild>
-              <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+              <a
+                href={pdfUrl?.replace('/raw/upload/', '/raw/upload/fl_attachment/')}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <FileDown className="h-4 w-4 mr-1.5" />
                 Download PDF
               </a>
