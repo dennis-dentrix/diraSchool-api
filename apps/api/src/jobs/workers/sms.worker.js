@@ -15,7 +15,7 @@ import AfricasTalking from 'africastalking';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
 import { SMS_TRIGGER_TYPES } from '../../constants/index.js';
-import School from '../schools/School.model.js';
+import School from '../../features/schools/School.model.js';
 
 const AT = AfricasTalking({
   username: env.AT_USERNAME,
