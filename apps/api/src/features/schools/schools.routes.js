@@ -20,6 +20,7 @@ import {
   getSchool,
   updateSchool,
   updateSubscription,
+  requestSmsSenderId,
 } from './schools.controller.js';
 
 const router = Router();
@@ -38,6 +39,12 @@ router
     validateUpdateMySchool,
     updateMySchool
   );
+
+router.post(
+  '/me/sms-sender-id-request',
+  authorize(ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER),
+  requestSmsSenderId
+);
 
 // ── Superadmin routes (/api/v1/schools) ──────────────────────────────────────
 

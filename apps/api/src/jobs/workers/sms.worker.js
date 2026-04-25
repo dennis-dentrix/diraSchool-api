@@ -8,11 +8,14 @@
  *   schoolId: string              — for audit logging
  *   trigger:  SMS_TRIGGER_TYPES   — fee_reminder | absence_alert | etc.
  * }
+ *
+ * Sender ID: Uses school's approved sender ID if available, falls back to default.
  */
 import AfricasTalking from 'africastalking';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
 import { SMS_TRIGGER_TYPES } from '../../constants/index.js';
+import School from '../schools/School.model.js';
 
 const AT = AfricasTalking({
   username: env.AT_USERNAME,
@@ -25,17 +28,24 @@ export const processSmsJob = async (job) => {
 
   const recipients = Array.isArray(to) ? to : [to];
 
+  // Fetch school's SMS settings to get approved sender ID
+  const school = await School.findById(schoolId).select('name smsSettings');
+  const senderIdApproved = school?.smsSettings?.senderIdApproved;
+  const senderId = senderIdApproved || env.AT_SENDER_ID || 'SCHOOL';
+
   logger.info('[SMS] Sending', {
     jobId: job.id,
     trigger,
     schoolId,
+    schoolName: school?.name,
+    senderId,
     recipients: recipients.length,
   });
 
   const result = await sms.send({
     to: recipients,
     message,
-    from: env.AT_SENDER_ID || 'SCHOOL',
+    from: senderId,
   });
 
   const recipients_result = result.SMSMessageData?.Recipients ?? [];

@@ -390,3 +390,71 @@ export const triggerMonitoringTest = asyncHandler(async (req, res) => {
     eventId,
   });
 });
+
+// ── PATCH /api/v1/admin/schools/:id/sms-sender-id ──────────────────────────────
+
+/**
+ * Admin endpoint to approve or reject a school's requested SMS sender ID.
+ *
+ * Body:
+ * {
+ *   action: 'approve' | 'reject',
+ *   senderIdApproved?: string  (required if action='approve')
+ *   rejectionReason?: string   (optional if action='reject')
+ * }
+ *
+ * Example:
+ *   PATCH /api/v1/admin/schools/60d5ec49c1234/sms-sender-id
+ *   { "action": "approve", "senderIdApproved": "NYERI_GIRLS" }
+ */
+export const approveSmsenderId = asyncHandler(async (req, res) => {
+  const { schoolId } = req.params;
+  const { action, senderIdApproved, rejectionReason } = req.body;
+
+  if (!['approve', 'reject'].includes(action)) {
+    return sendError(res, 'Action must be "approve" or "reject"', 400);
+  }
+
+  if (action === 'approve' && !senderIdApproved) {
+    return sendError(res, 'senderIdApproved is required when action="approve"', 400);
+  }
+
+  if (action === 'approve' && !/^[A-Z0-9_]{1,11}$/.test(senderIdApproved)) {
+    return sendError(res, 'Sender ID must be 1-11 alphanumeric chars', 400);
+  }
+
+  const updateData = {
+    'smsSettings.senderIdStatus': action === 'approve' ? 'approved' : 'rejected',
+  };
+
+  if (action === 'approve') {
+    updateData['smsSettings.senderIdApproved'] = senderIdApproved;
+    updateData['smsSettings.approvedAt'] = new Date();
+  } else if (rejectionReason) {
+    updateData['smsSettings.rejectionReason'] = rejectionReason;
+  }
+
+  const school = await School.findByIdAndUpdate(
+    schoolId,
+    { $set: updateData },
+    { new: true }
+  ).select('name smsSettings');
+
+  if (!school) {
+    return sendError(res, 'School not found', 404);
+  }
+
+  // Audit log
+  await AuditLog.create({
+    schoolId,
+    userId: req.user._id,
+    action: action === 'approve' ? 'sms_sender_approved' : 'sms_sender_rejected',
+    resource: 'SchoolSmsSetting',
+    metadata: {
+      senderIdApproved: senderIdApproved || null,
+      rejectionReason: rejectionReason || null,
+    },
+  });
+
+  return sendSuccess(res, school, `Sender ID ${action}ed successfully`);
+});

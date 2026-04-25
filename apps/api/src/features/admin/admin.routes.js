@@ -9,6 +9,7 @@ import {
   listAdminUsers,
   toggleAdminUser,
   triggerMonitoringTest,
+  approveSmsenderId,
 } from './admin.controller.js';
 
 const router = express.Router();
@@ -16,13 +17,14 @@ const router = express.Router();
 // All admin routes require a valid session AND superadmin role
 router.use(protect, superadminOnly);
 
-router.get('/stats',                  getStats);
-router.get('/schools',                listSchools);
-router.get('/schools/:id',            getSchool);
-router.patch('/schools/:id/status',   updateSchoolStatus);
-router.get('/audit-logs',             listSystemAuditLogs);
-router.get('/users',                  listAdminUsers);
-router.patch('/users/:id/toggle',     toggleAdminUser);
-router.post('/monitoring-test',       triggerMonitoringTest);
+router.get('/stats',                        getStats);
+router.get('/schools',                      listSchools);
+router.get('/schools/:id',                  getSchool);
+router.patch('/schools/:id/status',         updateSchoolStatus);
+router.patch('/schools/:id/sms-sender-id',  approveSmsenderId);
+router.get('/audit-logs',                   listSystemAuditLogs);
+router.get('/users',                        listAdminUsers);
+router.patch('/users/:id/toggle',           toggleAdminUser);
+router.post('/monitoring-test',             triggerMonitoringTest);
 
 export default router;

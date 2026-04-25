@@ -57,6 +57,32 @@ const schoolSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // SMS Settings — per-school sender ID management
+    smsSettings: {
+      senderIdRequested: {
+        type: String,
+        trim: true,
+        uppercase: true,
+        match: [/^[A-Z0-9_]{1,11}$/, 'Sender ID must be 1-11 alphanumeric chars'],
+      },
+      senderIdApproved: {
+        type: String,
+        trim: true,
+        uppercase: true,
+      },
+      senderIdStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: null,
+      },
+      smsEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      requestedAt: Date,
+      approvedAt: Date,
+      rejectionReason: String,
+    },
   },
   { timestamps: true }
 );

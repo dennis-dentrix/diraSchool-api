@@ -218,3 +218,48 @@ export const updateSubscription = asyncHandler(async (req, res) => {
     school,
   });
 });
+
+// ── POST /api/v1/schools/me/sms-sender-id-request ──────────────────────────────
+
+/**
+ * School admin endpoint to request a custom SMS sender ID (e.g., NYERI_GIRLS).
+ *
+ * Body: { senderIdRequested: string }
+ * Example: { "senderIdRequested": "NYERI_GIRLS" }
+ *
+ * Returns: school with updated smsSettings and status 'pending'.
+ * Admin will approve/reject after reviewing with Africa's Talking.
+ */
+export const requestSmsSenderId = asyncHandler(async (req, res) => {
+  const { senderIdRequested } = req.body;
+  const schoolId = req.user.schoolId;
+
+  if (!senderIdRequested) {
+    return sendError(res, 'senderIdRequested is required', 400);
+  }
+
+  if (!/^[A-Z0-9_]{1,11}$/.test(senderIdRequested)) {
+    return sendError(res, 'Sender ID must be 1-11 alphanumeric chars, e.g., NYERI_GIRLS', 400);
+  }
+
+  const school = await School.findByIdAndUpdate(
+    schoolId,
+    {
+      $set: {
+        'smsSettings.senderIdRequested': senderIdRequested.toUpperCase(),
+        'smsSettings.senderIdStatus': 'pending',
+        'smsSettings.requestedAt': new Date(),
+      },
+    },
+    { new: true }
+  ).select('name smsSettings');
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.UPDATE,
+    resource: AUDIT_RESOURCES.SCHOOL,
+    resourceId: schoolId,
+    meta: { senderIdRequested: senderIdRequested.toUpperCase() },
+  });
+
+  return sendSuccess(res, school, 'SMS sender ID requested. Our team will review and approve within 24 hours.');
+});
