@@ -51,3 +51,5 @@ apps/web/.next
 apps/web/e2e/.auth/*.json
 apps/web/playwright-report/
 apps/web/test-results/
+
+docs/
