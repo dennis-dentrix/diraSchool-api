@@ -456,9 +456,23 @@ export default function ClassesPage() {
                     <div className="space-y-3">
                       {classPlans.map((plan) => {
                         const firstImg = plan.images?.[0];
-                        const pdfUrl = plan.pdfUrl
-                          ? plan.pdfUrl.replace(/\/(raw|image|video)\/upload\//, '/$1/upload/fl_attachment/')
-                          : null;
+
+                        async function downloadPdf() {
+                          if (!plan.pdfUrl) return;
+                          try {
+                            const res = await fetch(plan.pdfUrl);
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${plan.title.replace(/\s+/g, '_')}.pdf`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                          } catch { /* silently fail */ }
+                        }
+
                         return (
                           <div key={plan._id} className="rounded-lg border border-slate-200 overflow-hidden">
                             {firstImg ? (
@@ -499,11 +513,11 @@ export default function ClassesPage() {
                                     <Eye className="h-3 w-3" /> View
                                   </a>
                                 )}
-                                {pdfUrl && (
-                                  <a href={pdfUrl} target="_blank" rel="noreferrer"
+                                {plan.pdfUrl && (
+                                  <button onClick={downloadPdf}
                                     className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:underline">
                                     <Download className="h-3 w-3" /> Download PDF
-                                  </a>
+                                  </button>
                                 )}
                               </div>
                             </div>

@@ -403,9 +403,28 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
   const typeLabel = plan.type === 'work_schedule' ? 'Work Schedule' : 'Lesson Plan';
   const typeColor = plan.type === 'work_schedule' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700';
 
-  const pdfDownloadUrl = plan.pdfUrl
-    ? plan.pdfUrl.replace(/\/(raw|image|video)\/upload\//, '/$1/upload/fl_attachment/')
-    : null;
+  const [pdfDownloading, setPdfDownloading] = useState(false);
+
+  async function handlePdfDownload() {
+    if (!plan.pdfUrl) return;
+    setPdfDownloading(true);
+    try {
+      const res = await fetch(plan.pdfUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${plan.title.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently fail — user can try again
+    } finally {
+      setPdfDownloading(false);
+    }
+  }
 
   function openLightbox(idx = 0) {
     setLightboxIdx(idx);
@@ -481,12 +500,12 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
                 <Eye className="h-3.5 w-3.5" /> View
               </Button>
             )}
-            {pdfDownloadUrl && (
-              <a href={pdfDownloadUrl} target="_blank" rel="noreferrer">
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
-                  <Download className="h-3.5 w-3.5" /> PDF
-                </Button>
-              </a>
+            {plan.pdfUrl && (
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                onClick={handlePdfDownload} disabled={pdfDownloading}>
+                <Download className="h-3.5 w-3.5" />
+                {pdfDownloading ? 'Downloading…' : 'PDF'}
+              </Button>
             )}
             {plan.pdfStatus === 'processing' && (
               <span className="text-[11px] text-muted-foreground italic">PDF generating…</span>
