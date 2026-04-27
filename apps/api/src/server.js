@@ -41,6 +41,7 @@ import exportRoutes from './features/export/export.routes.js';
 import notificationRoutes from './features/notifications/notifications.routes.js';
 import subscriptionRoutes from './features/subscriptions/subscriptions.routes.js';
 import lessonPlanRoutes from './features/lesson-plans/lesson-plans.routes.js';
+import smsInboundRoutes from './features/sms/sms-inbound.routes.js';
 
 // ── Startup diagnostic — always runs first, visible in Railway logs ──────────
 // This prints BEFORE validateEnv() so missing vars are visible even if we crash.
@@ -174,6 +175,7 @@ app.use('/api/v1/pricing', pricingRoutes);
 app.use('/api/v1/export', exportRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/subscriptions', subscriptionRoutes);
+app.use('/api/v1/sms', smsInboundRoutes);
 
 // ── 404 catch-all ────────────────────────────────────────────────────────────
 app.use((req, res) => {

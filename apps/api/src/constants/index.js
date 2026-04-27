@@ -102,6 +102,12 @@ export const SMS_TRIGGER_TYPES = {
   CUSTOM_BROADCAST: 'custom_broadcast',
   ACCOUNT_CREATED: 'account_created',
   REPORT_PUBLISHED: 'report_published',
+  PAYMENT_RECEIPT: 'payment_receipt',
+};
+
+export const PAYMENT_SOURCE = {
+  MANUAL: 'manual',
+  SMS_WEBHOOK: 'sms_webhook',
 };
 
 export const QUEUE_NAMES = {

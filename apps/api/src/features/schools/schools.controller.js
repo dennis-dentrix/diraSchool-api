@@ -36,7 +36,7 @@ export const updateMySchool = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId);
   if (!school) return sendError(res, 'School not found.', 404);
 
-  const { name, phone, county, constituency, registrationNumber, address } = req.body;
+  const { name, phone, county, constituency, registrationNumber, address, mpesaTillNumber } = req.body;
 
   if (name !== undefined) school.name = name;
   if (phone !== undefined) school.phone = phone;
@@ -44,6 +44,7 @@ export const updateMySchool = asyncHandler(async (req, res) => {
   if (constituency !== undefined) school.constituency = constituency;
   if (registrationNumber !== undefined) school.registrationNumber = registrationNumber;
   if (address !== undefined) school.address = address;
+  if (mpesaTillNumber !== undefined) school.mpesaTillNumber = mpesaTillNumber || undefined;
 
   await school.save();
   await bustSubCache(school._id);

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { PAYMENT_METHODS, PAYMENT_STATUSES, TERMS } from '../../constants/index.js';
+import { PAYMENT_METHODS, PAYMENT_STATUSES, PAYMENT_SOURCE, TERMS } from '../../constants/index.js';
 import { getRedis } from '../../config/redis.js';
 
 const paymentSchema = new mongoose.Schema(
@@ -53,11 +53,17 @@ const paymentSchema = new mongoose.Schema(
       enum: Object.values(PAYMENT_STATUSES),
       default: PAYMENT_STATUSES.COMPLETED,
     },
-    // Staff member who recorded the payment
+    // How this payment entered the system
+    source: {
+      type: String,
+      enum: Object.values(PAYMENT_SOURCE),
+      default: PAYMENT_SOURCE.MANUAL,
+    },
+    // Staff member who recorded the payment (null for sms_webhook payments)
     recordedByUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      required: function () { return this.source === PAYMENT_SOURCE.MANUAL; },
     },
     notes: {
       type: String,

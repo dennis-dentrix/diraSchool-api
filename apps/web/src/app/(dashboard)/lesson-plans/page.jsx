@@ -6,7 +6,7 @@ import {
   Upload, Trash2, Share2, X, Image as ImageIcon, FileText, Eye, UserCheck,
   Download, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { lessonPlansApi, usersApi } from '@/lib/api';
+import { lessonPlansApi, usersApi, classesApi, subjectsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { TERMS, ACADEMIC_YEARS } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
@@ -31,11 +31,26 @@ function UploadDialog({ open, onClose }) {
   const [form, setForm] = useState({
     title: '', description: '', type: 'lesson_plan',
     academicYear: CURRENT_YEAR, term: 'Term 1', weekNumber: '',
+    classId: '', subjectId: '',
   });
   const [files, setFiles]       = useState([]);   // File objects
   const [previews, setPreviews] = useState([]);   // object URLs
   const fileRef = useRef();
   const qc = useQueryClient();
+
+  const { data: classesData } = useQuery({
+    queryKey: ['classes-list'],
+    queryFn: () => classesApi.list().then((r) => r.data?.classes ?? []),
+    staleTime: 60_000,
+  });
+  const classes = classesData ?? [];
+
+  const { data: subjectsData } = useQuery({
+    queryKey: ['subjects-list'],
+    queryFn: () => subjectsApi.list().then((r) => r.data?.subjects ?? []),
+    staleTime: 60_000,
+  });
+  const subjects = subjectsData ?? [];
 
   const { mutate, isPending } = useMutation({
     mutationFn: () => {
@@ -48,7 +63,7 @@ function UploadDialog({ open, onClose }) {
       toast.success('Lesson plan uploaded. PDF is being generated.');
       qc.invalidateQueries({ queryKey: ['lesson-plans'] });
       onClose();
-      setForm({ title: '', description: '', type: 'lesson_plan', academicYear: CURRENT_YEAR, term: 'Term 1', weekNumber: '' });
+      setForm({ title: '', description: '', type: 'lesson_plan', academicYear: CURRENT_YEAR, term: 'Term 1', weekNumber: '', classId: '', subjectId: '' });
       setFiles([]);
       setPreviews([]);
     },
@@ -120,6 +135,35 @@ function UploadDialog({ open, onClose }) {
                 value={form.weekNumber}
                 onChange={(e) => set('weekNumber')(e.target.value)}
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Class (optional)</Label>
+              <Select value={form.classId} onValueChange={set('classId')}>
+                <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— None —</SelectItem>
+                  {classes.map((c) => (
+                    <SelectItem key={c._id} value={c._id}>
+                      {c.name}{c.stream ? ` ${c.stream}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject (optional)</Label>
+              <Select value={form.subjectId} onValueChange={set('subjectId')}>
+                <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— None —</SelectItem>
+                  {subjects.map((s) => (
+                    <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
