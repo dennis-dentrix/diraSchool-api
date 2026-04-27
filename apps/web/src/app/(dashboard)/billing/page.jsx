@@ -42,7 +42,7 @@ function calcBill(students, option = 'per-term', addOns = {}) {
     0
   );
   const subtotal = BASE_FEE + students * PER_STUDENT + addOnsPerTerm;
-  const multiplier = option === 'annual' ? 2.98 : option === 'multi-year' ? 2.4 : 1;
+  const multiplier = option === 'annual' ? 2.7 : option === 'multi-year' ? 2.55 : 1;
   const base = subtotal * multiplier;
   const vat = Math.round(base * VAT);
   return { subtotal, base, vat, total: base + vat, multiplier, addOnsPerTerm };

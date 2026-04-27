@@ -82,7 +82,7 @@ export const uploadLessonPlan = asyncHandler(async (req, res) => {
       const pdfUpload = await uploadBuffer(pdfBuffer, {
         folder: `lesson-plans-pdf/${req.user.schoolId}`,
         public_id: `${req.user._id}_${Date.now()}_plan`,
-        resource_type: 'raw',
+        resource_type: 'auto',
         format: 'pdf',
       });
       if (pdfUpload?.url) {
@@ -177,7 +177,7 @@ export const deleteLessonPlan = asyncHandler(async (req, res) => {
   // Clean up Cloudinary assets
   await Promise.allSettled([
     ...plan.images.map((img) => deleteFile(img.publicId, { resource_type: 'image' })),
-    plan.pdfPublicId ? deleteFile(plan.pdfPublicId, { resource_type: 'raw' }) : Promise.resolve(),
+    plan.pdfPublicId ? deleteFile(plan.pdfPublicId, { resource_type: 'auto' }) : Promise.resolve(),
   ]);
 
   await plan.deleteOne();

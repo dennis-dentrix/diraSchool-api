@@ -21,8 +21,8 @@ const PER_STUDENT_RATE = 40;
 const VAT_RATE = 0.16;
 const MULTIPLIERS = {
   'per-term': 1,
-  annual: 2.98,
-  'multi-year': 2.4,
+  annual: 2.7,
+  'multi-year': 2.55,
 };
 
 const toSafeString = (value) => (value === null || value === undefined ? '' : String(value));

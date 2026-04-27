@@ -44,6 +44,11 @@ docs/__pycache__/
 apps/api/scripts/*
 !apps/api/scripts/seed.js
 !apps/api/scripts/verify-cloudinary.js
+scripts/
+
+# ── Generated analysis documents ─────────────────────────────
+*.pdf
+EduSaaS-*.md
 
 apps/web/.next
 

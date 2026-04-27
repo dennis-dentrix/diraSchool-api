@@ -9,8 +9,8 @@ const SCHOOL_FEE_ASSUMPTION = 10000; // KES per student per term (for % calc)
 
 const MULTIPLIERS = {
   'per-term': 1,
-  'annual': 2.98,       // 3 terms − 15% discount
-  'multi-year': 2.4,    // 3 terms − 20% discount per year
+  'annual': 2.7,        // 3 terms − 10% discount
+  'multi-year': 2.55,   // 3 terms − 15% discount per year
 };
 
 const schema = z.object({

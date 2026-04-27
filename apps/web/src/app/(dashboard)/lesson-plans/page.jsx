@@ -403,9 +403,8 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
   const typeLabel = plan.type === 'work_schedule' ? 'Work Schedule' : 'Lesson Plan';
   const typeColor = plan.type === 'work_schedule' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700';
 
-  // Build a downloadable PDF URL (Cloudinary fl_attachment trick)
   const pdfDownloadUrl = plan.pdfUrl
-    ? plan.pdfUrl.replace('/raw/upload/', '/raw/upload/fl_attachment/')
+    ? plan.pdfUrl.replace(/\/(raw|image|video)\/upload\//, '/$1/upload/fl_attachment/')
     : null;
 
   function openLightbox(idx = 0) {

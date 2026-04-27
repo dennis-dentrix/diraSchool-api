@@ -457,7 +457,7 @@ export default function ClassesPage() {
                       {classPlans.map((plan) => {
                         const firstImg = plan.images?.[0];
                         const pdfUrl = plan.pdfUrl
-                          ? plan.pdfUrl.replace('/raw/upload/', '/raw/upload/fl_attachment/')
+                          ? plan.pdfUrl.replace(/\/(raw|image|video)\/upload\//, '/$1/upload/fl_attachment/')
                           : null;
                         return (
                           <div key={plan._id} className="rounded-lg border border-slate-200 overflow-hidden">
