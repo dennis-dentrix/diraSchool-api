@@ -461,7 +461,8 @@ export default function ClassesPage() {
                           if (!plan.pdfUrl) return;
                           try {
                             const res = await fetch(plan.pdfUrl);
-                            const blob = await res.blob();
+                            const buffer = await res.arrayBuffer();
+                            const blob = new Blob([buffer], { type: 'application/pdf' });
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.href = url;

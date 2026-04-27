@@ -18,6 +18,11 @@ import { Label }    from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { toast }    from 'sonner';
 
@@ -410,7 +415,8 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
     setPdfDownloading(true);
     try {
       const res = await fetch(plan.pdfUrl);
-      const blob = await res.blob();
+      const buffer = await res.arrayBuffer();
+      const blob = new Blob([buffer], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -420,7 +426,7 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      // silently fail — user can try again
+      toast.error('Failed to download PDF. Please try again.');
     } finally {
       setPdfDownloading(false);
     }
@@ -566,16 +572,19 @@ export default function LessonPlansPage() {
     enabled: !!user?._id,
   });
 
-  const { mutate: deletePlan } = useMutation({
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const { mutate: deletePlan, isPending: deleting } = useMutation({
     mutationFn: (id) => lessonPlansApi.delete(id),
-    onSuccess: () => { toast.success('Deleted.'); qc.invalidateQueries({ queryKey: ['lesson-plans'] }); },
+    onSuccess: () => {
+      toast.success('Lesson plan deleted.');
+      qc.invalidateQueries({ queryKey: ['lesson-plans'] });
+      setDeleteTarget(null);
+    },
     onError: (e) => toast.error(e?.response?.data?.message ?? 'Delete failed.'),
   });
 
-  function handleDelete(plan) {
-    if (!confirm(`Delete "${plan.title}"?`)) return;
-    deletePlan(plan._id);
-  }
+  function handleDelete(plan) { setDeleteTarget(plan); }
 
   const plans = data ?? [];
   const setFilter = (k) => (v) => setFilters((p) => ({ ...p, [k]: v === 'all' ? '' : v }));
@@ -672,6 +681,43 @@ export default function LessonPlansPage() {
       {shareTarget && (
         <ShareDialog plan={shareTarget} open={!!shareTarget} onClose={() => setShareTarget(null)} />
       )}
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o && !deleting) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete lesson plan?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>
+                  You are about to permanently delete{' '}
+                  <span className="font-semibold text-slate-900">"{deleteTarget?.title}"</span>.
+                </p>
+                <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive space-y-1">
+                  <p className="font-medium">This will permanently remove:</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-destructive/80">
+                    {deleteTarget?.images?.length > 0 && (
+                      <li>{deleteTarget.images.length} uploaded image{deleteTarget.images.length > 1 ? 's' : ''} from storage</li>
+                    )}
+                    {deleteTarget?.pdfUrl && <li>The generated PDF from storage</li>}
+                    <li>All sharing permissions for this plan</li>
+                  </ul>
+                </div>
+                <p className="text-xs text-muted-foreground">This action cannot be undone.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={() => deletePlan(deleteTarget._id)}
+            >
+              {deleting ? 'Deleting…' : 'Yes, delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
