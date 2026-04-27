@@ -439,7 +439,7 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
               </Button>
             )}
             {pdfDownloadUrl && (
-              <a href={pdfDownloadUrl} download target="_blank" rel="noreferrer">
+              <a href={pdfDownloadUrl} target="_blank" rel="noreferrer">
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
                   <Download className="h-3.5 w-3.5" /> PDF
                 </Button>

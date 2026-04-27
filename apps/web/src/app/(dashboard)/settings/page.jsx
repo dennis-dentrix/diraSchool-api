@@ -40,6 +40,8 @@ export default function SettingsPage() {
   const [profileForm, setProfileForm] = useState(null);
   const [newHoliday, setNewHoliday] = useState({ name: '', date: '', description: '' });
   const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
+  const [mpesaForm, setMpesaForm]   = useState(null);
+  const [editingMpesa, setEditingMpesa] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
 
   const { data, isLoading } = useQuery({
@@ -66,6 +68,17 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['school-me'] });
       setEditingProfile(false);
       setProfileForm(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: saveMpesa, isPending: savingMpesa } = useMutation({
+    mutationFn: (data) => schoolsApi.updateMe(data),
+    onSuccess: () => {
+      toast.success('M-Pesa configuration saved');
+      queryClient.invalidateQueries({ queryKey: ['school-me'] });
+      setEditingMpesa(false);
+      setMpesaForm(null);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -262,6 +275,51 @@ export default function SettingsPage() {
               <InfoRow label="Reg. Number" value={schoolData?.registrationNumber} />
               <InfoRow label="Address" value={schoolData?.address} />
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── M-Pesa Payment Capture ───────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Info className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">M-Pesa Payment Capture</CardTitle>
+            </div>
+            {canEditSchoolDetails && !editingMpesa && (
+              <Button size="sm" variant="outline" onClick={() => { setMpesaForm({ mpesaTillNumber: schoolData?.mpesaTillNumber ?? '' }); setEditingMpesa(true); }}>
+                <Pencil className="h-4 w-4" /> Edit
+              </Button>
+            )}
+            {editingMpesa && canEditSchoolDetails && (
+              <div className="flex gap-2">
+                <Button size="sm" variant="ghost" onClick={() => { setEditingMpesa(false); setMpesaForm(null); }}><X className="h-4 w-4" /></Button>
+                <Button size="sm" onClick={() => saveMpesa({ mpesaTillNumber: mpesaForm.mpesaTillNumber })} disabled={savingMpesa}><Save className="h-4 w-4" /> Save</Button>
+              </div>
+            )}
+          </div>
+          <CardDescription>
+            Register your M-Pesa till/paybill number so Africa&apos;s Talking can forward payment
+            SMSes to DiraSchool and auto-generate receipts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {editingMpesa && mpesaForm ? (
+            <div className="max-w-xs space-y-1.5">
+              <Label>M-Pesa Till / Paybill Number</Label>
+              <Input
+                value={mpesaForm.mpesaTillNumber}
+                onChange={(e) => setMpesaForm((p) => ({ ...p, mpesaTillNumber: e.target.value }))}
+                placeholder="e.g. 0722123456 or 123456"
+              />
+              <p className="text-xs text-muted-foreground">
+                Register this number in Africa&apos;s Talking, set the callback URL to{' '}
+                <code className="bg-muted px-1 rounded">/api/v1/sms/inbound</code>, then save.
+              </p>
+            </div>
+          ) : (
+            <InfoRow label="Till / Paybill Number" value={schoolData?.mpesaTillNumber} />
           )}
         </CardContent>
       </Card>

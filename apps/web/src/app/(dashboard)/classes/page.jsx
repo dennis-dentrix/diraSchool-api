@@ -500,7 +500,7 @@ export default function ClassesPage() {
                                   </a>
                                 )}
                                 {pdfUrl && (
-                                  <a href={pdfUrl} download target="_blank" rel="noreferrer"
+                                  <a href={pdfUrl} target="_blank" rel="noreferrer"
                                     className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:underline">
                                     <Download className="h-3 w-3" /> Download PDF
                                   </a>
