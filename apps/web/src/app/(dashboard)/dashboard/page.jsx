@@ -343,8 +343,8 @@ function PrincipalDashboard({ user, summary, isLoading }) {
         <Button onClick={() => router.push('/students')} variant="outline" className="gap-2">
           <Plus className="h-4 w-4" /> Enroll Student
         </Button>
-        <Button onClick={() => router.push('/report-cards')} variant="outline" className="gap-2">
-          <FileText className="h-4 w-4" /> Post Grades
+        <Button onClick={() => router.push('/results')} variant="outline" className="gap-2">
+          <FileText className="h-4 w-4" /> View Results
         </Button>
       </div>
     </DashboardShell>

@@ -16,6 +16,7 @@ import {
   UserCog,
   Home,
   Receipt,
+  Image,
 } from 'lucide-react';
 
 // Role groups
@@ -66,9 +67,15 @@ export const schoolNavItems = [
     roles: ACADEMIC,
   },
   {
-    label: 'Report Cards',
-    href: '/report-cards',
+    label: 'Results',
+    href: '/results',
     icon: BarChart2,
+    roles: ACADEMIC,
+  },
+  {
+    label: 'Lesson Plans',
+    href: '/lesson-plans',
+    icon: Image,
     roles: ACADEMIC,
   },
   {

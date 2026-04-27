@@ -3,18 +3,21 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, BookOpen, Users, MoreHorizontal, ChevronRight, GraduationCap, Pencil, UserPlus } from 'lucide-react';
+import { Plus, BookOpen, Users, MoreHorizontal, ChevronRight, GraduationCap, Pencil, UserPlus, Image as ImageIcon, FileText, Eye, ExternalLink } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { classesApi, usersApi, getErrorMessage } from '@/lib/api';
+import { classesApi, usersApi, lessonPlansApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { LEVEL_CATEGORIES, ACADEMIC_YEARS } from '@/lib/constants';
+import { formatDate } from '@/lib/utils';
 import { PageHeader } from '@/components/shared/page-header';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -84,6 +87,8 @@ export default function ClassesPage() {
     enabled: adminUser,
   });
 
+  const [sheetTab, setSheetTab] = useState('students');
+
   const { data: classDetailData, isLoading: studentsLoading } = useQuery({
     queryKey: ['class-detail', selectedClass?._id],
     queryFn: async () => {
@@ -91,6 +96,15 @@ export default function ClassesPage() {
       return res.data;
     },
     enabled: !!selectedClass?._id,
+  });
+
+  const { data: classPlans, isLoading: plansLoading } = useQuery({
+    queryKey: ['lesson-plans-class', selectedClass?._id],
+    queryFn: async () => {
+      const res = await lessonPlansApi.list({ classId: selectedClass._id });
+      return res.data?.plans ?? [];
+    },
+    enabled: !!selectedClass?._id && sheetTab === 'plans',
   });
 
   const classStudents = classDetailData?.students ?? classDetailData?.data?.students ?? [];
@@ -323,7 +337,7 @@ export default function ClassesPage() {
       )}
 
       {/* ── Class detail side panel ───────────────────────────────────────── */}
-      <Sheet open={!!selectedClass} onOpenChange={(open) => !open && setSelectedClass(null)}>
+      <Sheet open={!!selectedClass} onOpenChange={(open) => { if (!open) { setSelectedClass(null); setSheetTab('students'); } }}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           {selectedClass && (
             <>
@@ -338,12 +352,7 @@ export default function ClassesPage() {
                     </SheetDescription>
                   </div>
                   {adminUser && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 mt-0.5"
-                      onClick={() => openEdit(selectedClass)}
-                    >
+                    <Button size="sm" variant="outline" className="shrink-0 mt-0.5" onClick={() => openEdit(selectedClass)}>
                       <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
                     </Button>
                   )}
@@ -351,7 +360,7 @@ export default function ClassesPage() {
               </SheetHeader>
 
               {/* Meta info */}
-              <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground mb-0.5">Students</p>
                   <p className="text-xl font-bold">{selectedClass.studentCount ?? classStudents.length}</p>
@@ -368,45 +377,39 @@ export default function ClassesPage() {
 
               {/* Action buttons */}
               {canManageEnrollmentPromotion && (
-                <div className="flex gap-2 mb-5">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => {
-                      setSelectedClass(null);
-                      router.push(`/students?classId=${selectedClass._id}&enroll=1`);
-                    }}
-                  >
+                <div className="flex gap-2 mb-4">
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => { setSelectedClass(null); router.push(`/students?classId=${selectedClass._id}&enroll=1`); }}>
                     <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Enroll Student
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setPromoteDialog({ open: true, sourceClass: selectedClass, targetClassId: '', action: 'promote' })}
-                  >
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => setPromoteDialog({ open: true, sourceClass: selectedClass, targetClassId: '', action: 'promote' })}>
                     <GraduationCap className="h-3.5 w-3.5 mr-1.5" /> Promote
                   </Button>
                 </div>
               )}
 
-              {/* Student list */}
-              <div>
-                <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Users className="h-4 w-4" /> Students
-                </h4>
-                {studentsLoading ? (
-                  <div className="space-y-2">
-                    {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
-                  </div>
-                ) : studentContactRows.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">No students enrolled in this class</p>
-                ) : (
-                  <div className="divide-y rounded-md border overflow-hidden">
-                    {studentContactRows.map((row, idx) => (
-                      <div key={row.studentId} className="px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
-                        <div className="flex items-center justify-between">
+              {/* Tabs: Students | Lesson Plans */}
+              <Tabs value={sheetTab} onValueChange={setSheetTab}>
+                <TabsList className="w-full grid grid-cols-2 mb-4">
+                  <TabsTrigger value="students" className="text-xs">
+                    <Users className="h-3.5 w-3.5 mr-1.5" /> Students
+                  </TabsTrigger>
+                  <TabsTrigger value="plans" className="text-xs">
+                    <ImageIcon className="h-3.5 w-3.5 mr-1.5" /> Lesson Plans
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* ── Students tab ────────────────────────────────────── */}
+                <TabsContent value="students">
+                  {studentsLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
+                    </div>
+                  ) : studentContactRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">No students enrolled in this class</p>
+                  ) : (
+                    <div className="divide-y rounded-md border overflow-hidden">
+                      {studentContactRows.map((row, idx) => (
+                        <div key={row.studentId} className="px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
                           <div className="flex items-center gap-2.5">
                             <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}</span>
                             <div>
@@ -414,19 +417,90 @@ export default function ClassesPage() {
                               <p className="text-xs text-muted-foreground font-mono">{row.admissionNumber}</p>
                             </div>
                           </div>
+                          <div className="mt-1.5 space-y-1 pl-7">
+                            {row.contacts.map((c, i) => (
+                              <p key={`${row.studentId}-${i}`} className="text-xs text-muted-foreground">
+                                {c.name} · {c.phone || '—'}
+                              </p>
+                            ))}
+                          </div>
                         </div>
-                        <div className="mt-1.5 space-y-1 pl-7">
-                          {row.contacts.map((c, i) => (
-                            <p key={`${row.studentId}-${i}`} className="text-xs text-muted-foreground">
-                              {c.name} · {c.phone || '—'}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+
+                {/* ── Lesson Plans tab ────────────────────────────────── */}
+                <TabsContent value="plans">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs text-muted-foreground">Plans & work schedules for this class</p>
+                    <Button
+                      size="sm" variant="outline" className="h-7 text-xs gap-1"
+                      onClick={() => router.push(`/lesson-plans`)}
+                    >
+                      <ExternalLink className="h-3 w-3" /> All Plans
+                    </Button>
                   </div>
-                )}
-              </div>
+
+                  {plansLoading ? (
+                    <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
+                  ) : !classPlans?.length ? (
+                    <div className="py-8 text-center">
+                      <ImageIcon className="h-8 w-8 mx-auto text-slate-200 mb-2" />
+                      <p className="text-sm text-muted-foreground">No lesson plans uploaded for this class yet.</p>
+                      <Button size="sm" variant="outline" className="mt-3 gap-1.5 text-xs" onClick={() => router.push('/lesson-plans')}>
+                        <ExternalLink className="h-3.5 w-3.5" /> Go to Lesson Plans
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {classPlans.map((plan) => (
+                        <div key={plan._id} className="rounded-lg border border-slate-200 overflow-hidden">
+                          {plan.imageUrl ? (
+                            <img
+                              src={plan.imageUrl}
+                              alt={plan.title}
+                              className="w-full h-28 object-cover bg-slate-50"
+                            />
+                          ) : (
+                            <div className="flex items-center justify-center h-16 bg-slate-50 border-b border-slate-100">
+                              <FileText className="h-6 w-6 text-slate-300" />
+                            </div>
+                          )}
+                          <div className="p-2.5 space-y-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-xs font-semibold text-slate-900 leading-snug">{plan.title}</p>
+                              <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
+                                {plan.type === 'work_schedule' ? 'Schedule' : 'Plan'}
+                              </Badge>
+                            </div>
+                            {plan.subjectId && (
+                              <p className="text-[11px] text-muted-foreground">{plan.subjectId.name}</p>
+                            )}
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                              <span>{plan.term} {plan.academicYear}{plan.weekNumber ? ` · Wk ${plan.weekNumber}` : ''}</span>
+                              <span>{formatDate(plan.createdAt)}</span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              By {plan.teacherId?.firstName} {plan.teacherId?.lastName}
+                            </p>
+                            {plan.imageUrl && (
+                              <a
+                                href={plan.imageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] text-cyan-700 hover:underline mt-1"
+                              >
+                                <Eye className="h-3 w-3" /> View full image
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </>
           )}
         </SheetContent>

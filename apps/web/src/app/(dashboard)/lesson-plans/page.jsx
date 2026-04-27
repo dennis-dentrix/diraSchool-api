@@ -1,0 +1,508 @@
+'use client';
+
+import { useState, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Upload, Trash2, Share2, X, Image as ImageIcon, FileText, Eye, UserCheck,
+} from 'lucide-react';
+import { lessonPlansApi, usersApi } from '@/lib/api';
+import { useAuthStore } from '@/store/auth.store';
+import { TERMS, ACADEMIC_YEARS } from '@/lib/constants';
+import { formatDate } from '@/lib/utils';
+import { Button }   from '@/components/ui/button';
+import { Badge }    from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input }    from '@/components/ui/input';
+import { Label }    from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { toast }    from 'sonner';
+
+const ADMIN_ROLES = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
+const CURRENT_YEAR = String(new Date().getFullYear());
+
+function isAdmin(role) { return ADMIN_ROLES.includes(role); }
+
+// ── Upload dialog ─────────────────────────────────────────────────────────────
+function UploadDialog({ open, onClose, onSuccess }) {
+  const [form, setForm] = useState({
+    title: '', description: '', type: 'lesson_plan',
+    academicYear: CURRENT_YEAR, term: 'Term 1', weekNumber: '',
+  });
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const fileRef = useRef();
+  const qc = useQueryClient();
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: () => {
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
+      if (file) fd.append('image', file);
+      return lessonPlansApi.upload(fd);
+    },
+    onSuccess: () => {
+      toast.success('Lesson plan uploaded.');
+      qc.invalidateQueries({ queryKey: ['lesson-plans'] });
+      onClose();
+      setForm({ title: '', description: '', type: 'lesson_plan', academicYear: CURRENT_YEAR, term: 'Term 1', weekNumber: '' });
+      setFile(null);
+      setPreview(null);
+    },
+    onError: (e) => toast.error(e?.response?.data?.message ?? 'Upload failed.'),
+  });
+
+  function handleFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+  }
+
+  const set = (k) => (v) => setForm((p) => ({ ...p, [k]: v }));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Upload Lesson Plan / Work Schedule</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Select value={form.type} onValueChange={set('type')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lesson_plan">Lesson Plan</SelectItem>
+                  <SelectItem value="work_schedule">Work Schedule</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Term</Label>
+              <Select value={form.term} onValueChange={set('term')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Academic Year</Label>
+              <Select value={form.academicYear} onValueChange={set('academicYear')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Week No. (optional)</Label>
+              <Input
+                type="number" min={1} max={52} placeholder="e.g. 3"
+                value={form.weekNumber}
+                onChange={(e) => set('weekNumber')(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Title <span className="text-destructive">*</span></Label>
+            <Input
+              placeholder="e.g. Week 3 Lesson Plan — Mathematics"
+              value={form.title}
+              onChange={(e) => set('title')(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Description (optional)</Label>
+            <Textarea
+              placeholder="Brief notes about this plan…"
+              rows={2}
+              value={form.description}
+              onChange={(e) => set('description')(e.target.value)}
+            />
+          </div>
+
+          {/* Image picker */}
+          <div className="space-y-2">
+            <Label>Image (photo of plan)</Label>
+            {preview ? (
+              <div className="relative rounded-lg overflow-hidden border border-slate-200">
+                <img src={preview} alt="preview" className="w-full max-h-52 object-contain bg-slate-50" />
+                <button
+                  type="button"
+                  onClick={() => { setFile(null); setPreview(null); fileRef.current.value = ''; }}
+                  className="absolute top-2 right-2 rounded-full bg-white/90 p-1 shadow hover:bg-white"
+                >
+                  <X className="h-3.5 w-3.5 text-slate-700" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-200 p-6 text-slate-500 hover:border-cyan-400 hover:text-cyan-600 transition-colors"
+              >
+                <ImageIcon className="h-7 w-7" />
+                <span className="text-sm">Click to choose a photo (JPG, PNG)</span>
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
+          <Button
+            onClick={() => mutate()}
+            disabled={isPending || !form.title}
+            className="bg-cyan-700 hover:bg-cyan-800"
+          >
+            {isPending ? 'Uploading…' : <><Upload className="h-4 w-4 mr-1.5" />Upload</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Share dialog ──────────────────────────────────────────────────────────────
+function ShareDialog({ plan, open, onClose }) {
+  const [search, setSearch] = useState('');
+  const qc = useQueryClient();
+
+  const { data: staffData } = useQuery({
+    queryKey: ['staff-list-share'],
+    queryFn: async () => {
+      const res = await usersApi.list({ limit: 200, role: 'teacher' });
+      return res.data?.data ?? res.data?.users ?? [];
+    },
+    enabled: open,
+  });
+
+  const { mutate: share, isPending: sharing } = useMutation({
+    mutationFn: (teacherId) => lessonPlansApi.share(plan._id, teacherId),
+    onSuccess: () => { toast.success('Plan shared.'); qc.invalidateQueries({ queryKey: ['lesson-plans'] }); },
+    onError: (e) => toast.error(e?.response?.data?.message ?? 'Share failed.'),
+  });
+
+  const { mutate: unshare } = useMutation({
+    mutationFn: (teacherId) => lessonPlansApi.unshare(plan._id, teacherId),
+    onSuccess: () => { toast.success('Access removed.'); qc.invalidateQueries({ queryKey: ['lesson-plans'] }); },
+    onError: (e) => toast.error(e?.response?.data?.message ?? 'Failed.'),
+  });
+
+  const sharedIds = new Set((plan.sharedWith ?? []).map((u) => String(u._id ?? u)));
+  const teacherList = (staffData ?? []).filter((s) => {
+    const notOwner = String(s._id) !== String(plan.teacherId?._id ?? plan.teacherId);
+    const matchSearch = !search || `${s.firstName} ${s.lastName}`.toLowerCase().includes(search.toLowerCase());
+    return notOwner && matchSearch;
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Share Lesson Plan</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            Grant access to another teacher — e.g. a replacement teacher taking over this class.
+          </p>
+
+          {/* Currently shared */}
+          {plan.sharedWith?.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Currently shared with</p>
+              {plan.sharedWith.map((u) => (
+                <div key={u._id ?? u} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-emerald-600" />
+                    <span className="text-sm font-medium">{u.firstName} {u.lastName}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => unshare(String(u._id ?? u))}
+                    className="text-xs text-destructive hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add teacher</p>
+            <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {teacherList.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2 text-center">No teachers found.</p>
+              ) : teacherList.map((s) => {
+                const already = sharedIds.has(String(s._id));
+                return (
+                  <div key={s._id} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                    <span className="text-sm">{s.firstName} {s.lastName}</span>
+                    {already ? (
+                      <Badge variant="secondary" className="text-xs">Shared</Badge>
+                    ) : (
+                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={sharing} onClick={() => share(s._id)}>
+                        Share
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Plan card ─────────────────────────────────────────────────────────────────
+function PlanCard({ plan, currentUser, onShare, onDelete }) {
+  const [imgOpen, setImgOpen] = useState(false);
+  const isOwner = String(plan.teacherId?._id ?? plan.teacherId) === String(currentUser._id);
+  const admin   = isAdmin(currentUser.role);
+
+  const typeLabel = plan.type === 'work_schedule' ? 'Work Schedule' : 'Lesson Plan';
+  const typeColor = plan.type === 'work_schedule' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700';
+
+  return (
+    <>
+      <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow">
+        <CardContent className="p-4 space-y-3">
+          {/* Image preview */}
+          {plan.imageUrl ? (
+            <button type="button" onClick={() => setImgOpen(true)} className="block w-full">
+              <img
+                src={plan.imageUrl}
+                alt={plan.title}
+                className="w-full h-36 object-cover rounded-lg border border-slate-100 hover:opacity-90 transition-opacity"
+              />
+            </button>
+          ) : (
+            <div className="flex h-36 items-center justify-center rounded-lg border-2 border-dashed border-slate-100 bg-slate-50">
+              <FileText className="h-8 w-8 text-slate-300" />
+            </div>
+          )}
+
+          {/* Meta */}
+          <div>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-900 leading-snug">{plan.title}</p>
+              <span className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${typeColor}`}>
+                {typeLabel}
+              </span>
+            </div>
+            {plan.description && (
+              <p className="mt-1 text-xs text-slate-500 line-clamp-2">{plan.description}</p>
+            )}
+          </div>
+
+          {/* Details */}
+          <div className="flex flex-wrap gap-1.5">
+            <Badge variant="outline" className="text-[11px]">{plan.term} {plan.academicYear}</Badge>
+            {plan.weekNumber && <Badge variant="outline" className="text-[11px]">Week {plan.weekNumber}</Badge>}
+            {plan.classId && <Badge variant="outline" className="text-[11px]">{plan.classId.name}{plan.classId.stream ? ` ${plan.classId.stream}` : ''}</Badge>}
+          </div>
+
+          {/* Teacher + date */}
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>{plan.teacherId?.firstName} {plan.teacherId?.lastName}</span>
+            <span>{formatDate(plan.createdAt)}</span>
+          </div>
+
+          {/* Shared with */}
+          {plan.sharedWith?.length > 0 && (
+            <p className="text-xs text-emerald-600 flex items-center gap-1">
+              <UserCheck className="h-3.5 w-3.5" />
+              Shared with {plan.sharedWith.length} teacher{plan.sharedWith.length > 1 ? 's' : ''}
+            </p>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+            {plan.imageUrl && (
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setImgOpen(true)}>
+                <Eye className="h-3.5 w-3.5" /> View
+              </Button>
+            )}
+            {admin && (
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onShare(plan)}>
+                <Share2 className="h-3.5 w-3.5" /> Share
+              </Button>
+            )}
+            {(isOwner || admin) && (
+              <Button
+                size="sm" variant="ghost"
+                className="h-7 text-xs gap-1 ml-auto text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => onDelete(plan)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Full-size image lightbox */}
+      <Dialog open={imgOpen} onOpenChange={setImgOpen}>
+        <DialogContent className="max-w-3xl p-2">
+          <img src={plan.imageUrl} alt={plan.title} className="w-full rounded-lg" />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+export default function LessonPlansPage() {
+  const { user } = useAuthStore();
+  const qc = useQueryClient();
+  const [uploadOpen, setUploadOpen]   = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
+  const [filters, setFilters] = useState({
+    academicYear: CURRENT_YEAR,
+    term: '',
+    type: '',
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['lesson-plans', filters],
+    queryFn: async () => {
+      const params = {};
+      if (filters.academicYear) params.academicYear = filters.academicYear;
+      if (filters.term)         params.term         = filters.term;
+      if (filters.type)         params.type         = filters.type;
+      const res = await lessonPlansApi.list(params);
+      return res.data?.plans ?? [];
+    },
+    enabled: !!user?._id,
+  });
+
+  const { mutate: deletePlan } = useMutation({
+    mutationFn: (id) => lessonPlansApi.delete(id),
+    onSuccess: () => { toast.success('Deleted.'); qc.invalidateQueries({ queryKey: ['lesson-plans'] }); },
+    onError: (e) => toast.error(e?.response?.data?.message ?? 'Delete failed.'),
+  });
+
+  function handleDelete(plan) {
+    if (!confirm(`Delete "${plan.title}"?`)) return;
+    deletePlan(plan._id);
+  }
+
+  const plans = data ?? [];
+  const setFilter = (k) => (v) => setFilters((p) => ({ ...p, [k]: v === 'all' ? '' : v }));
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40">
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Lesson Plans</h1>
+              <p className="mt-1 text-sm text-slate-600">Upload and manage lesson plans and work schedules</p>
+            </div>
+            <Button onClick={() => setUploadOpen(true)} className="gap-2 bg-cyan-700 hover:bg-cyan-800 sm:self-start">
+              <Upload className="h-4 w-4" /> Upload Plan
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filters */}
+      <Card className="border-border/70">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="space-y-1">
+              <Label className="text-xs">Year</Label>
+              <Select value={filters.academicYear} onValueChange={setFilter('academicYear')}>
+                <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y} className="text-xs">{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Term</Label>
+              <Select value={filters.term || 'all'} onValueChange={setFilter('term')}>
+                <SelectTrigger className="w-28 h-8 text-xs"><SelectValue placeholder="All terms" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">All terms</SelectItem>
+                  {TERMS.map((t) => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Type</Label>
+              <Select value={filters.type || 'all'} onValueChange={setFilter('type')}>
+                <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="All types" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" className="text-xs">All types</SelectItem>
+                  <SelectItem value="lesson_plan" className="text-xs">Lesson Plan</SelectItem>
+                  <SelectItem value="work_schedule" className="text-xs">Work Schedule</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground ml-auto self-end pb-1">
+              {plans.length} plan{plans.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Grid */}
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-64" />)}
+        </div>
+      ) : plans.length === 0 ? (
+        <Card className="border-border/70">
+          <CardContent className="py-16 text-center">
+            <ImageIcon className="h-10 w-10 mx-auto text-slate-300 mb-3" />
+            <p className="text-sm font-medium text-slate-700">No lesson plans yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Upload a photo of your lesson plan or work schedule.</p>
+            <Button onClick={() => setUploadOpen(true)} className="mt-4 gap-2 bg-cyan-700 hover:bg-cyan-800">
+              <Upload className="h-4 w-4" /> Upload your first plan
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {plans.map((plan) => (
+            <PlanCard
+              key={plan._id}
+              plan={plan}
+              currentUser={user}
+              onShare={setShareTarget}
+              onDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
+
+      <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      {shareTarget && (
+        <ShareDialog plan={shareTarget} open={!!shareTarget} onClose={() => setShareTarget(null)} />
+      )}
+    </div>
+  );
+}

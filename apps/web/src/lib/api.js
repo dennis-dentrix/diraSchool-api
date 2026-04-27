@@ -261,6 +261,19 @@ export const settingsApi = {
   deleteHoliday: (id) => api.delete(`/settings/holidays/${id}`),
 };
 
+// ─── Lesson Plans ─────────────────────────────────────────────────────────────
+export const lessonPlansApi = {
+  list:    (params) => api.get('/lesson-plans', { params }),
+  get:     (id)     => api.get(`/lesson-plans/${id}`),
+  upload:  (formData) =>
+    api.post('/lesson-plans', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  delete:  (id) => api.delete(`/lesson-plans/${id}`),
+  share:   (id, teacherId) => api.post(`/lesson-plans/${id}/share`, { teacherId }),
+  unshare: (id, teacherId) => api.delete(`/lesson-plans/${id}/share/${teacherId}`),
+};
+
 // ─── Pricing (public) ─────────────────────────────────────────────────────────
 export const pricingApi = {
   calculate: (params) => api.get('/pricing/calculate', { params }),
