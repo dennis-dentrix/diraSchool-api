@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, BookOpen, Users, MoreHorizontal, ChevronRight, GraduationCap, Pencil, UserPlus, Image as ImageIcon, FileText, Eye, ExternalLink } from 'lucide-react';
+import { Plus, BookOpen, Users, MoreHorizontal, ChevronRight, GraduationCap, Pencil, UserPlus, Image as ImageIcon, FileText, Eye, ExternalLink, Download } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -454,49 +454,62 @@ export default function ClassesPage() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {classPlans.map((plan) => (
-                        <div key={plan._id} className="rounded-lg border border-slate-200 overflow-hidden">
-                          {plan.imageUrl ? (
-                            <img
-                              src={plan.imageUrl}
-                              alt={plan.title}
-                              className="w-full h-28 object-cover bg-slate-50"
-                            />
-                          ) : (
-                            <div className="flex items-center justify-center h-16 bg-slate-50 border-b border-slate-100">
-                              <FileText className="h-6 w-6 text-slate-300" />
-                            </div>
-                          )}
-                          <div className="p-2.5 space-y-1.5">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-xs font-semibold text-slate-900 leading-snug">{plan.title}</p>
-                              <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
-                                {plan.type === 'work_schedule' ? 'Schedule' : 'Plan'}
-                              </Badge>
-                            </div>
-                            {plan.subjectId && (
-                              <p className="text-[11px] text-muted-foreground">{plan.subjectId.name}</p>
+                      {classPlans.map((plan) => {
+                        const firstImg = plan.images?.[0];
+                        const pdfUrl = plan.pdfUrl
+                          ? plan.pdfUrl.replace('/raw/upload/', '/raw/upload/fl_attachment/')
+                          : null;
+                        return (
+                          <div key={plan._id} className="rounded-lg border border-slate-200 overflow-hidden">
+                            {firstImg ? (
+                              <div className="relative">
+                                <img src={firstImg.url} alt={plan.title} className="w-full h-28 object-cover bg-slate-50" />
+                                {plan.images.length > 1 && (
+                                  <span className="absolute bottom-1 right-1 text-[10px] bg-black/60 text-white px-1.5 py-0.5 rounded-full">
+                                    {plan.images.length} pages
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center h-16 bg-slate-50 border-b border-slate-100">
+                                <FileText className="h-6 w-6 text-slate-300" />
+                              </div>
                             )}
-                            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                              <span>{plan.term} {plan.academicYear}{plan.weekNumber ? ` · Wk ${plan.weekNumber}` : ''}</span>
-                              <span>{formatDate(plan.createdAt)}</span>
+                            <div className="p-2.5 space-y-1.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="text-xs font-semibold text-slate-900 leading-snug">{plan.title}</p>
+                                <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
+                                  {plan.type === 'work_schedule' ? 'Schedule' : 'Plan'}
+                                </Badge>
+                              </div>
+                              {plan.subjectId && (
+                                <p className="text-[11px] text-muted-foreground">{plan.subjectId.name}</p>
+                              )}
+                              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span>{plan.term} {plan.academicYear}{plan.weekNumber ? ` · Wk ${plan.weekNumber}` : ''}</span>
+                                <span>{formatDate(plan.createdAt)}</span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground">
+                                By {plan.teacherId?.firstName} {plan.teacherId?.lastName}
+                              </p>
+                              <div className="flex items-center gap-2 pt-1">
+                                {firstImg && (
+                                  <a href={firstImg.url} target="_blank" rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] text-cyan-700 hover:underline">
+                                    <Eye className="h-3 w-3" /> View
+                                  </a>
+                                )}
+                                {pdfUrl && (
+                                  <a href={pdfUrl} download target="_blank" rel="noreferrer"
+                                    className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:underline">
+                                    <Download className="h-3 w-3" /> Download PDF
+                                  </a>
+                                )}
+                              </div>
                             </div>
-                            <p className="text-[11px] text-muted-foreground">
-                              By {plan.teacherId?.firstName} {plan.teacherId?.lastName}
-                            </p>
-                            {plan.imageUrl && (
-                              <a
-                                href={plan.imageUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-[11px] text-cyan-700 hover:underline mt-1"
-                              >
-                                <Eye className="h-3 w-3" /> View full image
-                              </a>
-                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </TabsContent>

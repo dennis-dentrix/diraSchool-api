@@ -1,16 +1,15 @@
-import LessonPlan           from './LessonPlan.model.js';
-import User                  from '../users/User.model.js';
-import asyncHandler          from '../../utils/asyncHandler.js';
+import PDFDocument              from 'pdfkit';
+import LessonPlan               from './LessonPlan.model.js';
+import User                     from '../users/User.model.js';
+import asyncHandler             from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError, sendForbidden } from '../../utils/response.js';
 import { uploadBuffer, deleteFile } from '../../jobs/helpers/cloudinaryUpload.js';
-import { ROLES }             from '../../constants/index.js';
+import { ROLES }                from '../../constants/index.js';
 
 const VIEWER_ROLES = [
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER, ROLES.DEPUTY_HEADTEACHER,
 ];
-const SHARER_ROLES = [
-  ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER, ROLES.DEPUTY_HEADTEACHER,
-];
+const SHARER_ROLES = VIEWER_ROLES;
 
 function canView(user, plan) {
   if (VIEWER_ROLES.includes(user.role)) return true;
@@ -19,7 +18,32 @@ function canView(user, plan) {
   return plan.sharedWith?.some((id) => String(id) === uid);
 }
 
-// POST /lesson-plans  (multipart/form-data with field "image")
+// Build a PDF buffer from an array of image buffers (one page per image, A4)
+async function buildPdfFromImages(imageBuffers) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ autoFirstPage: false, margin: 0 });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const PAGE_W = 595.28;  // A4 points
+    const PAGE_H = 841.89;
+
+    for (const buf of imageBuffers) {
+      doc.addPage({ size: 'A4', margin: 0 });
+      try {
+        doc.image(buf, 0, 0, { fit: [PAGE_W, PAGE_H], align: 'center', valign: 'center' });
+      } catch {
+        // If image format unsupported by PDFKit, skip silently
+      }
+    }
+
+    doc.end();
+  });
+}
+
+// POST /lesson-plans  (multipart/form-data with field "images")
 export const uploadLessonPlan = asyncHandler(async (req, res) => {
   const { title, description, type, academicYear, term, weekNumber, classId, subjectId } = req.body;
 
@@ -27,25 +51,50 @@ export const uploadLessonPlan = asyncHandler(async (req, res) => {
     return sendError(res, 'title, academicYear, and term are required.', 400);
   }
 
-  let imageUrl, imagePublicId;
+  const files = req.files ?? [];
 
-  if (req.file) {
-    const upload = await uploadBuffer(req.file.buffer, {
-      folder:        `lesson-plans/${req.user.schoolId}`,
-      public_id:     `${req.user._id}_${Date.now()}`,
-      resource_type: 'image',
-    });
-    if (!upload?.url) {
-      return sendError(res, 'Image upload failed. Check Cloudinary configuration.', 503);
+  // Upload all images to Cloudinary in parallel
+  const uploadedImages = await Promise.all(
+    files.map((file, idx) =>
+      uploadBuffer(file.buffer, {
+        folder:        `lesson-plans/${req.user.schoolId}`,
+        public_id:     `${req.user._id}_${Date.now()}_${idx}`,
+        resource_type: 'image',
+      })
+    )
+  );
+
+  const images = uploadedImages
+    .filter(Boolean)
+    .map((u) => ({ url: u.url, publicId: u.publicId }));
+
+  // Generate PDF from the same in-memory buffers
+  let pdfUrl, pdfPublicId, pdfStatus = 'none';
+  if (files.length > 0) {
+    try {
+      const pdfBuffer = await buildPdfFromImages(files.map((f) => f.buffer));
+      const pdfUpload = await uploadBuffer(pdfBuffer, {
+        folder:        `lesson-plans-pdf/${req.user.schoolId}`,
+        public_id:     `${req.user._id}_${Date.now()}_plan`,
+        resource_type: 'raw',
+        format:        'pdf',
+      });
+      if (pdfUpload?.url) {
+        pdfUrl       = pdfUpload.url;
+        pdfPublicId  = pdfUpload.publicId;
+        pdfStatus    = 'ready';
+      } else {
+        pdfStatus = 'failed';
+      }
+    } catch {
+      pdfStatus = 'failed';
     }
-    imageUrl      = upload.url;
-    imagePublicId = upload.publicId;
   }
 
   const plan = await LessonPlan.create({
     schoolId:    req.user.schoolId,
     teacherId:   req.user._id,
-    classId:     classId || undefined,
+    classId:     classId   || undefined,
     subjectId:   subjectId || undefined,
     title:       title.trim(),
     description: description?.trim(),
@@ -53,8 +102,10 @@ export const uploadLessonPlan = asyncHandler(async (req, res) => {
     academicYear,
     term,
     weekNumber:  weekNumber ? Number(weekNumber) : undefined,
-    imageUrl,
-    imagePublicId,
+    images,
+    pdfUrl,
+    pdfPublicId,
+    pdfStatus,
   });
 
   return sendSuccess(res, { plan }, 201);
@@ -70,12 +121,8 @@ export const listLessonPlans = asyncHandler(async (req, res) => {
   if (classId)      filter.classId      = classId;
   if (type)         filter.type         = type;
 
-  // Teachers only see their own + shared; admins see all
   if (!VIEWER_ROLES.includes(req.user.role)) {
-    filter.$or = [
-      { teacherId: req.user._id },
-      { sharedWith: req.user._id },
-    ];
+    filter.$or = [{ teacherId: req.user._id }, { sharedWith: req.user._id }];
     if (teacherId && String(teacherId) === String(req.user._id)) {
       delete filter.$or;
       filter.teacherId = req.user._id;
@@ -110,25 +157,26 @@ export const getLessonPlan = asyncHandler(async (req, res) => {
   return sendSuccess(res, { plan });
 });
 
-// DELETE /lesson-plans/:id — owner or admin
+// DELETE /lesson-plans/:id
 export const deleteLessonPlan = asyncHandler(async (req, res) => {
   const plan = await LessonPlan.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
-
   if (!plan) return sendError(res, 'Lesson plan not found.', 404);
 
   const isOwner = String(plan.teacherId) === String(req.user._id);
-  const isAdmin = VIEWER_ROLES.includes(req.user.role);
-  if (!isOwner && !isAdmin) return sendForbidden(res, 'Only the owner or an administrator can delete this plan.');
+  const isAdminRole = VIEWER_ROLES.includes(req.user.role);
+  if (!isOwner && !isAdminRole) return sendForbidden(res, 'Only the owner or an administrator can delete this plan.');
 
-  if (plan.imagePublicId) {
-    await deleteFile(plan.imagePublicId, { resource_type: 'image' });
-  }
+  // Clean up Cloudinary assets
+  await Promise.allSettled([
+    ...plan.images.map((img) => deleteFile(img.publicId, { resource_type: 'image' })),
+    plan.pdfPublicId ? deleteFile(plan.pdfPublicId, { resource_type: 'raw' }) : Promise.resolve(),
+  ]);
 
   await plan.deleteOne();
   return sendSuccess(res, { message: 'Lesson plan deleted.' });
 });
 
-// POST /lesson-plans/:id/share — admin/headteacher only
+// POST /lesson-plans/:id/share
 export const shareLessonPlan = asyncHandler(async (req, res) => {
   if (!SHARER_ROLES.includes(req.user.role)) {
     return sendForbidden(res, 'Only school administrators can share lesson plans.');
@@ -145,8 +193,7 @@ export const shareLessonPlan = asyncHandler(async (req, res) => {
   if (!plan)    return sendError(res, 'Lesson plan not found.', 404);
   if (!teacher) return sendError(res, 'Teacher not found in this school.', 404);
 
-  const alreadyShared = plan.sharedWith.some((id) => String(id) === String(teacherId));
-  if (!alreadyShared) {
+  if (!plan.sharedWith.some((id) => String(id) === String(teacherId))) {
     plan.sharedWith.push(teacherId);
     await plan.save();
   }
@@ -154,7 +201,7 @@ export const shareLessonPlan = asyncHandler(async (req, res) => {
   return sendSuccess(res, { message: `Lesson plan shared with ${teacher.firstName} ${teacher.lastName}.` });
 });
 
-// DELETE /lesson-plans/:id/share/:teacherId — unshare
+// DELETE /lesson-plans/:id/share/:teacherId
 export const unshareLessonPlan = asyncHandler(async (req, res) => {
   if (!SHARER_ROLES.includes(req.user.role)) {
     return sendForbidden(res, 'Only school administrators can manage lesson plan access.');

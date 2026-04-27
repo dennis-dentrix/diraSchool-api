@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Upload, Trash2, Share2, X, Image as ImageIcon, FileText, Eye, UserCheck,
+  Download, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { lessonPlansApi, usersApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -26,13 +27,13 @@ const CURRENT_YEAR = String(new Date().getFullYear());
 function isAdmin(role) { return ADMIN_ROLES.includes(role); }
 
 // ── Upload dialog ─────────────────────────────────────────────────────────────
-function UploadDialog({ open, onClose, onSuccess }) {
+function UploadDialog({ open, onClose }) {
   const [form, setForm] = useState({
     title: '', description: '', type: 'lesson_plan',
     academicYear: CURRENT_YEAR, term: 'Term 1', weekNumber: '',
   });
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [files, setFiles]       = useState([]);   // File objects
+  const [previews, setPreviews] = useState([]);   // object URLs
   const fileRef = useRef();
   const qc = useQueryClient();
 
@@ -40,32 +41,41 @@ function UploadDialog({ open, onClose, onSuccess }) {
     mutationFn: () => {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
-      if (file) fd.append('image', file);
+      files.forEach((f) => fd.append('images', f));
       return lessonPlansApi.upload(fd);
     },
     onSuccess: () => {
-      toast.success('Lesson plan uploaded.');
+      toast.success('Lesson plan uploaded. PDF is being generated.');
       qc.invalidateQueries({ queryKey: ['lesson-plans'] });
       onClose();
       setForm({ title: '', description: '', type: 'lesson_plan', academicYear: CURRENT_YEAR, term: 'Term 1', weekNumber: '' });
-      setFile(null);
-      setPreview(null);
+      setFiles([]);
+      setPreviews([]);
     },
     onError: (e) => toast.error(e?.response?.data?.message ?? 'Upload failed.'),
   });
 
-  function handleFile(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
+  function handleFiles(e) {
+    const selected = Array.from(e.target.files ?? []);
+    if (!selected.length) return;
+    setFiles((prev) => [...prev, ...selected]);
+    setPreviews((prev) => [...prev, ...selected.map((f) => URL.createObjectURL(f))]);
+    fileRef.current.value = '';
+  }
+
+  function removeImage(idx) {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+    setPreviews((prev) => {
+      URL.revokeObjectURL(prev[idx]);
+      return prev.filter((_, i) => i !== idx);
+    });
   }
 
   const set = (k) => (v) => setForm((p) => ({ ...p, [k]: v }));
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Upload Lesson Plan / Work Schedule</DialogTitle>
         </DialogHeader>
@@ -132,31 +142,53 @@ function UploadDialog({ open, onClose, onSuccess }) {
             />
           </div>
 
-          {/* Image picker */}
+          {/* Multi-image picker */}
           <div className="space-y-2">
-            <Label>Image (photo of plan)</Label>
-            {preview ? (
-              <div className="relative rounded-lg overflow-hidden border border-slate-200">
-                <img src={preview} alt="preview" className="w-full max-h-52 object-contain bg-slate-50" />
-                <button
-                  type="button"
-                  onClick={() => { setFile(null); setPreview(null); fileRef.current.value = ''; }}
-                  className="absolute top-2 right-2 rounded-full bg-white/90 p-1 shadow hover:bg-white"
-                >
-                  <X className="h-3.5 w-3.5 text-slate-700" />
-                </button>
+            <div className="flex items-center justify-between">
+              <Label>Photos of plan pages</Label>
+              <span className="text-xs text-muted-foreground">{files.length}/20 images</span>
+            </div>
+
+            {/* Preview grid */}
+            {previews.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {previews.map((src, idx) => (
+                  <div key={idx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-[3/4]">
+                    <img src={src} alt={`page ${idx + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(idx)}
+                      className="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 hover:bg-black/80"
+                    >
+                      <X className="h-3 w-3 text-white" />
+                    </button>
+                    <span className="absolute bottom-1 left-1 text-[10px] bg-black/50 text-white rounded px-1">{idx + 1}</span>
+                  </div>
+                ))}
               </div>
-            ) : (
+            )}
+
+            {/* Add more button */}
+            {files.length < 20 && (
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-slate-200 p-6 text-slate-500 hover:border-cyan-400 hover:text-cyan-600 transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 py-4 text-slate-500 hover:border-cyan-400 hover:text-cyan-600 transition-colors"
               >
-                <ImageIcon className="h-7 w-7" />
-                <span className="text-sm">Click to choose a photo (JPG, PNG)</span>
+                <ImageIcon className="h-5 w-5" />
+                <span className="text-sm">
+                  {files.length === 0 ? 'Add photos (JPG, PNG)' : 'Add more pages'}
+                </span>
               </button>
             )}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+
+            {files.length > 0 && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <FileText className="h-3.5 w-3.5" />
+                A downloadable PDF will be generated automatically from these {files.length} image{files.length > 1 ? 's' : ''}.
+              </p>
+            )}
           </div>
         </div>
 
@@ -275,28 +307,89 @@ function ShareDialog({ plan, open, onClose }) {
   );
 }
 
+// ── Image carousel (lightbox) ─────────────────────────────────────────────────
+function ImageCarousel({ images, title, open, onClose, startIndex = 0 }) {
+  const [current, setCurrent] = useState(startIndex);
+  const total = images.length;
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl p-2 bg-black/95">
+        <div className="relative">
+          <img
+            src={images[current]?.url}
+            alt={`${title} — page ${current + 1}`}
+            className="w-full max-h-[80vh] object-contain rounded"
+          />
+          {total > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setCurrent((c) => (c - 1 + total) % total)}
+                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 hover:bg-black/80"
+              >
+                <ChevronLeft className="h-5 w-5 text-white" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrent((c) => (c + 1) % total)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 hover:bg-black/80"
+              >
+                <ChevronRight className="h-5 w-5 text-white" />
+              </button>
+              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white/80 bg-black/50 px-2 py-0.5 rounded-full">
+                {current + 1} / {total}
+              </span>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Plan card ─────────────────────────────────────────────────────────────────
 function PlanCard({ plan, currentUser, onShare, onDelete }) {
-  const [imgOpen, setImgOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIdx, setLightboxIdx]   = useState(0);
   const isOwner = String(plan.teacherId?._id ?? plan.teacherId) === String(currentUser._id);
   const admin   = isAdmin(currentUser.role);
 
+  const images   = plan.images ?? [];
+  const hasImages = images.length > 0;
   const typeLabel = plan.type === 'work_schedule' ? 'Work Schedule' : 'Lesson Plan';
   const typeColor = plan.type === 'work_schedule' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700';
+
+  // Build a downloadable PDF URL (Cloudinary fl_attachment trick)
+  const pdfDownloadUrl = plan.pdfUrl
+    ? plan.pdfUrl.replace('/raw/upload/', '/raw/upload/fl_attachment/')
+    : null;
+
+  function openLightbox(idx = 0) {
+    setLightboxIdx(idx);
+    setLightboxOpen(true);
+  }
 
   return (
     <>
       <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="p-4 space-y-3">
-          {/* Image preview */}
-          {plan.imageUrl ? (
-            <button type="button" onClick={() => setImgOpen(true)} className="block w-full">
+          {/* Image thumbnail strip */}
+          {hasImages ? (
+            <div
+              className="relative cursor-pointer rounded-lg overflow-hidden border border-slate-100 bg-slate-50"
+              onClick={() => openLightbox(0)}
+            >
               <img
-                src={plan.imageUrl}
+                src={images[0].url}
                 alt={plan.title}
-                className="w-full h-36 object-cover rounded-lg border border-slate-100 hover:opacity-90 transition-opacity"
+                className="w-full h-36 object-cover hover:opacity-90 transition-opacity"
               />
-            </button>
+              {images.length > 1 && (
+                <span className="absolute bottom-2 right-2 text-xs bg-black/60 text-white px-2 py-0.5 rounded-full">
+                  +{images.length - 1} more
+                </span>
+              )}
+            </div>
           ) : (
             <div className="flex h-36 items-center justify-center rounded-lg border-2 border-dashed border-slate-100 bg-slate-50">
               <FileText className="h-8 w-8 text-slate-300" />
@@ -321,6 +414,7 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
             <Badge variant="outline" className="text-[11px]">{plan.term} {plan.academicYear}</Badge>
             {plan.weekNumber && <Badge variant="outline" className="text-[11px]">Week {plan.weekNumber}</Badge>}
             {plan.classId && <Badge variant="outline" className="text-[11px]">{plan.classId.name}{plan.classId.stream ? ` ${plan.classId.stream}` : ''}</Badge>}
+            {images.length > 0 && <Badge variant="outline" className="text-[11px]">{images.length} page{images.length > 1 ? 's' : ''}</Badge>}
           </div>
 
           {/* Teacher + date */}
@@ -338,11 +432,21 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
           )}
 
           {/* Actions */}
-          <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-            {plan.imageUrl && (
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setImgOpen(true)}>
+          <div className="flex items-center gap-2 pt-1 border-t border-slate-100 flex-wrap">
+            {hasImages && (
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openLightbox(0)}>
                 <Eye className="h-3.5 w-3.5" /> View
               </Button>
+            )}
+            {pdfDownloadUrl && (
+              <a href={pdfDownloadUrl} download target="_blank" rel="noreferrer">
+                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+                  <Download className="h-3.5 w-3.5" /> PDF
+                </Button>
+              </a>
+            )}
+            {plan.pdfStatus === 'processing' && (
+              <span className="text-[11px] text-muted-foreground italic">PDF generating…</span>
             )}
             {admin && (
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onShare(plan)}>
@@ -362,12 +466,15 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
         </CardContent>
       </Card>
 
-      {/* Full-size image lightbox */}
-      <Dialog open={imgOpen} onOpenChange={setImgOpen}>
-        <DialogContent className="max-w-3xl p-2">
-          <img src={plan.imageUrl} alt={plan.title} className="w-full rounded-lg" />
-        </DialogContent>
-      </Dialog>
+      {hasImages && (
+        <ImageCarousel
+          images={images}
+          title={plan.title}
+          open={lightboxOpen}
+          onClose={() => setLightboxOpen(false)}
+          startIndex={lightboxIdx}
+        />
+      )}
     </>
   );
 }

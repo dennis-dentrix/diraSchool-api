@@ -82,3 +82,28 @@ export const uploadImage = (fieldName = 'file') => (req, res, next) => {
     next();
   });
 };
+
+/**
+ * Multiple-image upload middleware.
+ * Field name: "images", up to 20 files, 10 MB each.
+ */
+const multiImageUpload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (String(file.mimetype).startsWith('image/')) return cb(null, true);
+    return cb(new Error('Only image files are allowed.'));
+  },
+});
+
+export const uploadImages = (fieldName = 'images', maxCount = 20) => (req, res, next) => {
+  multiImageUpload.array(fieldName, maxCount)(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') return sendError(res, 'Each image must be 10 MB or smaller.', 400);
+      if (err.code === 'LIMIT_UNEXPECTED_FILE') return sendError(res, `Maximum ${maxCount} images allowed.`, 400);
+      return sendError(res, err.message, 400);
+    }
+    if (err) return sendError(res, err.message, 400);
+    next();
+  });
+};

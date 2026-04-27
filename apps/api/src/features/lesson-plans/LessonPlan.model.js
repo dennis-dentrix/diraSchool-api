@@ -1,6 +1,14 @@
 import mongoose from 'mongoose';
 import { TERMS } from '../../constants/index.js';
 
+const imageSchema = new mongoose.Schema(
+  {
+    url:      { type: String, required: true, trim: true },
+    publicId: { type: String, required: true, trim: true },
+  },
+  { _id: false }
+);
+
 const lessonPlanSchema = new mongoose.Schema(
   {
     schoolId: {
@@ -15,23 +23,14 @@ const lessonPlanSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    classId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Class',
-    },
-    subjectId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Subject',
-    },
+    classId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },
+    subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
     title: {
       type: String,
       required: true,
       trim: true,
     },
-    description: {
-      type: String,
-      trim: true,
-    },
+    description: { type: String, trim: true },
     type: {
       type: String,
       enum: ['lesson_plan', 'work_schedule'],
@@ -48,26 +47,22 @@ const lessonPlanSchema = new mongoose.Schema(
       enum: TERMS,
       required: true,
     },
-    weekNumber: {
-      type: Number,
-      min: 1,
-      max: 52,
-    },
-    imageUrl: {
+    weekNumber: { type: Number, min: 1, max: 52 },
+
+    // Multiple uploaded images (one page each in the PDF)
+    images: { type: [imageSchema], default: [] },
+
+    // Generated PDF (compiled from all images)
+    pdfUrl:       { type: String, trim: true },
+    pdfPublicId:  { type: String, trim: true },
+    pdfStatus: {
       type: String,
-      trim: true,
+      enum: ['none', 'processing', 'ready', 'failed'],
+      default: 'none',
     },
-    imagePublicId: {
-      type: String,
-      trim: true,
-    },
+
     // Teachers this plan has been shared with (beyond the original uploader)
-    sharedWith: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-      },
-    ],
+    sharedWith: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true }
 );
