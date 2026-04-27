@@ -40,6 +40,7 @@ import pricingRoutes from './features/pricing/pricing.routes.js';
 import exportRoutes from './features/export/export.routes.js';
 import notificationRoutes from './features/notifications/notifications.routes.js';
 import subscriptionRoutes from './features/subscriptions/subscriptions.routes.js';
+import lessonPlanRoutes from './features/lesson-plans/lesson-plans.routes.js';
 
 // ── Startup diagnostic — always runs first, visible in Railway logs ──────────
 // This prints BEFORE validateEnv() so missing vars are visible even if we crash.
@@ -158,6 +159,7 @@ app.use('/api/v1/exams', examRoutes);
 app.use('/api/v1/results', resultRoutes);
 app.use('/api/v1/fees', feeRoutes);
 app.use('/api/v1/report-cards', reportCardRoutes);
+app.use('/api/v1/lesson-plans', lessonPlanRoutes);
 app.use('/api/v1/schools', schoolRoutes);
 app.use('/api/v1/parent', parentRoutes);
 app.use('/api/v1/audit-logs', auditRoutes);
