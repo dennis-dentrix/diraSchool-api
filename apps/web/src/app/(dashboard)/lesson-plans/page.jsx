@@ -141,10 +141,10 @@ function UploadDialog({ open, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Class (optional)</Label>
-              <Select value={form.classId} onValueChange={set('classId')}>
+              <Select value={form.classId || 'none'} onValueChange={(v) => set('classId')(v === 'none' ? '' : v)}>
                 <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— None —</SelectItem>
+                  <SelectItem value="none">— None —</SelectItem>
                   {classes.map((c) => (
                     <SelectItem key={c._id} value={c._id}>
                       {c.name}{c.stream ? ` ${c.stream}` : ''}
@@ -155,10 +155,10 @@ function UploadDialog({ open, onClose }) {
             </div>
             <div className="space-y-1.5">
               <Label>Subject (optional)</Label>
-              <Select value={form.subjectId} onValueChange={set('subjectId')}>
+              <Select value={form.subjectId || 'none'} onValueChange={(v) => set('subjectId')(v === 'none' ? '' : v)}>
                 <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">— None —</SelectItem>
+                  <SelectItem value="none">— None —</SelectItem>
                   {subjects.map((s) => (
                     <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>
                   ))}

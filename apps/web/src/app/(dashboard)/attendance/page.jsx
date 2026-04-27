@@ -237,9 +237,13 @@ function RecordsTab({ classes, adminView }) {
   const [page, setPage] = useState(1);
   const LIMIT = 20;
 
+  // Teacher has exactly one class — always scope to it; don't let filter override
+  const forcedClassId = !adminView && classes.length === 1 ? classes[0]._id : null;
+
   const queryParams = useMemo(() => {
     const p = { limit: LIMIT, page };
-    if (classFilter) p.classId = classFilter;
+    const effectiveClass = forcedClassId ?? (classFilter || undefined);
+    if (effectiveClass) p.classId = effectiveClass;
     if (statusFilter) p.status = statusFilter;
     if (quickPeriod === 'today') { p.from = TODAY; p.to = TODAY; }
     else if (quickPeriod === 'week')  { const r = getWeekRange(); p.from = r.from; p.to = r.to; }
@@ -361,11 +365,14 @@ function SummaryTab({ classes }) {
   const [term, setTerm] = useState(TERMS[0]);
   const [academicYear, setAcademicYear] = useState(String(CURRENT_YEAR));
 
+  const forcedClassId = classes.length === 1 ? classes[0]._id : null;
+
   const periodParams = useMemo(() => getPeriodParams(period, term, academicYear), [period, term, academicYear]);
 
   const queryParams = useMemo(() => {
     const p = { limit: 500, status: 'submitted' };
-    if (summaryClass)               p.classId      = summaryClass;
+    const effectiveClass = forcedClassId ?? (summaryClass || undefined);
+    if (effectiveClass)             p.classId      = effectiveClass;
     if (periodParams?.from)         p.from         = periodParams.from;
     if (periodParams?.to)           p.to           = periodParams.to;
     if (periodParams?.term)         p.term         = periodParams.term;
@@ -545,13 +552,22 @@ export default function AttendancePage() {
     queryFn: async () => {
       if (isTeacher) {
         const res = await classesApi.myClass();
-        const cls = res.data?.class ?? res.data?.data ?? res.data;
-        return cls ? [cls] : [];
+        // Return the full API payload so it's compatible with the dashboard cache shape
+        return res.data?.data ?? res.data;
       }
       const res = await classesApi.list({ limit: 100 });
       return res.data?.data ?? res.data?.classes ?? [];
     },
   });
+
+  // Normalise: dashboard stores { class, students, feeStructure }, attendance page
+  // expects an array. Handle both shapes so they can share the same cache key.
+  const classes = (() => {
+    if (!classesData) return [];
+    if (Array.isArray(classesData)) return classesData;
+    if (classesData?.class) return [classesData.class];
+    return [];
+  })();
 
   const { data: todayRegisters, isLoading: todayLoading } = useQuery({
     queryKey: ['attendance-today'],
@@ -571,7 +587,6 @@ export default function AttendancePage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const classes = Array.isArray(classesData) ? classesData : [];
   const today = Array.isArray(todayRegisters) ? todayRegisters : [];
 
   const todayDone  = today.filter((r) => r.status === 'submitted').length;
