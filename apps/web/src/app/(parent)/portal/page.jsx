@@ -168,10 +168,17 @@ function FeesTab({ studentId }) {
 
       {(data?.payments ?? []).length > 0 ? (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Payment History</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm">Payment History</CardTitle>
+              {data.payments.length > 3 && (
+                <span className="text-xs text-muted-foreground">{data.payments.length} payments total</span>
+              )}
+            </div>
+          </CardHeader>
           <CardContent>
             <div className="divide-y">
-              {data.payments.map((p, i) => (
+              {data.payments.slice(0, 3).map((p, i) => (
                 <div key={p._id ?? i} className="flex justify-between items-center py-3">
                   <div>
                     <p className="text-sm font-medium">{p.description ?? 'Payment'}</p>
@@ -184,11 +191,22 @@ function FeesTab({ studentId }) {
                 </div>
               ))}
             </div>
+            {data.payments.length > 3 && (
+              <p className="text-xs text-muted-foreground text-center pt-3 border-t mt-1">
+                Showing 3 of {data.payments.length} payments. Contact the school bursar for a full statement.
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : totalBilled > 0 ? (
         <p className="text-sm text-muted-foreground text-center py-4">No payments recorded yet.</p>
       ) : null}
+
+      {balance > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 flex items-center justify-between gap-3">
+          <span>To pay fees, visit the school bursar with your admission number.</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -452,12 +470,12 @@ function SchoolTab() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" />Upcoming Holidays
+            <CalendarDays className="h-4 w-4" />Upcoming Events
           </CardTitle>
         </CardHeader>
         <CardContent>
           {upcoming.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No upcoming holidays scheduled.</p>
+            <p className="text-sm text-muted-foreground">No upcoming events scheduled.</p>
           ) : (
             <div className="divide-y">
               {upcoming.map((h) => (
@@ -478,7 +496,7 @@ function SchoolTab() {
       {past.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Recent Holidays</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Recent Events</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="divide-y">

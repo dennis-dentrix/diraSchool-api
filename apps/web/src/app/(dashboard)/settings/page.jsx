@@ -106,7 +106,7 @@ export default function SettingsPage() {
   const { mutate: addHoliday, isPending: addingHoliday } = useMutation({
     mutationFn: () => settingsApi.addHoliday(newHoliday),
     onSuccess: () => {
-      toast.success('Holiday added');
+      toast.success('Event added');
       queryClient.invalidateQueries({ queryKey: ['settings'] });
       setNewHoliday({ name: '', date: '', description: '' });
     },
@@ -115,7 +115,7 @@ export default function SettingsPage() {
 
   const { mutate: deleteHoliday } = useMutation({
     mutationFn: (id) => settingsApi.deleteHoliday(id),
-    onSuccess: () => { toast.success('Holiday removed'); queryClient.invalidateQueries({ queryKey: ['settings'] }); },
+    onSuccess: () => { toast.success('Event removed'); queryClient.invalidateQueries({ queryKey: ['settings'] }); },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
@@ -154,7 +154,7 @@ export default function SettingsPage() {
   const todayHoliday = (data?.holidays ?? []).find((h) => String(h?.date ?? '').slice(0, 10) === todayIso);
   const isMidterm = !!todayHoliday && /mid\s*term/i.test(`${todayHoliday?.name ?? ''} ${todayHoliday?.description ?? ''}`);
   const schoolDayStatus = todayHoliday
-    ? (isMidterm ? `Midterm break (${todayHoliday.name})` : `Holiday (${todayHoliday.name})`)
+    ? (isMidterm ? `Midterm break (${todayHoliday.name})` : `Event (${todayHoliday.name})`)
     : (currentTerm ? 'In session' : 'On break');
 
   return (
@@ -440,9 +440,9 @@ export default function SettingsPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Info className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="text-base">School Holidays</CardTitle>
+            <CardTitle className="text-base">School Events</CardTitle>
           </div>
-          <CardDescription>Public and school holidays for the academic calendar.</CardDescription>
+          <CardDescription>Holidays, events, and closures on the school calendar.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* List */}
@@ -465,7 +465,7 @@ export default function SettingsPage() {
                 </Button>
               </div>
             )) : (
-              <p className="text-sm text-muted-foreground py-1">No holidays configured.</p>
+              <p className="text-sm text-muted-foreground py-1">No events configured.</p>
             )}
           </div>
 
@@ -473,9 +473,9 @@ export default function SettingsPage() {
 
           {/* Add new */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Add Holiday</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Add Event</p>
             {!canEditSchoolDetails && (
-              <p className="text-xs text-muted-foreground mb-2">Only school admin, director, or headteacher can edit holidays.</p>
+              <p className="text-xs text-muted-foreground mb-2">Only school admin, director, or headteacher can add events.</p>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="space-y-1.5">
@@ -501,8 +501,8 @@ export default function SettingsPage() {
       <AlertDialog open={confirmDialog.open && canEditSchoolDetails} onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove holiday?</AlertDialogTitle>
-            <AlertDialogDescription>This holiday will be permanently removed from the school calendar.</AlertDialogDescription>
+            <AlertDialogTitle>Remove event?</AlertDialogTitle>
+            <AlertDialogDescription>This event will be permanently removed from the school calendar.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
