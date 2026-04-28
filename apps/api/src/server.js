@@ -139,8 +139,8 @@ app.get('/health', async (req, res) => {
       api: 'up',
       mongodb: 'up',
       redis: redisStatus,
-      cloudinary:
-        env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET
+      storage:
+        env.DO_SPACES_KEY && env.DO_SPACES_SECRET && env.DO_SPACES_BUCKET
           ? 'configured'
           : 'not_configured',
     },

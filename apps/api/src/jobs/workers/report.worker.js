@@ -14,7 +14,7 @@ import ReportCard from '../../features/report-cards/ReportCard.model.js';
 import School from '../../features/schools/School.model.js';
 import SchoolSettings from '../../features/settings/SchoolSettings.model.js';
 import { renderReportCardPdf } from '../helpers/renderReportCardPdf.js';
-import { uploadBuffer } from '../helpers/cloudinaryUpload.js';
+import { uploadBuffer } from '../helpers/spacesUpload.js';
 import logger from '../../config/logger.js';
 import { notifyUser } from '../../utils/notify.js';
 

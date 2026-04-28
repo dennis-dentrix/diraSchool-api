@@ -15,7 +15,7 @@ import { getRedis } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
-import { uploadBuffer } from '../../jobs/helpers/cloudinaryUpload.js';
+import { uploadBuffer } from '../../jobs/helpers/spacesUpload.js';
 
 const enqueueEmail = async (type, payload) =>
   emailQueue.add(type, { type, payload });
@@ -622,7 +622,7 @@ export const uploadStudentPhoto = asyncHandler(async (req, res) => {
   if (!upload?.url) {
     return sendError(
       res,
-      'Photo upload unavailable. Configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.',
+      'Photo upload unavailable. Configure DO_SPACES_KEY, DO_SPACES_SECRET, DO_SPACES_BUCKET, and DO_SPACES_REGION.',
       503
     );
   }

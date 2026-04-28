@@ -3,7 +3,7 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { cacheGet, cacheSet, cacheDel } from '../../config/redis.js';
 import { CACHE_TTL } from '../../constants/index.js';
-import { uploadBuffer } from '../../jobs/helpers/cloudinaryUpload.js';
+import { uploadBuffer } from '../../jobs/helpers/spacesUpload.js';
 
 const settingsCacheKey = (schoolId) => `settings:${schoolId}`;
 
@@ -105,7 +105,7 @@ export const uploadSchoolLogo = asyncHandler(async (req, res) => {
   if (!upload?.url) {
     return sendError(
       res,
-      'Logo upload unavailable. Configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.',
+      'Logo upload unavailable. Configure DO_SPACES_KEY, DO_SPACES_SECRET, DO_SPACES_BUCKET, and DO_SPACES_REGION.',
       503
     );
   }

@@ -113,9 +113,7 @@ function SectionCard({ title, icon: Icon, action, children }) {
 
 function PrincipalDashboard({ user, summary, isLoading }) {
   const router = useRouter();
-  if (!summary) return null;
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   const { data: schoolSettings } = useQuery({
     queryKey: ['school-settings'],
     queryFn: async () => {
@@ -132,6 +130,8 @@ function PrincipalDashboard({ user, summary, isLoading }) {
     .filter((h) => new Date(h.date) < now)
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 2);
+
+  if (!summary) return null;
 
   const feeData = summary.fees ?? {};
   const studentData = summary.students ?? {};

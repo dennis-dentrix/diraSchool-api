@@ -3,7 +3,7 @@ import LessonPlan from './LessonPlan.model.js';
 import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError, sendForbidden } from '../../utils/response.js';
-import { uploadBuffer, deleteFile } from '../../jobs/helpers/cloudinaryUpload.js';
+import { uploadBuffer, deleteFile } from '../../jobs/helpers/spacesUpload.js';
 import { ROLES } from '../../constants/index.js';
 
 const VIEWER_ROLES = [

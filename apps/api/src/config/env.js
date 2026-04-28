@@ -52,19 +52,17 @@ export const validateEnv = () => {
     // Non-fatal — warn but don't exit, so the server can still start
   }
 
-  const cloudinaryVars = [
-    'CLOUDINARY_CLOUD_NAME',
-    'CLOUDINARY_API_KEY',
-    'CLOUDINARY_API_SECRET',
-  ];
-  const configuredCloudinaryVars = cloudinaryVars.filter((key) => !!process.env[key]);
-  if (configuredCloudinaryVars.length > 0 && configuredCloudinaryVars.length < cloudinaryVars.length) {
+  // DO Spaces — partial config is always a mistake
+  const spacesVars = ['DO_SPACES_KEY', 'DO_SPACES_SECRET', 'DO_SPACES_BUCKET', 'DO_SPACES_REGION'];
+  const configuredSpacesVars = spacesVars.filter((key) => !!process.env[key]);
+  if (configuredSpacesVars.length > 0 && configuredSpacesVars.length < spacesVars.length) {
     writeStderr(
-      '\n[ENV ERROR] Partial Cloudinary configuration detected.\n' +
-      'Set all 3 variables or none:\n' +
-      '  CLOUDINARY_CLOUD_NAME\n' +
-      '  CLOUDINARY_API_KEY\n' +
-      '  CLOUDINARY_API_SECRET\n'
+      '\n[ENV ERROR] Partial DO Spaces configuration detected.\n' +
+      'Set all 4 variables or none:\n' +
+      '  DO_SPACES_KEY\n' +
+      '  DO_SPACES_SECRET\n' +
+      '  DO_SPACES_BUCKET\n' +
+      '  DO_SPACES_REGION\n'
     );
     process.exit(1);
   }
@@ -107,10 +105,11 @@ export const env = {
   ZEPTOMAIL_USERNAME: process.env.ZEPTOMAIL_USERNAME || 'emailapikey',
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
   RESEND_API_KEY: process.env.RESEND_API_KEY,
-  // Cloudinary — optional, PDF uploads skipped when not set
-  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
-  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
-  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
+  DO_SPACES_KEY: process.env.DO_SPACES_KEY,
+  DO_SPACES_SECRET: process.env.DO_SPACES_SECRET,
+  DO_SPACES_BUCKET: process.env.DO_SPACES_BUCKET,
+  DO_SPACES_REGION: process.env.DO_SPACES_REGION || 'ams3',
+  DO_SPACES_CDN_ENDPOINT: process.env.DO_SPACES_CDN_ENDPOINT,
   // Monitoring — optional
   SENTRY_DSN: process.env.SENTRY_DSN,
   // Pesapal — optional. If keys are set, checkout endpoints can be enabled.

@@ -408,30 +408,6 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
   const typeLabel = plan.type === 'work_schedule' ? 'Work Schedule' : 'Lesson Plan';
   const typeColor = plan.type === 'work_schedule' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700';
 
-  const [pdfDownloading, setPdfDownloading] = useState(false);
-
-  async function handlePdfDownload() {
-    if (!plan.pdfUrl) return;
-    setPdfDownloading(true);
-    try {
-      const res = await fetch(plan.pdfUrl);
-      const buffer = await res.arrayBuffer();
-      const blob = new Blob([buffer], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${plan.title.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Failed to download PDF. Please try again.');
-    } finally {
-      setPdfDownloading(false);
-    }
-  }
-
   function openLightbox(idx = 0) {
     setLightboxIdx(idx);
     setLightboxOpen(true);
@@ -507,10 +483,10 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
               </Button>
             )}
             {plan.pdfUrl && (
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                onClick={handlePdfDownload} disabled={pdfDownloading}>
-                <Download className="h-3.5 w-3.5" />
-                {pdfDownloading ? 'Downloading…' : 'PDF'}
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50" asChild>
+                <a href={plan.pdfUrl} download>
+                  <Download className="h-3.5 w-3.5" /> PDF
+                </a>
               </Button>
             )}
             {plan.pdfStatus === 'processing' && (

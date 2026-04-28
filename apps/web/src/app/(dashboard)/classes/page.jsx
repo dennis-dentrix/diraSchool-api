@@ -457,22 +457,6 @@ export default function ClassesPage() {
                       {classPlans.map((plan) => {
                         const firstImg = plan.images?.[0];
 
-                        async function downloadPdf() {
-                          if (!plan.pdfUrl) return;
-                          try {
-                            const res = await fetch(plan.pdfUrl);
-                            const buffer = await res.arrayBuffer();
-                            const blob = new Blob([buffer], { type: 'application/pdf' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `${plan.title.replace(/\s+/g, '_')}.pdf`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                          } catch { /* silently fail */ }
-                        }
 
                         return (
                           <div key={plan._id} className="rounded-lg border border-slate-200 overflow-hidden">
@@ -515,10 +499,10 @@ export default function ClassesPage() {
                                   </a>
                                 )}
                                 {plan.pdfUrl && (
-                                  <button onClick={downloadPdf}
+                                  <a href={plan.pdfUrl} download
                                     className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:underline">
                                     <Download className="h-3 w-3" /> Download PDF
-                                  </button>
+                                  </a>
                                 )}
                               </div>
                             </div>
