@@ -111,7 +111,7 @@ function SectionCard({ title, icon: Icon, action, children }) {
   );
 }
 
-function PrincipalDashboard({ user, summary, isLoading }) {
+function PrincipalDashboard({ user, summary, isLoading, error }) {
   const router = useRouter();
 
   const { data: schoolSettings } = useQuery({
@@ -145,7 +145,23 @@ function PrincipalDashboard({ user, summary, isLoading }) {
     );
   }
 
-  if (!summary) return null;
+  if (!summary) {
+    return (
+      <DashboardShell title={`Welcome, ${user?.firstName || 'Admin'}`} rightMeta={new Date().toLocaleDateString('en-KE', { weekday: 'long', month: 'short', day: 'numeric' })}>
+        <Card className="border-border/70">
+          <CardContent className="p-8 text-center space-y-3">
+            <p className="text-sm text-slate-600">Dashboard data could not be loaded.</p>
+            {error && (
+              <p className="text-xs font-mono bg-slate-100 rounded p-2 text-rose-700 text-left">
+                {error?.response?.data?.message ?? error?.message ?? 'Unknown error'}
+              </p>
+            )}
+            <Button size="sm" variant="outline" onClick={() => window.location.reload()}>Refresh page</Button>
+          </CardContent>
+        </Card>
+      </DashboardShell>
+    );
+  }
 
   const feeData = summary.fees ?? {};
   const studentData = summary.students ?? {};
@@ -365,7 +381,7 @@ function PrincipalDashboard({ user, summary, isLoading }) {
   );
 }
 
-function FinanceDashboard({ user, summary, isLoading }) {
+function FinanceDashboard({ user, summary, isLoading, error }) {
   const router = useRouter();
 
   if (isLoading) {
@@ -390,8 +406,14 @@ function FinanceDashboard({ user, summary, isLoading }) {
     return (
       <DashboardShell title={`Welcome, ${user?.firstName || 'Finance'}`} subtitle="Finance overview">
         <Card className="border-border/70">
-          <CardContent className="p-8 text-center">
-            <p className="text-sm text-slate-600">Dashboard data could not be loaded. Please refresh.</p>
+          <CardContent className="p-8 text-center space-y-3">
+            <p className="text-sm text-slate-600">Dashboard data could not be loaded.</p>
+            {error && (
+              <p className="text-xs font-mono bg-slate-100 rounded p-2 text-rose-700 text-left">
+                {error?.response?.data?.message ?? error?.message ?? 'Unknown error'}
+              </p>
+            )}
+            <Button size="sm" variant="outline" onClick={() => window.location.reload()}>Refresh page</Button>
           </CardContent>
         </Card>
       </DashboardShell>
@@ -628,12 +650,21 @@ export default function DashboardPage() {
   const isFinance = FINANCE_ROLES.includes(user?.role) && !isAdmin;
   const isTeacher = ['teacher', 'department_head'].includes(user?.role);
 
-  const { data: summary, isLoading } = useQuery({
+  const { data: summary, isLoading, error: dashError } = useQuery({
     queryKey: ['dashboard-summary', user?.role],
     queryFn: async () => {
       if (isAdmin || isFinance) {
         const res = await dashboardApi.get();
-        return res.data.data;
+        // normalizeSuccessPayload may put the payload in res.data.data (when
+        // it has multiple keys) or spread it directly onto res.data.
+        // Accept whichever shape is present.
+        const payload = res.data?.data ?? res.data;
+        // Ensure we got an object with fee data, not just the axios metadata
+        if (payload && typeof payload === 'object' && 'fees' in payload) return payload;
+        // Fallback: try the raw response keys directly
+        const { status: _s, data: _d, ...rest } = res.data ?? {};
+        if (rest.fees) return rest;
+        return payload;
       }
       return null;
     },
@@ -641,8 +672,8 @@ export default function DashboardPage() {
   });
 
   if (isTeacher) return <TeacherDashboard user={user} />;
-  if (isAdmin) return <PrincipalDashboard user={user} summary={summary} isLoading={isLoading} />;
-  if (isFinance) return <FinanceDashboard user={user} summary={summary} isLoading={isLoading} />;
+  if (isAdmin) return <PrincipalDashboard user={user} summary={summary} isLoading={isLoading} error={dashError} />;
+  if (isFinance) return <FinanceDashboard user={user} summary={summary} isLoading={isLoading} error={dashError} />;
 
   return (
     <div className="flex min-h-[55vh] items-center justify-center">
