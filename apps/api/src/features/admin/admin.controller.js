@@ -21,6 +21,7 @@ import { paginate } from '../../utils/pagination.js';
 import { SUBSCRIPTION_STATUSES, PLAN_TIERS, ROLES } from '../../constants/index.js';
 import { env } from '../../config/env.js';
 import { captureError, sentryEnabled } from '../../config/sentry.js';
+import { sendSenderIdReviewedEmail } from '../../services/email.service.js';
 
 // ── GET /api/v1/admin/stats ──────────────────────────────────────────────────
 
@@ -408,7 +409,7 @@ export const triggerMonitoringTest = asyncHandler(async (req, res) => {
  *   { "action": "approve", "senderIdApproved": "NYERI_GIRLS" }
  */
 export const approveSmsenderId = asyncHandler(async (req, res) => {
-  const { schoolId } = req.params;
+  const { id: schoolId } = req.params;
   const { action, senderIdApproved, rejectionReason } = req.body;
 
   if (!['approve', 'reject'].includes(action)) {
@@ -438,7 +439,7 @@ export const approveSmsenderId = asyncHandler(async (req, res) => {
     schoolId,
     { $set: updateData },
     { new: true }
-  ).select('name smsSettings');
+  ).select('name email smsSettings');
 
   if (!school) {
     return sendError(res, 'School not found', 404);
@@ -455,6 +456,16 @@ export const approveSmsenderId = asyncHandler(async (req, res) => {
       rejectionReason: rejectionReason || null,
     },
   });
+
+  // Notify school by email (fire-and-forget)
+  sendSenderIdReviewedEmail({
+    to: school.email,
+    schoolName: school.name,
+    action,
+    senderIdApproved: senderIdApproved || null,
+    rejectionReason: rejectionReason || null,
+    meta: { schoolId },
+  }).catch(() => {});
 
   return sendSuccess(res, school, `Sender ID ${action}ed successfully`);
 });

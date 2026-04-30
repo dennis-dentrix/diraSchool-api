@@ -258,6 +258,30 @@ export const sendPasswordResetEmail = ({
     meta,
   });
 
+export const sendSenderIdRequestNotification = ({
+  schoolName, schoolId, senderIdRequested, requestedByEmail, meta = {},
+}) =>
+  sendEmail({
+    to: 'diraschadmin@diraschool.com',
+    subject: `SMS Sender ID request — ${schoolName}`,
+    html: _senderIdRequestTemplate({ schoolName, schoolId, senderIdRequested, requestedByEmail }),
+    template: 'sender-id-request',
+    meta,
+  });
+
+export const sendSenderIdReviewedEmail = ({
+  to, schoolName, action, senderIdApproved, rejectionReason, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: action === 'approve'
+      ? `Your SMS Sender ID has been approved — ${senderIdApproved}`
+      : 'Your SMS Sender ID request was not approved',
+    html: _senderIdReviewedTemplate({ schoolName, action, senderIdApproved, rejectionReason }),
+    template: 'sender-id-reviewed',
+    meta,
+  });
+
 const _shell = (title, body) => `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -508,4 +532,73 @@ const _resetTemplate = ({ firstName, resetUrl, expiresInHours }) =>
         won't change.
       </p>
     `
+  );
+
+const _senderIdRequestTemplate = ({ schoolName, schoolId, senderIdRequested, requestedByEmail }) =>
+  _shell(
+    `SMS Sender ID request — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Sender ID approval needed</h2>
+      <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+        A school has requested a custom SMS Sender ID. Review and approve or reject it in the superadmin panel.
+      </p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;width:160px;border:1px solid #e5e7eb;">School</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${schoolName}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Requested by</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${requestedByEmail}</td>
+        </tr>
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Requested Sender ID</td>
+          <td style="padding:10px 14px;font-family:monospace;font-size:16px;font-weight:700;color:#1a56db;border:1px solid #e5e7eb;">${senderIdRequested}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">School ID</td>
+          <td style="padding:10px 14px;font-family:monospace;color:#6b7280;border:1px solid #e5e7eb;">${schoolId}</td>
+        </tr>
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Requested at</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${new Date().toUTCString()}</td>
+        </tr>
+      </table>
+      <p style="margin:24px 0 0;font-size:13px;color:#6b7280;">
+        Log in to the superadmin panel → Schools → find this school → SMS tab to approve or reject.
+      </p>
+    `
+  );
+
+const _senderIdReviewedTemplate = ({ schoolName, action, senderIdApproved, rejectionReason }) =>
+  _shell(
+    action === 'approve' ? `Sender ID approved — ${senderIdApproved}` : 'Sender ID request not approved',
+    action === 'approve'
+      ? `
+        <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Your Sender ID has been approved ✓</h2>
+        <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+          Great news! Your custom SMS Sender ID for <strong>${schoolName}</strong> has been approved.
+          Your messages will now be delivered using:
+        </p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;text-align:center;margin:0 0 20px;">
+          <span style="font-family:monospace;font-size:24px;font-weight:700;color:#15803d;letter-spacing:2px;">${senderIdApproved}</span>
+        </div>
+        <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">
+          No action is needed — your school's SMS messages will automatically use this Sender ID.
+          It may take up to 24 hours to become active on all networks.
+        </p>
+      `
+      : `
+        <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Sender ID request not approved</h2>
+        <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+          Unfortunately, your SMS Sender ID request for <strong>${schoolName}</strong> could not be approved at this time.
+        </p>
+        ${rejectionReason ? `
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:0 0 20px;">
+          <p style="margin:0;font-size:14px;color:#b91c1c;line-height:1.6;"><strong>Reason:</strong> ${rejectionReason}</p>
+        </div>` : ''}
+        <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">
+          You can submit a new request from your school's Settings page. If you have questions, reply to this email.
+        </p>
+      `
   );

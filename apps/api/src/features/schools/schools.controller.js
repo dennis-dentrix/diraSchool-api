@@ -6,6 +6,7 @@ import { paginate } from '../../utils/pagination.js';
 import { SUBSCRIPTION_STATUSES, AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
 import { getRedis } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
+import { sendSenderIdRequestNotification } from '../../services/email.service.js';
 
 // Bust the subscription cache for a school after any admin change.
 const bustSubCache = async (schoolId) => {
@@ -261,6 +262,15 @@ export const requestSmsSenderId = asyncHandler(async (req, res) => {
     resourceId: schoolId,
     meta: { senderIdRequested: senderIdRequested.toUpperCase() },
   });
+
+  // Notify superadmin (fire-and-forget)
+  sendSenderIdRequestNotification({
+    schoolName: school.name,
+    schoolId: schoolId.toString(),
+    senderIdRequested: senderIdRequested.toUpperCase(),
+    requestedByEmail: req.user.email,
+    meta: { schoolId },
+  }).catch(() => {});
 
   return sendSuccess(res, school, 'SMS sender ID requested. Our team will review and approve within 24 hours.');
 });
