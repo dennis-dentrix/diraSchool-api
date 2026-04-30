@@ -131,6 +131,20 @@ function PrincipalDashboard({ user, summary, isLoading }) {
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 2);
 
+  if (isLoading) {
+    return (
+      <DashboardShell title={`Welcome, ${user?.firstName || 'Admin'}`} rightMeta={new Date().toLocaleDateString('en-KE', { weekday: 'long', month: 'short', day: 'numeric' })}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
   if (!summary) return null;
 
   const feeData = summary.fees ?? {};
@@ -353,7 +367,36 @@ function PrincipalDashboard({ user, summary, isLoading }) {
 
 function FinanceDashboard({ user, summary, isLoading }) {
   const router = useRouter();
-  if (!summary) return null;
+
+  if (isLoading) {
+    return (
+      <DashboardShell
+        title={`Welcome, ${user?.firstName || 'Finance'}`}
+        subtitle="Finance overview"
+        rightMeta="Collections and receipting"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <Skeleton className="h-64" />
+          <Skeleton className="h-64" />
+        </div>
+      </DashboardShell>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <DashboardShell title={`Welcome, ${user?.firstName || 'Finance'}`} subtitle="Finance overview">
+        <Card className="border-border/70">
+          <CardContent className="p-8 text-center">
+            <p className="text-sm text-slate-600">Dashboard data could not be loaded. Please refresh.</p>
+          </CardContent>
+        </Card>
+      </DashboardShell>
+    );
+  }
 
   const feeData = summary.fees ?? {};
   const todayCollections  = feeData.todayAmount       ?? 0;

@@ -233,7 +233,7 @@ async function getFinanceDashboard(req, res) {
   const monthStart  = new Date(now.getFullYear(), now.getMonth(), 1);
   const currentYear = String(now.getFullYear());
 
-  const [school, studentCount, paymentStats] = await Promise.all([
+  const [school, studentCount, paymentStats, paidStudentIds] = await Promise.all([
     School.findById(schoolId).select('name subscriptionStatus planTier').lean(),
     Student.countDocuments({ schoolId, status: 'active' }),
     Payment.aggregate([
@@ -256,6 +256,7 @@ async function getFinanceDashboard(req, res) {
         },
       },
     ]),
+    Payment.distinct('studentId', { schoolId, academicYear: currentYear, status: 'completed' }),
   ]);
 
   if (!school) return sendError(res, 'School not found.', 404);
@@ -269,6 +270,7 @@ async function getFinanceDashboard(req, res) {
     monthAmount:    facet.month?.[0]?.total   ?? 0,
     monthCount:     facet.month?.[0]?.count   ?? 0,
     pendingReceipts: facet.pending?.[0]?.count ?? 0,
+    studentsToFollowUp: Math.max(0, studentCount - (paidStudentIds?.length ?? 0)),
     methodBreakdown: Object.fromEntries((facet.byMethod ?? []).map((m) => [m._id ?? 'unknown', m.total])),
     recentPayments: (facet.recent ?? []).map((p) => ({
       name:          `${p.student?.firstName ?? '—'} ${p.student?.lastName ?? ''}`.trim(),
