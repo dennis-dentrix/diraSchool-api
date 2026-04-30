@@ -20,10 +20,6 @@ const subscriptionPaymentSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
-    orderTrackingId: {
-      type: String,
-      index: true,
-    },
     status: {
       type: String,
       enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],
@@ -52,9 +48,9 @@ const subscriptionPaymentSchema = new mongoose.Schema(
       min: 1,
     },
     addOns: {
-      library: { type: Boolean, default: false },
+      library:   { type: Boolean, default: false },
       transport: { type: Boolean, default: false },
-      sms: { type: Boolean, default: false },
+      sms:       { type: Boolean, default: false },
     },
     addOnsPerTerm: {
       type: Number,
@@ -86,18 +82,7 @@ const subscriptionPaymentSchema = new mongoose.Schema(
       trim: true,
     },
     paidAt: Date,
-    pesapalStatusCode: {
-      type: mongoose.Schema.Types.Mixed,
-    },
-    pesapalPaymentStatus: {
-      type: String,
-      trim: true,
-    },
-    pesapalConfirmationCode: {
-      type: String,
-      trim: true,
-    },
-    pesapalRawResponse: {
+    paystackRawResponse: {
       type: mongoose.Schema.Types.Mixed,
     },
   },

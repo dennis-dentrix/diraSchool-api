@@ -23,4 +23,4 @@ const validate = (schema) => (req, res, next) => {
   next();
 };
 
-export const validateCreatePesapalCheckout = validate(createCheckoutSchema);
+export const validateCreateCheckout = validate(createCheckoutSchema);

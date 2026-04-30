@@ -14,24 +14,16 @@ import {
   SUBSCRIPTION_STATUSES,
 } from '../../constants/index.js';
 import { logAction } from '../../utils/auditLogger.js';
-import { getPesapalTransactionStatus, submitPesapalOrder } from './pesapal.service.js';
+import { initializeTransaction, verifyTransaction } from './paystack.service.js';
+import { sendSubscriptionConfirmationEmail } from '../../services/email.service.js';
 
 const BASE_FEE = 8500;
 const PER_STUDENT_RATE = 40;
 const VAT_RATE = 0.16;
 const MULTIPLIERS = {
   'per-term': 1,
-  annual: 2.7,
-  'multi-year': 2.55,
-};
-
-const toSafeString = (value) => (value === null || value === undefined ? '' : String(value));
-
-const pick = (obj, keys, fallback = null) => {
-  for (const key of keys) {
-    if (obj && obj[key] !== undefined && obj[key] !== null) return obj[key];
-  }
-  return fallback;
+  annual: 2.55,   // 3 terms × 0.85 = 15% off
+  'multi-year': 2.40, // 3 terms × 0.80 = 20% off (per year)
 };
 
 const normalizeAddOns = (addOns = {}) => ({
@@ -72,67 +64,34 @@ const bustSchoolSubCache = async (schoolId) => {
   }
 };
 
-const mapPaymentState = (statusPayload) => {
-  const statusCode = pick(statusPayload, ['status_code', 'statusCode', 'payment_status_code'], '');
-  const desc = toSafeString(
-    pick(statusPayload, ['payment_status_description', 'payment_status', 'paymentStatusDescription', 'status'])
-  ).toLowerCase();
+const activateSchool = async (payment) => {
+  const school = await School.findById(payment.schoolId);
+  if (!school) return;
+  school.subscriptionStatus = SUBSCRIPTION_STATUSES.ACTIVE;
+  school.planTier = payment.selectedPlanTier || PLAN_TIERS.STANDARD;
+  school.trialExpiry = undefined;
+  await school.save();
+  await bustSchoolSubCache(school._id);
 
-  const paidStates = ['completed', 'paid', 'settled'];
-  const pendingStates = ['pending', 'processing', 'in-progress', 'queued'];
-  const failedStates = ['failed', 'cancelled', 'invalid', 'reversed'];
-
-  if (String(statusCode) === '1' || paidStates.some((s) => desc.includes(s))) return 'completed';
-  if (pendingStates.some((s) => desc.includes(s))) return 'processing';
-  if (failedStates.some((s) => desc.includes(s))) return 'failed';
-  return 'pending';
-};
-
-const syncPaymentStatus = async (payment) => {
-  if (!payment?.orderTrackingId) return payment;
-
-  const payload = await getPesapalTransactionStatus(payment.orderTrackingId);
-  const nextStatus = mapPaymentState(payload);
-  const confirmationCode = pick(payload, ['confirmation_code', 'confirmationCode', 'payment_reference']);
-  const paymentStatus = pick(payload, [
-    'payment_status_description',
-    'payment_status',
-    'paymentStatusDescription',
-    'status',
-  ]);
-  const statusCode = pick(payload, ['status_code', 'statusCode', 'payment_status_code']);
-
-  payment.status = nextStatus;
-  payment.pesapalConfirmationCode = confirmationCode ?? payment.pesapalConfirmationCode;
-  payment.pesapalPaymentStatus = paymentStatus ?? payment.pesapalPaymentStatus;
-  payment.pesapalStatusCode = statusCode ?? payment.pesapalStatusCode;
-  payment.pesapalRawResponse = payload;
-
-  if (nextStatus === 'completed' && !payment.paidAt) {
-    payment.paidAt = new Date();
-  }
-  await payment.save();
-
-  if (nextStatus === 'completed') {
-    const school = await School.findById(payment.schoolId);
-    if (school) {
-      school.subscriptionStatus = SUBSCRIPTION_STATUSES.ACTIVE;
-      school.planTier = payment.selectedPlanTier || PLAN_TIERS.STANDARD;
-      school.trialExpiry = undefined;
-      await school.save();
-      await bustSchoolSubCache(school._id);
-    }
-  }
-
-  return payment;
+  sendSubscriptionConfirmationEmail({
+    to: school.email,
+    schoolName: school.name,
+    amount: payment.amount,
+    currency: payment.currency || 'KES',
+    billingCycle: payment.billingCycle,
+    studentCount: payment.studentCount,
+    merchantReference: payment.merchantReference,
+    paidAt: payment.paidAt || new Date(),
+    meta: { schoolId: school._id },
+  }).catch(() => {}); // fire-and-forget, non-fatal
 };
 
 /**
- * POST /api/v1/subscriptions/pesapal/checkout
+ * POST /api/v1/subscriptions/paystack/checkout
  */
-export const createPesapalCheckout = asyncHandler(async (req, res) => {
-  if (!env.PESAPAL_ENABLED) {
-    return sendError(res, 'Pesapal is not enabled in this environment.', 400);
+export const createPaystackCheckout = asyncHandler(async (req, res) => {
+  if (!env.PAYSTACK_ENABLED) {
+    return sendError(res, 'Paystack is not enabled in this environment.', 400);
   }
 
   const school = await School.findById(req.user.schoolId);
@@ -142,7 +101,8 @@ export const createPesapalCheckout = asyncHandler(async (req, res) => {
   const amounts = calcAmount({ studentCount, billingCycle, addOns });
   const reference = merchantRef(school._id);
 
-  const callbackUrl = `${env.CLIENT_URL.replace(/\/+$/, '')}/billing?provider=pesapal`;
+  const callbackUrl = `${env.CLIENT_URL.replace(/\/+$/, '')}/billing?reference=${reference}`;
+
   const payment = await SubscriptionPayment.create({
     schoolId: school._id,
     initiatedByUserId: req.user._id,
@@ -155,34 +115,28 @@ export const createPesapalCheckout = asyncHandler(async (req, res) => {
     amount: amounts.total,
     subtotalExVat: amounts.subtotalExVat,
     vatAmount: amounts.vatAmount,
-    currency: env.PESAPAL_CURRENCY || 'KES',
+    currency: 'KES',
     selectedPlanTier: planTier || school.planTier || PLAN_TIERS.STANDARD,
     description: description || `DiraSchool subscription (${billingCycle})`,
   });
 
   try {
-    const orderPayload = {
-      id: reference,
-      currency: payment.currency,
+    const result = await initializeTransaction({
+      email: school.email,
       amount: payment.amount,
-      description: payment.description,
-      callback_url: callbackUrl,
-      notification_id: env.PESAPAL_NOTIFICATION_ID,
-      billing_address: {
-        email_address: school.email,
-        phone_number: school.phone,
-        country_code: 'KE',
-        first_name: req.user.firstName || 'School',
-        last_name: req.user.lastName || 'Admin',
-        line_1: school.address || school.name,
+      reference,
+      callbackUrl,
+      metadata: {
+        schoolId: String(school._id),
+        schoolName: school.name,
+        billingCycle,
+        studentCount,
       },
-    };
+    });
 
-    const result = await submitPesapalOrder(orderPayload);
-    payment.orderTrackingId = pick(result, ['order_tracking_id', 'orderTrackingId']);
-    payment.checkoutUrl = pick(result, ['redirect_url', 'redirectUrl']);
-    payment.status = payment.orderTrackingId ? 'processing' : 'pending';
-    payment.pesapalRawResponse = result;
+    payment.checkoutUrl = result.authorization_url;
+    payment.status = 'processing';
+    payment.paystackRawResponse = result;
     await payment.save();
 
     logAction(req, {
@@ -190,47 +144,64 @@ export const createPesapalCheckout = asyncHandler(async (req, res) => {
       resource: AUDIT_RESOURCES.PAYMENT,
       resourceId: payment._id,
       meta: {
-        provider: 'pesapal',
-        merchantReference: payment.merchantReference,
-        orderTrackingId: payment.orderTrackingId ?? null,
+        provider: 'paystack',
+        merchantReference: reference,
         amount: payment.amount,
         addOns: payment.addOns,
-        addOnsPerTerm: payment.addOnsPerTerm,
       },
     });
 
     return sendSuccess(res, {
       checkout: {
-        provider: 'pesapal',
-        merchantReference: payment.merchantReference,
-        orderTrackingId: payment.orderTrackingId,
+        provider: 'paystack',
+        merchantReference: reference,
         amount: payment.amount,
         currency: payment.currency,
         addOns: payment.addOns,
         addOnsPerTerm: payment.addOnsPerTerm,
-        redirectUrl: payment.checkoutUrl,
+        redirectUrl: result.authorization_url,
+        accessCode: result.access_code,
       },
     });
   } catch (err) {
     payment.status = 'failed';
-    payment.pesapalRawResponse = { error: err.message, payload: err.payload ?? null };
+    payment.paystackRawResponse = { error: err.message, payload: err.payload ?? null };
     await payment.save();
-    return sendError(res, `Unable to initialize Pesapal checkout: ${err.message}`, 502);
+    return sendError(res, `Unable to initialize Paystack checkout: ${err.message}`, 502);
   }
 });
 
 /**
- * GET /api/v1/subscriptions/pesapal/status/:merchantReference
+ * GET /api/v1/subscriptions/paystack/status/:merchantReference
+ * Verifies the transaction with Paystack and syncs the payment record.
  */
-export const getPesapalCheckoutStatus = asyncHandler(async (req, res) => {
+export const getPaystackStatus = asyncHandler(async (req, res) => {
   const payment = await SubscriptionPayment.findOne({
     schoolId: req.user.schoolId,
     merchantReference: req.params.merchantReference,
   });
   if (!payment) return sendError(res, 'Subscription payment not found.', 404);
 
-  if (payment.orderTrackingId && payment.status !== 'completed') {
-    await syncPaymentStatus(payment);
+  if (payment.status !== 'completed') {
+    try {
+      const result = await verifyTransaction(payment.merchantReference);
+      payment.paystackRawResponse = result;
+
+      const paystackStatus = result?.status;
+      if (paystackStatus === 'success') {
+        payment.status = 'completed';
+        if (!payment.paidAt) payment.paidAt = new Date();
+        await payment.save();
+        await activateSchool(payment);
+      } else if (['failed', 'abandoned'].includes(paystackStatus)) {
+        payment.status = 'failed';
+        await payment.save();
+      } else {
+        await payment.save();
+      }
+    } catch {
+      // Paystack verify failed — return current DB state
+    }
   }
 
   const school = await School.findById(req.user.schoolId).select(
@@ -241,7 +212,6 @@ export const getPesapalCheckoutStatus = asyncHandler(async (req, res) => {
     payment: {
       _id: payment._id,
       merchantReference: payment.merchantReference,
-      orderTrackingId: payment.orderTrackingId,
       status: payment.status,
       amount: payment.amount,
       currency: payment.currency,
@@ -251,9 +221,6 @@ export const getPesapalCheckoutStatus = asyncHandler(async (req, res) => {
       addOnsPerTerm: payment.addOnsPerTerm,
       checkoutUrl: payment.checkoutUrl,
       paidAt: payment.paidAt,
-      pesapalStatusCode: payment.pesapalStatusCode,
-      pesapalPaymentStatus: payment.pesapalPaymentStatus,
-      pesapalConfirmationCode: payment.pesapalConfirmationCode,
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
     },
@@ -262,53 +229,64 @@ export const getPesapalCheckoutStatus = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET|POST /api/v1/subscriptions/pesapal/ipn
+ * GET /api/v1/subscriptions/payments
+ * Returns paginated subscription payment history for the school.
  */
-export const pesapalIpnCallback = asyncHandler(async (req, res) => {
-  const params = { ...(req.query || {}), ...(req.body || {}) };
-  const merchantReference = pick(params, [
-    'OrderMerchantReference',
-    'orderMerchantReference',
-    'order_merchant_reference',
+export const listPayments = asyncHandler(async (req, res) => {
+  const schoolId = req.user.schoolId;
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const skip = (page - 1) * limit;
+
+  const [payments, total] = await Promise.all([
+    SubscriptionPayment.find({ schoolId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('-paystackRawResponse')
+      .populate('initiatedByUserId', 'firstName lastName'),
+    SubscriptionPayment.countDocuments({ schoolId }),
   ]);
-  const orderTrackingId = pick(params, ['OrderTrackingId', 'orderTrackingId', 'order_tracking_id']);
-  const notificationType = pick(params, [
-    'OrderNotificationType',
-    'orderNotificationType',
-    'order_notification_type',
-  ]);
 
-  if (!merchantReference && !orderTrackingId) {
-    return sendError(res, 'Missing Pesapal identifiers in callback payload.', 400);
-  }
-
-  const payment = await SubscriptionPayment.findOne({
-    $or: [
-      ...(merchantReference ? [{ merchantReference }] : []),
-      ...(orderTrackingId ? [{ orderTrackingId }] : []),
-    ],
+  return sendSuccess(res, {
+    payments,
+    meta: { total, page, limit, pages: Math.ceil(total / limit) },
   });
+});
 
-  if (!payment) {
-    return res.status(200).json({
-      orderNotificationType: notificationType || 'IPNCHANGE',
-      orderTrackingId: orderTrackingId || null,
-      orderMerchantReference: merchantReference || null,
-      status: 200,
-    });
+/**
+ * POST /api/v1/subscriptions/paystack/webhook
+ * Public route — verified via HMAC-SHA512 signature.
+ */
+export const paystackWebhook = asyncHandler(async (req, res) => {
+  // Verify signature
+  const signature = req.headers['x-paystack-signature'];
+  const hash = crypto
+    .createHmac('sha512', env.PAYSTACK_SECRET_KEY)
+    .update(JSON.stringify(req.body))
+    .digest('hex');
+
+  if (signature !== hash) {
+    return res.status(401).end();
   }
 
-  if (!payment.orderTrackingId && orderTrackingId) {
-    payment.orderTrackingId = orderTrackingId;
-    await payment.save();
-  }
+  const { event, data } = req.body;
 
-  await syncPaymentStatus(payment);
+  // Acknowledge immediately — Paystack expects a 200 fast
+  res.status(200).end();
 
-  return res.status(200).json({
-    orderNotificationType: notificationType || 'IPNCHANGE',
-    orderTrackingId: payment.orderTrackingId || null,
-    orderMerchantReference: payment.merchantReference,
-    status: 200,
-  });
+  if (event !== 'charge.success') return;
+
+  const reference = data?.reference;
+  if (!reference) return;
+
+  const payment = await SubscriptionPayment.findOne({ merchantReference: reference });
+  if (!payment || payment.status === 'completed') return;
+
+  payment.status = 'completed';
+  payment.paidAt = new Date();
+  payment.paystackRawResponse = data;
+  await payment.save();
+
+  await activateSchool(payment);
 });

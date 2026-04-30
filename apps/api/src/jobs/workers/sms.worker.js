@@ -16,6 +16,7 @@ import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
 import { SMS_TRIGGER_TYPES } from '../../constants/index.js';
 import School from '../../features/schools/School.model.js';
+import SmsLog from '../../features/sms/SmsLog.model.js';
 
 const AT = AfricasTalking({
   username: env.AT_USERNAME,
@@ -24,7 +25,7 @@ const AT = AfricasTalking({
 const sms = AT.SMS;
 
 export const processSmsJob = async (job) => {
-  const { to, message, schoolId, trigger } = job.data;
+  const { to, message, schoolId, trigger, smsLogId } = job.data;
 
   const recipients = Array.isArray(to) ? to : [to];
 
@@ -32,6 +33,12 @@ export const processSmsJob = async (job) => {
   const school = await School.findById(schoolId).select('name smsSettings');
   const senderIdApproved = school?.smsSettings?.senderIdApproved;
   const senderId = senderIdApproved || env.AT_SENDER_ID || 'SCHOOL';
+
+  if (!senderIdApproved) {
+    logger.warn('[SMS] No approved sender ID for school — using default', {
+      schoolId, senderId, hint: 'School must request and get a custom sender ID approved.',
+    });
+  }
 
   logger.info('[SMS] Sending', {
     jobId: job.id,
@@ -58,11 +65,19 @@ export const processSmsJob = async (job) => {
     });
   }
 
-  logger.info('[SMS] Job completed', {
-    jobId: job.id,
-    sent: recipients_result.length - failed.length,
-    failed: failed.length,
-  });
+  const sentCount = recipients_result.length - failed.length;
+  const failedCount = failed.length;
 
-  return { sent: recipients_result.length - failed.length, failed: failed.length };
+  logger.info('[SMS] Job completed', { jobId: job.id, sent: sentCount, failed: failedCount });
+
+  if (smsLogId) {
+    try {
+      const status = failedCount === 0 ? 'sent' : sentCount === 0 ? 'failed' : 'partial';
+      await SmsLog.findByIdAndUpdate(smsLogId, { status, sentCount, failedCount });
+    } catch (err) {
+      logger.error('[SMS] Failed to update SmsLog', { err: err.message, smsLogId });
+    }
+  }
+
+  return { sent: sentCount, failed: failedCount };
 };

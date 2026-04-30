@@ -236,6 +236,17 @@ export const sendNewSchoolNotification = ({
     meta,
   });
 
+export const sendSubscriptionConfirmationEmail = ({
+  to, schoolName, amount, currency = 'KES', billingCycle, studentCount, merchantReference, paidAt, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `Subscription confirmed — ${schoolName}`,
+    html: _subscriptionConfirmTemplate({ schoolName, amount, currency, billingCycle, studentCount, merchantReference, paidAt }),
+    template: 'subscription-confirmation',
+    meta,
+  });
+
 export const sendPasswordResetEmail = ({
   to, firstName, resetUrl, expiresInHours = 1, meta = {},
 }) =>
@@ -423,6 +434,54 @@ const _newSchoolTemplate = ({ schoolName, schoolEmail, schoolPhone, county, admi
           <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${new Date().toUTCString()}</td>
         </tr>
       </table>
+    `
+  );
+
+const _fmtKes = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
+const _fmtCycle = (c) => ({ 'per-term': 'Per Term', annual: 'Annual (3 terms, 15% off)', 'multi-year': '3-Year Annual (20% off)' }[c] ?? c);
+const _fmtDate = (d) => new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' });
+
+const _subscriptionConfirmTemplate = ({ schoolName, amount, currency, billingCycle, studentCount, merchantReference, paidAt }) =>
+  _shell(
+    `Subscription confirmed — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 8px;font-size:20px;color:#111827;">Payment received — you're all set!</h2>
+      <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+        Thank you — <strong>${schoolName}</strong>'s DiraSchool subscription has been activated.
+        Your school now has full access to all features.
+      </p>
+      <table cellpadding="0" cellspacing="0"
+             style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px;">
+        <tr style="background:#f0f4ff;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;width:160px;border:1px solid #dbeafe;">Amount paid</td>
+          <td style="padding:10px 14px;color:#111827;font-weight:700;border:1px solid #dbeafe;">${_fmtKes(amount)} (incl. 16% VAT)</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Billing cycle</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${_fmtCycle(billingCycle)}</td>
+        </tr>
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Enrolled students</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${studentCount ?? '—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Payment date</td>
+          <td style="padding:10px 14px;color:#111827;border:1px solid #e5e7eb;">${_fmtDate(paidAt)}</td>
+        </tr>
+        <tr style="background:#f9fafb;">
+          <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Reference</td>
+          <td style="padding:10px 14px;color:#6b7280;font-family:'Courier New',monospace;font-size:12px;border:1px solid #e5e7eb;">${merchantReference}</td>
+        </tr>
+      </table>
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;line-height:1.6;">
+        Log in to your DiraSchool dashboard to view your billing details and download a full invoice.
+        Keep this email as your payment receipt.
+      </p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;">
+        Questions? Reply to this email or contact us at
+        <a href="mailto:contact@diraschool.com" style="color:#1a56db;">contact@diraschool.com</a>.
+      </p>
     `
   );
 

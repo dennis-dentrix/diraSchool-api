@@ -67,20 +67,8 @@ export const validateEnv = () => {
     process.exit(1);
   }
 
-  const pesapalVars = [
-    'PESAPAL_CONSUMER_KEY',
-    'PESAPAL_CONSUMER_SECRET',
-    'PESAPAL_NOTIFICATION_ID',
-  ];
-  const configuredPesapalVars = pesapalVars.filter((key) => !!process.env[key]);
-  if (configuredPesapalVars.length > 0 && configuredPesapalVars.length < pesapalVars.length) {
-    writeStderr(
-      '\n[ENV ERROR] Partial Pesapal configuration detected.\n' +
-      'Set all variables or none:\n' +
-      '  PESAPAL_CONSUMER_KEY\n' +
-      '  PESAPAL_CONSUMER_SECRET\n' +
-      '  PESAPAL_NOTIFICATION_ID\n'
-    );
+  if (process.env.PAYSTACK_ENABLED === 'true' && !process.env.PAYSTACK_SECRET_KEY) {
+    writeStderr('\n[ENV ERROR] PAYSTACK_ENABLED is true but PAYSTACK_SECRET_KEY is not set.\n');
     process.exit(1);
   }
 };
@@ -112,14 +100,9 @@ export const env = {
   DO_SPACES_CDN_ENDPOINT: process.env.DO_SPACES_CDN_ENDPOINT,
   // Monitoring — optional
   SENTRY_DSN: process.env.SENTRY_DSN,
-  // Pesapal — optional. If keys are set, checkout endpoints can be enabled.
-  PESAPAL_ENABLED: process.env.PESAPAL_ENABLED === 'true',
-  PESAPAL_ENV: process.env.PESAPAL_ENV || 'sandbox',
-  PESAPAL_BASE_URL: process.env.PESAPAL_BASE_URL,
-  PESAPAL_CONSUMER_KEY: process.env.PESAPAL_CONSUMER_KEY,
-  PESAPAL_CONSUMER_SECRET: process.env.PESAPAL_CONSUMER_SECRET,
-  PESAPAL_NOTIFICATION_ID: process.env.PESAPAL_NOTIFICATION_ID,
-  PESAPAL_CURRENCY: process.env.PESAPAL_CURRENCY || 'KES',
+  // Paystack — optional. Set PAYSTACK_ENABLED=true to activate checkout endpoints.
+  PAYSTACK_ENABLED: process.env.PAYSTACK_ENABLED === 'true',
+  PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV === 'development',
 };

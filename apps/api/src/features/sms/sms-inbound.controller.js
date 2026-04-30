@@ -28,7 +28,7 @@ import {
 
 // ── Phone normalisation ───────────────────────────────────────────────────────
 // Converts any Kenyan phone variant to E.164 (+254XXXXXXXXX) for comparison.
-function normalisePhone(raw) {
+export function normalisePhone(raw) {
   if (!raw) return null;
   const digits = String(raw).replace(/\D/g, '');
   if (digits.startsWith('254') && digits.length === 12) return `+${digits}`;
@@ -36,6 +36,11 @@ function normalisePhone(raw) {
   if (digits.length === 9) return `+254${digits}`;
   if (digits.startsWith('254')) return `+${digits}`;
   return `+${digits}`;
+}
+
+// Valid Kenyan mobile E.164: +254 followed by exactly 9 digits.
+export function isValidKenyanPhone(phone) {
+  return /^\+254\d{9}$/.test(phone);
 }
 
 // ── M-Pesa SMS parser ─────────────────────────────────────────────────────────
@@ -83,7 +88,12 @@ function resolveActivePeriod(settings) {
     .sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
   if (started.length) return { academicYear: year, term: started[0].name };
 
-  // Default
+  // No terms configured at all — log prominently so the operator knows
+  logger.warn('[SMS-INBOUND] No active or past term found in school settings, defaulting to "Term 1"', {
+    schoolId: settings?.schoolId,
+    currentAcademicYear: year,
+    configuredTerms: terms.length,
+  });
   return { academicYear: year, term: 'Term 1' };
 }
 
@@ -165,6 +175,14 @@ export const handleInboundSms = asyncHandler(async (req, res) => {
     student: `${student.firstName} ${student.lastName}`,
     amount,
   });
+
+  // Validate sender phone is a proper Kenyan E.164 number before queuing
+  if (!isValidKenyanPhone(senderPhone)) {
+    logger.warn('[SMS-INBOUND] Sender phone failed E.164 validation, skipping receipt SMS', {
+      senderPhone, paymentId: payment._id,
+    });
+    return sendSuccess(res, {});
+  }
 
   // Queue a receipt SMS back to the parent
   const receiptMsg =
