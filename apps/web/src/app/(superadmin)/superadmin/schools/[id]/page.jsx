@@ -239,7 +239,7 @@ export default function SchoolDetailPage() {
               <CardHeader className="pb-2">
                 <CardTitle className="text-base">SMS Sender ID</CardTitle>
                 <CardDescription>
-                  Africa's Talking requires sender IDs to be registered. Review and action the school's request below.
+                  Custom sender IDs must be registered with our SMS provider. Review and approve or reject the school's request.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">

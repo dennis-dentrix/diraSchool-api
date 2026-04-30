@@ -484,7 +484,7 @@ export default function MessagingPage() {
     <div className="space-y-6 max-w-3xl">
       <PageHeader
         title="Messaging"
-        description="Send SMS to parents and staff via Africa's Talking"
+        description="Send SMS messages to parents and staff"
       />
 
       <Tabs defaultValue="single">

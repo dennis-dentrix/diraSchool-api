@@ -311,8 +311,7 @@ export default function SettingsPage() {
             )}
           </div>
           <CardDescription>
-            Register your M-Pesa till/paybill number so Africa&apos;s Talking can forward payment
-            SMSes to DiraSchool and auto-generate receipts.
+            Register your M-Pesa till/paybill number to receive payment SMS notifications and auto-generate receipts.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -325,8 +324,7 @@ export default function SettingsPage() {
                 placeholder="e.g. 0722123456 or 123456"
               />
               <p className="text-xs text-muted-foreground">
-                Register this number in Africa&apos;s Talking, set the callback URL to{' '}
-                <code className="bg-muted px-1 rounded">/api/v1/sms/inbound</code>, then save.
+                Enter the till or paybill number you use to collect school fees, then save.
               </p>
             </div>
           ) : (

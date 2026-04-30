@@ -581,8 +581,8 @@ export default function BillingPage() {
                 <div className="flex items-center gap-3 flex-wrap">
                   <p className="text-xs text-slate-300">
                     {paymentStatusLoading
-                      ? 'Checking latest Paystack payment status...'
-                      : `Paystack reference: ${merchantReference}`}
+                      ? 'Checking payment status...'
+                      : `Payment reference: ${merchantReference}`}
                   </p>
                   {!paymentStatusLoading && merchantReference && (
                     <Link

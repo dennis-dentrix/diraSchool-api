@@ -137,7 +137,7 @@ export default function InvoicePage() {
             <span className="text-slate-400">Status</span>
             <span className="font-medium capitalize text-emerald-600">{payment.status}</span>
             <span className="text-slate-400">Provider</span>
-            <span className="font-medium">Paystack</span>
+            <span className="font-medium">Card / Mobile Money</span>
             <span className="text-slate-400">Reference</span>
             <span className="font-mono break-all">{payment.merchantReference}</span>
           </div>
