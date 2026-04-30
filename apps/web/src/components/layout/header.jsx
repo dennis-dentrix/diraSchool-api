@@ -81,7 +81,7 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
     onSuccess: (res) => {
       const updatedUser = res.data?.user ?? res.data?.data?.user;
       if (updatedUser && setUser) setUser(updatedUser);
-      queryClient.invalidateQueries({ queryKey: ['auth-me'] });
+      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
       toast.success('Profile updated');
       setProfileOpen(false);
     },

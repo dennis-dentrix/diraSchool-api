@@ -7,7 +7,7 @@ import { format, differenceInDays } from 'date-fns';
 import {
   CalendarDays, TrendingUp,
   AlertTriangle, CheckCircle2, Clock, Ban,
-  ArrowRight, Mail, Calculator, Download, Loader2,
+  ArrowRight, Mail, Calculator, Download, Loader2, Receipt, ExternalLink,
 } from 'lucide-react';
 import { schoolsApi, studentsApi, exportApi, downloadBlob, subscriptionsApi } from '@/lib/api';
 import { FEATURE_ADDONS, FEATURE_ADDON_PRICING } from '@/lib/constants';
@@ -42,7 +42,7 @@ function calcBill(students, option = 'per-term', addOns = {}) {
     0
   );
   const subtotal = BASE_FEE + students * PER_STUDENT + addOnsPerTerm;
-  const multiplier = option === 'annual' ? 2.7 : option === 'multi-year' ? 2.55 : 1;
+  const multiplier = option === 'annual' ? 2.55 : option === 'multi-year' ? 2.40 : 1;
   const base = subtotal * multiplier;
   const vat = Math.round(base * VAT);
   return { subtotal, base, vat, total: base + vat, multiplier, addOnsPerTerm };
@@ -216,6 +216,108 @@ const INVOICE_SCHEDULE = [
   { term: 'Term 3', issued: 'Mid August', due: 'September 1' },
 ];
 
+const PAYMENT_STATUS_CONFIG = {
+  pending:    { label: 'Pending',    color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  processing: { label: 'Processing', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+  completed:  { label: 'Paid',       color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  failed:     { label: 'Failed',     color: 'bg-red-50 text-red-700 border-red-200' },
+  cancelled:  { label: 'Cancelled',  color: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
+
+function PaymentHistory() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['billing', 'payments'],
+    queryFn: async () => {
+      const res = await subscriptionsApi.listPayments({ limit: 20 });
+      return res.data?.payments ?? res.data?.data?.payments ?? [];
+    },
+  });
+
+  const payments = data ?? [];
+  const fmtDate = (d) => new Date(d).toLocaleDateString('en-KE', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+  const fmtCycle = (c) => ({ 'per-term': 'Per Term', annual: 'Annual', 'multi-year': '3-Year' }[c] ?? c);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Receipt className="h-4 w-4 text-blue-600" />
+          Payment History
+        </CardTitle>
+        <CardDescription>All subscription payments made for this school.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex justify-between items-center py-3 border-b last:border-0">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-3 w-40 rounded-full" />
+                  <Skeleton className="h-3 w-24 rounded-full" />
+                </div>
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+            ))}
+          </div>
+        ) : payments.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-6">No subscription payments found.</p>
+        ) : (
+          <div className="space-y-0">
+            {payments.map((p) => {
+              const cfg = PAYMENT_STATUS_CONFIG[p.status] ?? PAYMENT_STATUS_CONFIG.pending;
+              const addOnsList = Object.entries(p.addOns ?? {})
+                .filter(([, v]) => v)
+                .map(([k]) => ({ library: 'Library', transport: 'Transport', sms: 'Bulk SMS' }[k] ?? k));
+              return (
+                <div key={p._id} className="py-3 border-b last:border-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border', cfg.color)}>
+                          {cfg.label}
+                        </span>
+                        <span className="text-xs text-muted-foreground">{fmtCycle(p.billingCycle)}</span>
+                        {p.studentCount && (
+                          <span className="text-xs text-muted-foreground">· {p.studentCount} students</span>
+                        )}
+                        {addOnsList.length > 0 && (
+                          <span className="text-xs text-muted-foreground">· {addOnsList.join(', ')}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <p className="text-sm font-semibold">{fmt(p.amount)} {p.currency ?? 'KES'}</p>
+                        <p className="text-xs text-muted-foreground">{fmtDate(p.createdAt)}</p>
+                        {p.initiatedByUserId && (
+                          <p className="text-xs text-muted-foreground">
+                            by {p.initiatedByUserId.firstName} {p.initiatedByUserId.lastName}
+                          </p>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">
+                        {p.merchantReference}
+                      </p>
+                    </div>
+                    {p.status === 'completed' && (
+                      <Link
+                        href={`/billing/invoice/${p.merchantReference}`}
+                        className="shrink-0 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Invoice <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function BillingPage() {
   const { user } = useAuthStore();
@@ -258,16 +360,13 @@ export default function BillingPage() {
 
   const bill = studentCount > 0 ? calcBill(studentCount, 'per-term', addOns) : null;
   const merchantReference = useMemo(
-    () =>
-      searchParams.get('OrderMerchantReference')
-      || searchParams.get('orderMerchantReference')
-      || searchParams.get('merchantReference'),
+    () => searchParams.get('reference') || searchParams.get('merchantReference'),
     [searchParams]
   );
 
   const createCheckout = useMutation({
     mutationFn: async () => {
-      const response = await subscriptionsApi.createPesapalCheckout({
+      const response = await subscriptionsApi.createCheckout({
         billingCycle: 'per-term',
         studentCount: Math.max(studentCount || 0, 1),
         planTier: planTier === 'trial' ? 'standard' : planTier,
@@ -277,22 +376,22 @@ export default function BillingPage() {
     },
     onSuccess: (checkout) => {
       if (!checkout?.redirectUrl) {
-        toast.error('Pesapal checkout URL was not returned.');
+        toast.error('Checkout URL was not returned. Please try again.');
         return;
       }
       window.location.assign(checkout.redirectUrl);
     },
     onError: (error) => {
-      const message = error?.response?.data?.message || 'Unable to start Pesapal checkout.';
+      const message = error?.response?.data?.message || 'Unable to start checkout. Please try again.';
       toast.error(message);
     },
   });
 
   const { data: paymentStatusData, isFetching: paymentStatusLoading } = useQuery({
-    queryKey: ['billing', 'pesapal-status', merchantReference],
+    queryKey: ['billing', 'paystack-status', merchantReference],
     enabled: Boolean(merchantReference),
     queryFn: async () => {
-      const response = await subscriptionsApi.pesapalStatus(merchantReference);
+      const response = await subscriptionsApi.getStatus(merchantReference);
       return response.data?.payment ?? response.data?.data?.payment;
     },
   });
@@ -306,7 +405,7 @@ export default function BillingPage() {
       return;
     }
     if (paymentStatusData.status === 'failed' || paymentStatusData.status === 'cancelled') {
-      toast.error('Pesapal payment was not completed. Please try again.');
+      toast.error('Payment was not completed. Please try again.');
       return;
     }
     toast.message('Payment is still processing. We will refresh status automatically.');
@@ -468,10 +567,10 @@ export default function BillingPage() {
                   {createCheckout.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Starting checkout...
+                      Starting checkout…
                     </>
                   ) : (
-                    'Pay with Pesapal'
+                    'Proceed to Checkout'
                   )}
                 </Button>
                 <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 bg-transparent">
@@ -479,11 +578,21 @@ export default function BillingPage() {
                 </Button>
               </div>
               {(merchantReference || paymentStatusLoading) && (
-                <p className="text-xs text-slate-300">
-                  {paymentStatusLoading
-                    ? 'Checking latest Pesapal payment status...'
-                    : `Pesapal reference: ${merchantReference}`}
-                </p>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <p className="text-xs text-slate-300">
+                    {paymentStatusLoading
+                      ? 'Checking latest Paystack payment status...'
+                      : `Paystack reference: ${merchantReference}`}
+                  </p>
+                  {!paymentStatusLoading && merchantReference && (
+                    <Link
+                      href={`/billing/invoice/${merchantReference}`}
+                      className="text-xs text-blue-300 underline underline-offset-2 hover:text-blue-200"
+                    >
+                      View invoice →
+                    </Link>
+                  )}
+                </div>
               )}
               <p className="text-xs text-slate-400">
                 Selected add-ons:
@@ -531,6 +640,9 @@ export default function BillingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Payment History ──────────────────────────────────────────────── */}
+      <PaymentHistory />
 
       {/* ── Pricing formula callout ───────────────────────────────────────── */}
       <Card className="bg-muted/40">

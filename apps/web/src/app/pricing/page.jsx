@@ -21,7 +21,7 @@ const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 
 function calcPrice(students, option) {
   const subtotal = BASE_FEE + students * PER_STUDENT;
-  const multiplier = option === 'annual' ? 2.7 : option === 'multi-year' ? 2.55 : 1;
+  const multiplier = option === 'annual' ? 2.55 : option === 'multi-year' ? 2.40 : 1;
   const base = subtotal * multiplier;
   const vat = Math.round(base * VAT);
   const total = base + vat;
@@ -108,7 +108,7 @@ const FAQS = [
   },
   {
     q: 'Are all features available at every plan level?',
-    a: 'Core platform pricing is the same for all schools. Optional add-ons are billed per term: Library (KES 500), Transport (KES 500), and Bulk SMS (KES 1,000).',
+    a: 'Core platform pricing is the same for all schools. Optional add-ons are billed per term: Library (KES 1,500), Transport (KES 1,500), and Bulk SMS (KES 2,000).',
   },
 ];
 

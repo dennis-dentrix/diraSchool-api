@@ -2,9 +2,9 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Save, Plus, Trash2, Pencil, X, CalendarDays, School, Info, Upload } from 'lucide-react';
+import { Save, Plus, Trash2, Pencil, X, CalendarDays, School, Info, Upload, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
-import { settingsApi, schoolsApi, getErrorMessage } from '@/lib/api';
+import { settingsApi, schoolsApi, smsApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { ACADEMIC_YEARS } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
@@ -43,6 +43,7 @@ export default function SettingsPage() {
   const [mpesaForm, setMpesaForm]   = useState(null);
   const [editingMpesa, setEditingMpesa] = useState(false);
   const [logoFile, setLogoFile] = useState(null);
+  const [senderIdForm, setSenderIdForm] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -79,6 +80,16 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['school-me'] });
       setEditingMpesa(false);
       setMpesaForm(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: requestSenderId, isPending: requestingSenderId } = useMutation({
+    mutationFn: () => smsApi.requestSenderId(senderIdForm.trim().toUpperCase()),
+    onSuccess: () => {
+      toast.success('Sender ID request submitted — awaiting approval');
+      setSenderIdForm('');
+      queryClient.invalidateQueries({ queryKey: ['school-me'] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -320,6 +331,81 @@ export default function SettingsPage() {
             </div>
           ) : (
             <InfoRow label="Till / Paybill Number" value={schoolData?.mpesaTillNumber} />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── SMS Sender ID ────────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base">SMS Sender ID</CardTitle>
+          </div>
+          <CardDescription>
+            A custom sender ID (e.g. GREENHILL) replaces the generic number shown to recipients.
+            Requests are reviewed and approved by DiraSchool within 2–3 business days.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Current status */}
+          {(() => {
+            const s = schoolData?.smsSettings;
+            if (!s || !s.senderIdStatus) {
+              return <p className="text-sm text-muted-foreground">No sender ID requested yet.</p>;
+            }
+            const statusMap = {
+              pending:  { label: 'Pending review', variant: 'secondary' },
+              approved: { label: 'Approved',       variant: 'success' },
+              rejected: { label: 'Rejected',       variant: 'destructive' },
+            };
+            const { label, variant } = statusMap[s.senderIdStatus] ?? statusMap.pending;
+            return (
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <Badge variant={variant}>{label}</Badge>
+                  {s.senderIdApproved && (
+                    <span className="text-sm font-mono font-semibold">{s.senderIdApproved}</span>
+                  )}
+                  {s.senderIdRequested && s.senderIdStatus === 'pending' && (
+                    <span className="text-sm text-muted-foreground">Requested: <span className="font-mono">{s.senderIdRequested}</span></span>
+                  )}
+                </div>
+                {s.senderIdStatus === 'rejected' && s.rejectionReason && (
+                  <p className="text-sm text-destructive">Reason: {s.rejectionReason}</p>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Request / re-request form — admins only, not while pending */}
+          {canEditSchoolDetails && schoolData?.smsSettings?.senderIdStatus !== 'pending' && (
+            <div className="space-y-2 pt-1">
+              <Label>
+                {schoolData?.smsSettings?.senderIdStatus === 'approved'
+                  ? 'Request a Different Sender ID'
+                  : 'Request Sender ID'}
+              </Label>
+              <div className="flex gap-2 max-w-xs">
+                <Input
+                  value={senderIdForm}
+                  onChange={(e) => setSenderIdForm(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+                  placeholder="e.g. GREENHILL"
+                  maxLength={11}
+                  className="font-mono uppercase"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => requestSenderId()}
+                  disabled={senderIdForm.trim().length < 1 || requestingSenderId}
+                >
+                  {requestingSenderId ? 'Submitting…' : 'Submit'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                1–11 alphanumeric characters. Avoid generic words (SCHOOL, SMS) — they are rejected by operators.
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>

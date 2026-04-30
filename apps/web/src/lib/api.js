@@ -101,6 +101,15 @@ export const usersApi = {
   toggleActive: (id, isActive, reason) => api.patch(`/users/${id}`, { isActive, ...(reason ? { reason } : {}) }),
 };
 
+// ─── SMS ──────────────────────────────────────────────────────────────────────
+export const smsApi = {
+  send: (data) => api.post('/sms/send', data),
+  broadcast: (data) => api.post('/sms/broadcast', data),
+  history: (params) => api.get('/sms/history', { params }),
+  requestSenderId: (senderIdRequested) =>
+    api.post('/schools/me/sms-sender-id-request', { senderIdRequested }),
+};
+
 // ─── Schools (school-scoped) ──────────────────────────────────────────────────
 export const schoolsApi = {
   me: () => api.get('/schools/me'),
@@ -281,8 +290,9 @@ export const pricingApi = {
 
 // ─── Subscription checkout ───────────────────────────────────────────────────
 export const subscriptionsApi = {
-  createPesapalCheckout: (data) => api.post('/subscriptions/pesapal/checkout', data),
-  pesapalStatus: (merchantReference) => api.get(`/subscriptions/pesapal/status/${merchantReference}`),
+  createCheckout: (data) => api.post('/subscriptions/paystack/checkout', data),
+  getStatus: (merchantReference) => api.get(`/subscriptions/paystack/status/${merchantReference}`),
+  listPayments: (params) => api.get('/subscriptions/payments', { params }),
 };
 
 // ─── Audit ────────────────────────────────────────────────────────────────────
