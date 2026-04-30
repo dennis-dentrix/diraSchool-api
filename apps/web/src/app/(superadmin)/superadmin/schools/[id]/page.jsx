@@ -4,16 +4,18 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, Clock, MessageSquare } from 'lucide-react';
 import { adminApi, studentsApi, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 
 const planColors = {
   trial: 'bg-yellow-100 text-yellow-800',
@@ -80,6 +82,17 @@ export default function SchoolDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const [senderIdForm, setSenderIdForm] = useState({ approvedId: '', rejectionReason: '' });
+  const { mutate: reviewSenderId, isPending: reviewPending } = useMutation({
+    mutationFn: (data) => adminApi.approveSenderId(id, data),
+    onSuccess: (_, vars) => {
+      toast.success(vars.action === 'approve' ? 'Sender ID approved' : 'Sender ID rejected');
+      setSenderIdForm({ approvedId: '', rejectionReason: '' });
+      queryClient.invalidateQueries({ queryKey: ['sa-school', id] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   if (isLoading) return (
     <div className="space-y-4">
       <Skeleton className="h-8 w-48" />
@@ -112,6 +125,13 @@ export default function SchoolDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="subscription">Subscription</TabsTrigger>
+          <TabsTrigger value="sms">
+            <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+            SMS
+            {school?.smsSettings?.senderIdStatus === 'pending' && (
+              <span className="ml-1.5 h-2 w-2 rounded-full bg-amber-500 inline-block" />
+            )}
+          </TabsTrigger>
           <TabsTrigger value="staff">Staff</TabsTrigger>
           <TabsTrigger value="students">Students</TabsTrigger>
         </TabsList>
@@ -210,6 +230,122 @@ export default function SchoolDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── SMS Sender ID ─────────────────────────────────────────────────── */}
+        <TabsContent value="sms">
+          <div className="max-w-md space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">SMS Sender ID</CardTitle>
+                <CardDescription>
+                  Africa's Talking requires sender IDs to be registered. Review and action the school's request below.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(() => {
+                  const s = school?.smsSettings ?? {};
+                  const statusConfig = {
+                    pending:  { label: 'Pending Review', color: 'bg-amber-100 text-amber-800', icon: Clock },
+                    approved: { label: 'Approved',       color: 'bg-green-100 text-green-800',  icon: CheckCircle2 },
+                    rejected: { label: 'Rejected',       color: 'bg-red-100 text-red-800',      icon: XCircle },
+                  };
+                  const cfg = statusConfig[s.senderIdStatus];
+                  return (
+                    <>
+                      {/* Current state */}
+                      <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Status</span>
+                          {cfg ? (
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.color}`}>
+                              <cfg.icon className="h-3 w-3" /> {cfg.label}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">No request yet</span>
+                          )}
+                        </div>
+                        {s.senderIdRequested && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Requested ID</span>
+                            <span className="font-mono font-semibold">{s.senderIdRequested}</span>
+                          </div>
+                        )}
+                        {s.senderIdApproved && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Approved ID</span>
+                            <span className="font-mono font-semibold text-green-700">{s.senderIdApproved}</span>
+                          </div>
+                        )}
+                        {s.requestedAt && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Requested</span>
+                            <span>{formatDate(s.requestedAt)}</span>
+                          </div>
+                        )}
+                        {s.approvedAt && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Approved</span>
+                            <span>{formatDate(s.approvedAt)}</span>
+                          </div>
+                        )}
+                        {s.rejectionReason && (
+                          <div className="flex justify-between gap-4">
+                            <span className="text-muted-foreground shrink-0">Rejection reason</span>
+                            <span className="text-right text-red-600">{s.rejectionReason}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action form — only show when there's a pending request or to allow manual approval */}
+                      <div className="space-y-3 pt-1">
+                        <div className="space-y-1.5">
+                          <Label>Sender ID to Approve</Label>
+                          <Input
+                            placeholder={s.senderIdRequested ?? 'e.g. NYERI_GIRLS'}
+                            value={senderIdForm.approvedId}
+                            onChange={(e) => setSenderIdForm((p) => ({
+                              ...p,
+                              approvedId: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 11),
+                            }))}
+                            className="font-mono"
+                          />
+                          <p className="text-xs text-muted-foreground">Max 11 characters, letters, numbers, underscores only.</p>
+                        </div>
+                        <Button
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          disabled={!senderIdForm.approvedId || reviewPending}
+                          onClick={() => reviewSenderId({ action: 'approve', senderIdApproved: senderIdForm.approvedId })}
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                          Approve Sender ID
+                        </Button>
+
+                        <div className="space-y-1.5 pt-1 border-t">
+                          <Label>Rejection Reason (optional)</Label>
+                          <Textarea
+                            placeholder="e.g. Sender ID already taken — please choose another."
+                            rows={2}
+                            value={senderIdForm.rejectionReason}
+                            onChange={(e) => setSenderIdForm((p) => ({ ...p, rejectionReason: e.target.value }))}
+                          />
+                        </div>
+                        <Button
+                          variant="destructive"
+                          className="w-full"
+                          disabled={reviewPending}
+                          onClick={() => reviewSenderId({ action: 'reject', rejectionReason: senderIdForm.rejectionReason || undefined })}
+                        >
+                          <XCircle className="h-4 w-4 mr-1.5" />
+                          Reject Request
+                        </Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* ── Staff ─────────────────────────────────────────────────────────── */}

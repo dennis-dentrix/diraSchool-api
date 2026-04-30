@@ -136,6 +136,7 @@ export const adminApi = {
   auditLogs: (params) => api.get('/admin/audit-logs', { params }),
   listUsers: (params) => api.get('/admin/users', { params }),
   toggleUser: (id) => api.patch(`/admin/users/${id}/toggle`),
+  approveSenderId: (id, data) => api.patch(`/admin/schools/${id}/sms-sender-id`, data),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────
