@@ -262,7 +262,7 @@ const buildColumns = ({ canIssueReceipts }) => [
 export default function PaymentsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const canIssueReceipts = ['secretary', 'accountant'].includes(user?.role);
+  const canIssueReceipts = ['secretary', 'accountant', 'school_admin', 'director', 'headteacher', 'deputy_headteacher'].includes(user?.role);
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);

@@ -40,6 +40,7 @@ export const enrollStudent = asyncHandler(async (req, res) => {
     gender,
     dateOfBirth,
     birthCertificateNumber,
+    assessmentNumber,
     enrollmentDate,
     guardians = [],
     parent, // legacy single-guardian field
@@ -245,6 +246,7 @@ export const enrollStudent = asyncHandler(async (req, res) => {
           gender,
           dateOfBirth:            dateOfBirth ? new Date(dateOfBirth) : undefined,
           birthCertificateNumber: birthCertificateNumber?.trim(),
+          assessmentNumber:       assessmentNumber?.trim(),
           enrollmentDate:         enrollmentDate ? new Date(enrollmentDate) : new Date(),
           guardians: guardianEntries,
           parentIds: Array.from(parentIds),
@@ -370,7 +372,7 @@ export const updateStudent = asyncHandler(async (req, res) => {
     }
 
     const {
-      firstName, lastName, gender, dateOfBirth, admissionNumber, birthCertificateNumber, enrollmentDate, guardians,
+      firstName, lastName, gender, dateOfBirth, admissionNumber, birthCertificateNumber, assessmentNumber, enrollmentDate, guardians,
     } = req.body;
 
     if (firstName !== undefined) student.firstName = firstName;
@@ -379,6 +381,7 @@ export const updateStudent = asyncHandler(async (req, res) => {
     if (dateOfBirth !== undefined) student.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : undefined;
     if (admissionNumber !== undefined) student.admissionNumber = admissionNumber.trim().toUpperCase();
     if (birthCertificateNumber !== undefined) student.birthCertificateNumber = birthCertificateNumber || undefined;
+    if (assessmentNumber !== undefined) student.assessmentNumber = assessmentNumber?.trim() || undefined;
     if (enrollmentDate !== undefined) student.enrollmentDate = enrollmentDate ? new Date(enrollmentDate) : undefined;
 
     const pendingInvites = new Map();

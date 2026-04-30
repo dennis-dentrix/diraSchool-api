@@ -18,6 +18,7 @@ import {
   Receipt,
   Image,
   MessageSquare,
+  UserCheck,
 } from 'lucide-react';
 
 // Role groups
@@ -119,6 +120,12 @@ export const schoolNavItems = [
     href: '/messaging',
     icon: MessageSquare,
     roles: ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'],
+  },
+  {
+    label: 'Visitors',
+    href: '/visitors',
+    icon: UserCheck,
+    roles: ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary'],
   },
   {
     label: 'Audit Logs',

@@ -64,6 +64,10 @@ const studentSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    assessmentNumber: {
+      type: String,
+      trim: true,
+    },
     enrollmentDate: {
       type: Date,
       default: Date.now,

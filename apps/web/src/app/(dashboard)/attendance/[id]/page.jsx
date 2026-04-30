@@ -94,6 +94,7 @@ export default function AttendanceRegisterPage() {
       queryClient.invalidateQueries({ queryKey: ['attendance-register', id] });
       queryClient.invalidateQueries({ queryKey: ['attendance-today'] });
       queryClient.invalidateQueries({ queryKey: ['attendance-past'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });

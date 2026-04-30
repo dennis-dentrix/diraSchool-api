@@ -26,6 +26,7 @@ const editSchema = z.object({
   gender: z.enum(['male', 'female']),
   dateOfBirth: z.string().optional(),
   admissionNumber: z.string().min(1, 'Required'),
+  assessmentNumber: z.string().optional(),
   birthCertificateNumber: z.string().optional(),
   enrollmentDate: z.string().optional(),
 });
@@ -305,6 +306,7 @@ export default function StudentDetailPage() {
       gender: student.gender ?? 'male',
       dateOfBirth: student.dateOfBirth ? new Date(student.dateOfBirth).toISOString().slice(0, 10) : '',
       admissionNumber: student.admissionNumber ?? '',
+      assessmentNumber: student.assessmentNumber ?? '',
       birthCertificateNumber: student.birthCertificateNumber ?? '',
       enrollmentDate: student.enrollmentDate ? new Date(student.enrollmentDate).toISOString().slice(0, 10) : '',
     });
@@ -424,6 +426,7 @@ export default function StudentDetailPage() {
               <CardHeader className="pb-2"><CardTitle className="text-base">Academic Information</CardTitle></CardHeader>
               <CardContent className="pt-0">
                 <InfoRow label="Admission No." value={student?.admissionNumber} />
+                {student?.assessmentNumber && <InfoRow label="Assessment No." value={student.assessmentNumber} />}
                 <InfoRow label="Class" value={typeof cls === 'object' ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—'} />
                 <InfoRow label="Level" value={typeof cls === 'object' ? cls.levelCategory : '—'} />
                 <InfoRow label="Academic Year" value={typeof cls === 'object' ? cls.academicYear : '—'} />
@@ -565,9 +568,15 @@ export default function StudentDetailPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label>Birth Certificate No. (optional)</Label>
-              <Input {...register('birthCertificateNumber')} placeholder="e.g. 12345678" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Assessment No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input {...register('assessmentNumber')} placeholder="e.g. 12345678" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Birth Certificate No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Input {...register('birthCertificateNumber')} placeholder="e.g. 12345678" />
+              </div>
             </div>
 
             <DialogFooter>

@@ -14,7 +14,7 @@
 import AfricasTalking from 'africastalking';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
-import { SMS_TRIGGER_TYPES } from '../../constants/index.js';
+// import { SMS_TRIGGER_TYPES } from '../../constants/index.js';
 import School from '../../features/schools/School.model.js';
 import SmsLog from '../../features/sms/SmsLog.model.js';
 
@@ -32,11 +32,13 @@ export const processSmsJob = async (job) => {
   // Fetch school's SMS settings to get approved sender ID
   const school = await School.findById(schoolId).select('name smsSettings');
   const senderIdApproved = school?.smsSettings?.senderIdApproved;
-  const senderId = senderIdApproved || env.AT_SENDER_ID || 'SCHOOL';
+  const senderId = senderIdApproved || env.AT_SENDER_ID || 'Diraschool';
 
   if (!senderIdApproved) {
     logger.warn('[SMS] No approved sender ID for school — using default', {
-      schoolId, senderId, hint: 'School must request and get a custom sender ID approved.',
+      schoolId,
+      senderId,
+      hint: 'School must request and get a custom sender ID approved.',
     });
   }
 

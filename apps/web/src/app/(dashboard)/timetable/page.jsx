@@ -378,7 +378,7 @@ function ClassTimetableTab({ canWrite }) {
   const [localSlots, setLocalSlots] = useState([]);
   const [slotDialog, setSlotDialog] = useState({ open: false, initial: null });
 
-  const { data: classesData } = useQuery({
+  const { data: classesData, isError: classesError } = useQuery({
     queryKey: ['classes'],
     queryFn: async () => {
       const res = await classesApi.list({ limit: 100 });
@@ -390,7 +390,7 @@ function ClassTimetableTab({ canWrite }) {
     },
   });
 
-  const { data: timetable, isLoading } = useQuery({
+  const { data: timetable, isLoading, isError: timetableError, error: timetableErr } = useQuery({
     queryKey: ['timetable', selectedClass, selectedTerm, selectedYear],
     queryFn: async () => {
       const res = await timetableApi.list({ classId: selectedClass, term: selectedTerm, academicYear: selectedYear, limit: 1 });
@@ -591,13 +591,27 @@ function ClassTimetableTab({ canWrite }) {
         </p>
       )}
 
-      {!selectedClass ? (
+      {classesError ? (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+          <AlertTriangle className="h-8 w-8 text-destructive opacity-60" />
+          <p className="text-sm text-destructive">Failed to load classes. Please refresh the page.</p>
+        </div>
+      ) : !selectedClass ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
           <Calendar className="h-8 w-8 opacity-40" />
           <p className="text-sm">Select a class to view its timetable</p>
         </div>
       ) : isLoading ? (
         <Skeleton className="h-64 w-full" />
+      ) : timetableError ? (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
+          <AlertTriangle className="h-8 w-8 text-destructive opacity-60" />
+          <p className="text-sm text-destructive">
+            {timetableErr?.response?.data?.upgradeRequired
+              ? 'Timetable is not available on your current plan. Please upgrade to access it.'
+              : 'Failed to load timetable. Please try again.'}
+          </p>
+        </div>
       ) : !timetable ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
           <Calendar className="h-8 w-8 opacity-40" />

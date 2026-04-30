@@ -356,3 +356,11 @@ export const transportApi = {
   assignStudents: (id, data) => api.post(`/transport/routes/${id}/assign`, data),
   unassignStudents: (id, data) => api.post(`/transport/routes/${id}/unassign`, data),
 };
+
+// ─── Visitors ─────────────────────────────────────────────────────────────────
+export const visitorsApi = {
+  list:   (params) => api.get('/visitors', { params }),
+  create: (data)   => api.post('/visitors', data),
+  update: (id, data) => api.patch(`/visitors/${id}`, data),
+  remove: (id)     => api.delete(`/visitors/${id}`),
+};

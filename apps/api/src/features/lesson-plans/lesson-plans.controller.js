@@ -72,6 +72,10 @@ export const uploadLessonPlan = asyncHandler(async (req, res) => {
 
   const images = uploadedImages.filter(Boolean).map((u) => ({ url: u.url, publicId: u.publicId }));
 
+  if (files.length > 0 && images.length === 0) {
+    return sendError(res, 'File storage is not configured. Please contact your system administrator.', 503);
+  }
+
   // Generate PDF from the same in-memory buffers
   let pdfUrl,
     pdfPublicId,

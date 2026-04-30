@@ -32,6 +32,7 @@ const schema = z.object({
   firstName:              z.string().min(1, 'Required'),
   lastName:               z.string().min(1, 'Required'),
   admissionNumber:        z.string().min(1, 'Required'),
+  assessmentNumber:       z.string().optional(),
   gender:                 z.enum(['male', 'female']),
   dateOfBirth:            z.string().optional(),
   birthCertificateNumber: z.string().optional(),
@@ -439,6 +440,13 @@ export default function StudentsPage() {
                   <Input {...register('admissionNumber')} placeholder="ADM/2024/001" />
                   {errors.admissionNumber && <p className="text-xs text-destructive">{errors.admissionNumber.message}</p>}
                 </div>
+                <div className="space-y-1.5">
+                  <Label>Assessment No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <Input {...register('assessmentNumber')} placeholder="e.g. 12345678" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Birth Certificate No.</Label>
                   <Input {...register('birthCertificateNumber')} placeholder="12345678" />
