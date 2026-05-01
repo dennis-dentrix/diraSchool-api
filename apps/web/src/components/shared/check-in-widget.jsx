@@ -51,7 +51,7 @@ function getOfflinePending() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export function CheckInWidget() {
+export function CheckInWidget({ hideButton = false }) {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
 
@@ -323,8 +323,8 @@ export function CheckInWidget() {
             </div>
           )}
 
-          {/* Check-in button */}
-          {!alreadyDone && (
+          {/* Check-in button — hidden when header already provides it */}
+          {!alreadyDone && !hideButton && (
             <Button
               onClick={handleCheckIn}
               disabled={state === 'locating' || state === 'submitting'}

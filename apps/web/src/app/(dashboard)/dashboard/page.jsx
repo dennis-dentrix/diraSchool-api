@@ -406,7 +406,7 @@ function FinanceDashboard({ user, summary, isLoading, error }) {
       </SectionCard>
 
       {/* Check-in widget */}
-      <CheckInWidget />
+      <CheckInWidget hideButton />
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-2">
@@ -616,7 +616,7 @@ function SecretaryDashboard({ user, summary, isLoading, error }) {
       )}
 
       {/* Check-in widget */}
-      <CheckInWidget />
+      <CheckInWidget hideButton />
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-2">
@@ -851,7 +851,7 @@ function PrincipalDashboard({ user, summary, isLoading, error }) {
       </div>
 
       {/* Check-in widget for principal/deputy (soft-enforced) */}
-      <CheckInWidget />
+      <CheckInWidget hideButton />
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => router.push('/fees/payments')} className="gap-2 bg-cyan-700 hover:bg-cyan-800">
@@ -1112,7 +1112,7 @@ function TeacherDashboard({ user }) {
       </div>
 
       {/* Check-in widget */}
-      <CheckInWidget />
+      <CheckInWidget hideButton />
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-2">
