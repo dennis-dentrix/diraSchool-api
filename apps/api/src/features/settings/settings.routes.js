@@ -13,6 +13,8 @@ import {
   validateUpdateSettings,
   validateAddHoliday,
 } from './settings.validator.js';
+import { updateGeofence, updateCheckInTimes } from '../checkins/checkins.controller.js';
+import { validateGeofence, validateCheckInTimes } from '../checkins/checkins.validator.js';
 
 const router = Router();
 
@@ -42,6 +44,22 @@ router.delete(
   '/holidays/:holidayId',
   authorize(ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER),
   deleteHoliday
+);
+
+// Geofence configuration — school admin only
+router.put(
+  '/geofence',
+  authorize(ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER),
+  validateGeofence,
+  updateGeofence
+);
+
+// Check-in / check-out deadline times
+router.put(
+  '/checkin-times',
+  authorize(ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER),
+  validateCheckInTimes,
+  updateCheckInTimes
 );
 
 export default router;

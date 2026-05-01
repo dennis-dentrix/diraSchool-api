@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Save, Plus, Trash2, Pencil, X, CalendarDays, School, Info, Upload, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 import { settingsApi, schoolsApi, smsApi, getErrorMessage } from '@/lib/api';
+import { GeofenceSettings } from '@/components/settings/GeofenceSettings';
 import { useAuthStore } from '@/store/auth.store';
 import { ACADEMIC_YEARS } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
@@ -638,6 +639,9 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Geofence & Check-In Times ─────────────────────────────────────────── */}
+      <GeofenceSettings settings={data} canEdit={canEditSchoolDetails} />
 
       {/* ── Confirm delete ────────────────────────────────────────────────────── */}
       <AlertDialog open={confirmDialog.open && canEditSchoolDetails} onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}>

@@ -56,6 +56,17 @@ const schoolSettingsSchema = new mongoose.Schema(
     principalName: { type: String, trim: true },
     // Override the address stored on the School record (optional)
     physicalAddress: { type: String, trim: true },
+    // Geofence — boundary staff must be within to check in
+    geofence: {
+      latitude:      { type: Number },
+      longitude:     { type: Number },
+      radius_meters: { type: Number, default: 150, min: 50, max: 500 },
+      configured_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      configured_at: { type: Date },
+    },
+    // Daily check-in deadline "HH:MM" 24-h Kenya time — late if checked in after this
+    checkInDeadline: { type: String, default: '08:00' },
+    checkOutTime:    { type: String, default: '17:00' },
   },
   { timestamps: true }
 );

@@ -1,10 +1,13 @@
 import express from 'express';
-import { protect, blockIfMustChangePassword } from '../../middleware/auth.js';
-import { getDashboard } from './dashboard.controller.js';
+import { protect, blockIfMustChangePassword, authorize } from '../../middleware/auth.js';
+import { getDashboard, getTeacherDashboard } from './dashboard.controller.js';
+import { ROLES } from '../../constants/index.js';
 
 const router = express.Router();
 
-// Protected — must be logged in and have changed their temp password
-router.get('/', protect, blockIfMustChangePassword, getDashboard);
+router.use(protect, blockIfMustChangePassword);
+
+router.get('/', getDashboard);
+router.get('/teacher', authorize(ROLES.TEACHER, ROLES.DEPARTMENT_HEAD), getTeacherDashboard);
 
 export default router;

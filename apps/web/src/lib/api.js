@@ -123,7 +123,8 @@ export const schoolsApi = {
 
 // ─── Dashboard (school admin summary) ────────────────────────────────────────
 export const dashboardApi = {
-  get: () => api.get('/dashboard'),
+  get:        () => api.get('/dashboard'),
+  getTeacher: () => api.get('/dashboard/teacher'),
 };
 
 // ─── Admin (superadmin only) ──────────────────────────────────────────────────
@@ -363,4 +364,19 @@ export const visitorsApi = {
   create: (data)   => api.post('/visitors', data),
   update: (id, data) => api.patch(`/visitors/${id}`, data),
   remove: (id)     => api.delete(`/visitors/${id}`),
+};
+
+
+// ─── Check-ins (geofence-based staff attendance) ──────────────────────────────
+export const checkInsApi = {
+  checkIn:  (data)         => api.post('/checkins', data),
+  today:    ()             => api.get('/checkins/today'),
+  roster:   (date)         => api.get('/checkins/roster', { params: date ? { date } : {} }),
+  staffHistory: (staffId, params) => api.get(`/checkins/staff/${staffId}`, { params }),
+};
+
+// ─── Geofence settings ────────────────────────────────────────────────────────
+export const geofenceApi = {
+  save:          (data) => api.put('/settings/geofence', data),
+  saveTimings:   (data) => api.put('/settings/checkin-times', data),
 };
