@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonList } from '@/components/shared/skeleton-list';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -764,7 +764,7 @@ function SchoolCalendarTab() {
     },
   });
 
-  if (isLoading) return <div className="space-y-3 pt-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24" />)}</div>;
+  if (isLoading) return <SkeletonList count={3} className="h-24" spacing="space-y-3 pt-4" />;
 
   const terms = settings?.terms ?? [];
   const holidays = settings?.holidays ?? [];

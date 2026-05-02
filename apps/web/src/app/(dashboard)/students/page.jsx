@@ -32,7 +32,7 @@ const schema = z.object({
   firstName:              z.string().min(1, 'Required'),
   lastName:               z.string().min(1, 'Required'),
   admissionNumber:        z.string().min(1, 'Required'),
-  assessmentNumber:       z.string().optional(),
+  assessmentNumber:       z.string().min(1, 'Required'),
   gender:                 z.enum(['male', 'female']),
   dateOfBirth:            z.string().optional(),
   birthCertificateNumber: z.string().optional(),

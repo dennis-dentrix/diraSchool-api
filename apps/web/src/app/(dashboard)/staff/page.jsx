@@ -7,11 +7,12 @@ import {
   Plus, Search, MoreHorizontal, Mail, KeyRound, PauseCircle, PlayCircle,
   UserCheck, UserX, AlertTriangle, Pencil, Trash2,
   CheckCircle2, XCircle, Clock, AlertCircle, Umbrella, Loader2,
+  CalendarDays, MapPin, ChevronLeft, ChevronRight as ChevronRightIcon,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { usersApi, leaveApi, getErrorMessage } from '@/lib/api';
+import { usersApi, leaveApi, checkInsApi, getErrorMessage } from '@/lib/api';
 import { ROLE_LABELS } from '@/lib/constants';
 import { getRoleBadgeColor, formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
@@ -27,7 +28,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { SkeletonList } from '@/components/shared/skeleton-list';
 import { useDebounce } from '@/hooks/use-debounce';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -397,7 +399,7 @@ function LeaveTab() {
         </CardHeader>
         <CardContent>
           {(leaveFilter === 'pending' ? loadingPending : loadingAll) ? (
-            <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
+            <SkeletonList count={4} className="h-16" spacing="space-y-3" />
           ) : displayLeaves.length > 0 ? (
             <div>
               {displayLeaves.map((leave) => (
@@ -425,6 +427,167 @@ function LeaveTab() {
   );
 }
 
+// ── Check-ins Tab ─────────────────────────────────────────────────────────────
+
+const TODAY_STR = new Date().toISOString().split('T')[0];
+
+function CheckInsTab() {
+  const [date, setDate] = useState(TODAY_STR);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['checkins-roster', date],
+    queryFn: async () => {
+      const res = await checkInsApi.roster(date);
+      return res.data;
+    },
+  });
+
+  function stepDate(delta) {
+    const d = new Date(date);
+    d.setDate(d.getDate() + delta);
+    setDate(d.toISOString().split('T')[0]);
+  }
+
+  const present  = data?.present ?? [];
+  const absent   = data?.absent  ?? [];
+  const counts   = data?.counts  ?? {};
+
+  const TYPE_LABEL = { morning_in: 'Morning In', afternoon_out: 'Afternoon Out', afternoon_in: 'Afternoon In', evening_out: 'Evening Out' };
+
+  return (
+    <div className="space-y-4 mt-4">
+      {/* Date navigator */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => stepDate(-1)}
+          className="p-1.5 rounded-md hover:bg-muted transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <input
+          type="date"
+          value={date}
+          max={TODAY_STR}
+          onChange={(e) => setDate(e.target.value)}
+          className="text-sm border rounded-md px-3 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <button
+          onClick={() => stepDate(1)}
+          disabled={date >= TODAY_STR}
+          className="p-1.5 rounded-md hover:bg-muted transition-colors disabled:opacity-40"
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </button>
+        {date !== TODAY_STR && (
+          <button onClick={() => setDate(TODAY_STR)} className="text-xs text-primary hover:underline ml-1">
+            Today
+          </button>
+        )}
+      </div>
+
+      {/* Summary */}
+      {!isLoading && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Present',  value: counts.present  ?? present.length, color: 'bg-green-50 text-green-700' },
+            { label: 'Absent',   value: counts.absent   ?? absent.length,  color: 'bg-red-50 text-red-700' },
+            { label: 'On Time',  value: counts.on_time  ?? 0,              color: 'bg-blue-50 text-blue-700' },
+            { label: 'Late',     value: counts.late     ?? 0,              color: 'bg-amber-50 text-amber-700' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className={`rounded-xl px-4 py-3 text-center ${color}`}>
+              <p className="text-2xl font-bold tabular-nums">{value}</p>
+              <p className="text-xs font-medium mt-0.5 opacity-80">{label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isLoading ? (
+        <SkeletonList count={6} className="h-12" spacing="space-y-2" />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Present */}
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm flex items-center gap-2 text-green-700">
+                <CheckCircle2 className="h-4 w-4" />
+                Checked In ({present.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              {present.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No check-ins recorded</p>
+              ) : (
+                <div className="divide-y">
+                  {present.map((c) => {
+                    const staff = c.staffId;
+                    const name  = staff ? `${staff.firstName} ${staff.lastName}` : '—';
+                    const time  = new Date(c.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <div key={c._id} className="flex items-center justify-between py-2.5 gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {ROLE_LABELS[staff?.role] ?? staff?.role} · {TYPE_LABEL[c.check_in_type] ?? c.check_in_type} · {time}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {c.off_site && (
+                            <Badge variant="outline" className="text-[10px] border-purple-200 text-purple-700 bg-purple-50 gap-1">
+                              <MapPin className="h-2.5 w-2.5" /> Off-site
+                            </Badge>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${
+                              c.status === 'late'
+                                ? 'border-amber-200 text-amber-700 bg-amber-50'
+                                : 'border-green-200 text-green-700 bg-green-50'
+                            }`}
+                          >
+                            {c.status === 'late' ? 'Late' : 'On Time'}
+                          </Badge>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Absent */}
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm flex items-center gap-2 text-red-700">
+                <XCircle className="h-4 w-4" />
+                Not Checked In ({absent.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              {absent.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">All staff have checked in</p>
+              ) : (
+                <div className="divide-y">
+                  {absent.map((s) => (
+                    <div key={s._id} className="flex items-center gap-3 py-2.5">
+                      <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{s.firstName} {s.lastName}</p>
+                        <p className="text-xs text-muted-foreground">{ROLE_LABELS[s.role] ?? s.role}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function StaffPage() {
@@ -442,7 +605,12 @@ export default function StaffPage() {
   const [pauseTarget,  setPauseTarget] = useState(null);
   const [pauseReason,  setPauseReason] = useState('');
   const [editTarget,   setEditTarget]  = useState(null);
-  const [editValues,   setEditValues]  = useState({ firstName: '', lastName: '', email: '', role: '', phone: '', tscNumber: '' });
+  const [editValues,   setEditValues]  = useState({
+    firstName: '', lastName: '', email: '', role: '', phone: '', tscNumber: '',
+    employmentType: '', dateOfJoining: '', nationalId: '', salaryGrade: '',
+    emergencyName: '', emergencyPhone: '', emergencyRelation: '',
+    bankName: '', accountNumber: '', branchCode: '',
+  });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const debouncedSearch = useDebounce(search, 400);
 
@@ -522,7 +690,7 @@ export default function StaffPage() {
     onResetPassword: (id)   => resetPassword(id),
     onToggleActive:  (id, isActive) => toggleActive({ id, isActive }),
     onPauseRequest:  (u)    => { setPauseTarget(u); setPauseReason(''); },
-    onEdit:          (u)    => { setEditTarget(u); setEditValues({ firstName: u.firstName ?? '', lastName: u.lastName ?? '', email: u.email ?? '', role: u.role ?? '', phone: u.phone ?? '', tscNumber: u.tscNumber ?? '' }); },
+    onEdit:          (u)    => { setEditTarget(u); setEditValues({ firstName: u.firstName ?? '', lastName: u.lastName ?? '', email: u.email ?? '', role: u.role ?? '', phone: u.phone ?? '', tscNumber: u.tscNumber ?? '', employmentType: u.employmentType ?? '', dateOfJoining: u.dateOfJoining ? new Date(u.dateOfJoining).toISOString().slice(0, 10) : '', nationalId: u.nationalId ?? '', salaryGrade: u.salaryGrade ?? '', emergencyName: u.emergencyContact?.name ?? '', emergencyPhone: u.emergencyContact?.phone ?? '', emergencyRelation: u.emergencyContact?.relation ?? '', bankName: u.bankDetails?.bankName ?? '', accountNumber: u.bankDetails?.accountNumber ?? '', branchCode: u.bankDetails?.branchCode ?? '' }); },
     onDeleteRequest: (u)    => setDeleteTarget(u),
   };
 
@@ -550,6 +718,12 @@ export default function StaffPage() {
                   {pendingLeaveCount}
                 </span>
               )}
+            </TabsTrigger>
+          )}
+          {canManageLeave && (
+            <TabsTrigger value="checkins" className="gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" />
+              Check-ins
             </TabsTrigger>
           )}
         </TabsList>
@@ -639,52 +813,147 @@ export default function StaffPage() {
             <LeaveTab />
           </TabsContent>
         )}
+
+        {/* ── Check-ins tab ─────────────────────────────────────────────────── */}
+        {canManageLeave && (
+          <TabsContent value="checkins">
+            <CheckInsTab />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* ── Edit dialog ────────────────────────────────────────────────────── */}
       <Dialog open={!!editTarget} onOpenChange={(v) => !v && setEditTarget(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Edit Staff Details</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-first">First Name</Label>
-                <Input id="edit-first" value={editValues.firstName} onChange={(e) => setEditValues((p) => ({ ...p, firstName: e.target.value }))} />
+          <Tabs defaultValue="basic">
+            <TabsList className="mb-4">
+              <TabsTrigger value="basic">Basic Info</TabsTrigger>
+              <TabsTrigger value="hr">HR Details</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="basic" className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-first">First Name</Label>
+                  <Input id="edit-first" value={editValues.firstName} onChange={(e) => setEditValues((p) => ({ ...p, firstName: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-last">Last Name</Label>
+                  <Input id="edit-last" value={editValues.lastName} onChange={(e) => setEditValues((p) => ({ ...p, lastName: e.target.value }))} />
+                </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="edit-last">Last Name</Label>
-                <Input id="edit-last" value={editValues.lastName} onChange={(e) => setEditValues((p) => ({ ...p, lastName: e.target.value }))} />
+                <Label htmlFor="edit-email">Email Address</Label>
+                <Input id="edit-email" type="email" value={editValues.email} onChange={(e) => setEditValues((p) => ({ ...p, email: e.target.value }))} />
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-email">Email Address</Label>
-              <Input id="edit-email" type="email" value={editValues.email} onChange={(e) => setEditValues((p) => ({ ...p, email: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-role">Role</Label>
+                  <Select value={editValues.role} onValueChange={(v) => setEditValues((p) => ({ ...p, role: v }))}>
+                    <SelectTrigger id="edit-role"><SelectValue placeholder="Select role" /></SelectTrigger>
+                    <SelectContent>
+                      {roleOptions.map((r) => <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-phone">Phone</Label>
+                  <Input id="edit-phone" value={editValues.phone} onChange={(e) => setEditValues((p) => ({ ...p, phone: e.target.value }))} />
+                </div>
+              </div>
               <div className="space-y-1.5">
-                <Label htmlFor="edit-role">Role</Label>
-                <Select value={editValues.role} onValueChange={(v) => setEditValues((p) => ({ ...p, role: v }))}>
-                  <SelectTrigger id="edit-role"><SelectValue placeholder="Select role" /></SelectTrigger>
-                  <SelectContent>
-                    {roleOptions.map((r) => <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="edit-tsc">TSC Number</Label>
+                <Input id="edit-tsc" value={editValues.tscNumber} onChange={(e) => setEditValues((p) => ({ ...p, tscNumber: e.target.value }))} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="hr" className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-emptype">Employment Type</Label>
+                  <Select value={editValues.employmentType} onValueChange={(v) => setEditValues((p) => ({ ...p, employmentType: v }))}>
+                    <SelectTrigger id="edit-emptype"><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TSC">TSC (Government)</SelectItem>
+                      <SelectItem value="BOM">BOM (Board of Management)</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
+                      <SelectItem value="permanent">Permanent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-doj">Date of Joining</Label>
+                  <Input id="edit-doj" type="date" value={editValues.dateOfJoining} onChange={(e) => setEditValues((p) => ({ ...p, dateOfJoining: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-nid">National ID</Label>
+                  <Input id="edit-nid" value={editValues.nationalId} onChange={(e) => setEditValues((p) => ({ ...p, nationalId: e.target.value }))} placeholder="e.g. 12345678" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-sg">Salary Grade</Label>
+                  <Input id="edit-sg" value={editValues.salaryGrade} onChange={(e) => setEditValues((p) => ({ ...p, salaryGrade: e.target.value }))} placeholder="e.g. Grade 5" />
+                </div>
+              </div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide pt-1">Emergency Contact</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-ec-name">Name</Label>
+                  <Input id="edit-ec-name" value={editValues.emergencyName} onChange={(e) => setEditValues((p) => ({ ...p, emergencyName: e.target.value }))} placeholder="Full name" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-ec-rel">Relation</Label>
+                  <Input id="edit-ec-rel" value={editValues.emergencyRelation} onChange={(e) => setEditValues((p) => ({ ...p, emergencyRelation: e.target.value }))} placeholder="e.g. Spouse" />
+                </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="edit-phone">Phone</Label>
-                <Input id="edit-phone" value={editValues.phone} onChange={(e) => setEditValues((p) => ({ ...p, phone: e.target.value }))} />
+                <Label htmlFor="edit-ec-phone">Emergency Phone</Label>
+                <Input id="edit-ec-phone" value={editValues.emergencyPhone} onChange={(e) => setEditValues((p) => ({ ...p, emergencyPhone: e.target.value }))} placeholder="0712 345 678" />
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-tsc">TSC Number</Label>
-              <Input id="edit-tsc" value={editValues.tscNumber} onChange={(e) => setEditValues((p) => ({ ...p, tscNumber: e.target.value }))} />
-            </div>
-          </div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide pt-1">Bank Details</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-bank">Bank Name</Label>
+                  <Input id="edit-bank" value={editValues.bankName} onChange={(e) => setEditValues((p) => ({ ...p, bankName: e.target.value }))} placeholder="e.g. KCB" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-branch">Branch Code</Label>
+                  <Input id="edit-branch" value={editValues.branchCode} onChange={(e) => setEditValues((p) => ({ ...p, branchCode: e.target.value }))} placeholder="e.g. 01200" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-acc">Account Number</Label>
+                <Input id="edit-acc" value={editValues.accountNumber} onChange={(e) => setEditValues((p) => ({ ...p, accountNumber: e.target.value }))} placeholder="e.g. 1234567890" />
+              </div>
+            </TabsContent>
+          </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
             <Button
               disabled={updatingUser}
-              onClick={() => updateUser({ id: editTarget._id, data: { firstName: editValues.firstName, lastName: editValues.lastName, email: editValues.email, role: editValues.role, phone: editValues.phone || undefined, tscNumber: editValues.tscNumber || undefined } })}
+              onClick={() => updateUser({
+                id: editTarget._id,
+                data: {
+                  firstName: editValues.firstName,
+                  lastName: editValues.lastName,
+                  email: editValues.email,
+                  role: editValues.role,
+                  phone: editValues.phone || undefined,
+                  tscNumber: editValues.tscNumber || undefined,
+                  employmentType: editValues.employmentType || undefined,
+                  dateOfJoining: editValues.dateOfJoining || undefined,
+                  nationalId: editValues.nationalId || undefined,
+                  salaryGrade: editValues.salaryGrade || undefined,
+                  emergencyContact: (editValues.emergencyName || editValues.emergencyPhone || editValues.emergencyRelation)
+                    ? { name: editValues.emergencyName || undefined, phone: editValues.emergencyPhone || undefined, relation: editValues.emergencyRelation || undefined }
+                    : undefined,
+                  bankDetails: (editValues.bankName || editValues.accountNumber || editValues.branchCode)
+                    ? { bankName: editValues.bankName || undefined, accountNumber: editValues.accountNumber || undefined, branchCode: editValues.branchCode || undefined }
+                    : undefined,
+                },
+              })}
             >
               Save Changes
             </Button>

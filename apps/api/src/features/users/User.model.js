@@ -126,6 +126,33 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // ── HR / Payroll fields ───────────────────────────────────────────────────
+    employmentType: {
+      type: String,
+      enum: ['TSC', 'BOM', 'contract', 'permanent'],
+    },
+    dateOfJoining: {
+      type: Date,
+    },
+    nationalId: {
+      type: String,
+      trim: true,
+    },
+    salaryGrade: {
+      type: String,
+      trim: true,
+    },
+    emergencyContact: {
+      name:     { type: String, trim: true },
+      phone:    { type: String, trim: true },
+      relation: { type: String, trim: true },
+    },
+    bankDetails: {
+      bankName:      { type: String, trim: true },
+      accountNumber: { type: String, trim: true },
+      branchCode:    { type: String, trim: true },
+    },
   },
   { timestamps: true }
 );

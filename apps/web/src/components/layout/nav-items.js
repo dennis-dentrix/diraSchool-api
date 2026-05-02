@@ -4,7 +4,6 @@ import {
   GraduationCap,
   BookOpen,
   ClipboardList,
-  BarChart2,
   FileText,
   CreditCard,
   Calendar,
@@ -19,6 +18,7 @@ import {
   MessageSquare,
   UserCheck,
   Umbrella,
+  Banknote,
 } from 'lucide-react';
 
 // Role groups
@@ -69,12 +69,6 @@ export const schoolNavItems = [
     roles: ACADEMIC,
   },
   {
-    label: 'Results',
-    href: '/results',
-    icon: BarChart2,
-    roles: ACADEMIC,
-  },
-  {
     label: 'Lesson Plans',
     href: '/lesson-plans',
     icon: Image,
@@ -96,6 +90,12 @@ export const schoolNavItems = [
     href: '/staff',
     icon: Users,
     roles: ADMIN,
+  },
+  {
+    label: 'Payroll',
+    href: '/payroll',
+    icon: Banknote,
+    roles: FINANCE,
   },
   {
     label: 'Leave',

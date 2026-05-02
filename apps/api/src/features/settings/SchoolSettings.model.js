@@ -56,6 +56,17 @@ const schoolSettingsSchema = new mongoose.Schema(
     principalName: { type: String, trim: true },
     // Override the address stored on the School record (optional)
     physicalAddress: { type: String, trim: true },
+    // Per-school leave entitlements (working days per year).
+    // Falls back to system defaults when not set.
+    leaveEntitlements: {
+      annual:        { type: Number, default: 21,  min: 0 },
+      sick:          { type: Number, default: 10,  min: 0 },
+      maternity:     { type: Number, default: 90,  min: 0 },
+      paternity:     { type: Number, default: 14,  min: 0 },
+      compassionate: { type: Number, default: 5,   min: 0 },
+      study:         { type: Number, default: 10,  min: 0 },
+      unpaid:        { type: Number, default: 365, min: 0 },
+    },
     // Geofence — boundary staff must be within to check in
     geofence: {
       latitude:      { type: Number },

@@ -26,7 +26,7 @@ const editSchema = z.object({
   gender: z.enum(['male', 'female']),
   dateOfBirth: z.string().optional(),
   admissionNumber: z.string().min(1, 'Required'),
-  assessmentNumber: z.string().optional(),
+  assessmentNumber: z.string().min(1, 'Required'),
   birthCertificateNumber: z.string().optional(),
   enrollmentDate: z.string().optional(),
 });

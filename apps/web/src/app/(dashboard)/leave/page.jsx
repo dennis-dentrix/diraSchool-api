@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonList } from '@/components/shared/skeleton-list';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -225,7 +226,7 @@ export default function LeavePage() {
         </CardHeader>
         <CardContent>
           {loadingMyLeaves ? (
-            <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
+            <SkeletonList count={3} className="h-14" spacing="space-y-3" />
           ) : myLeaves?.length ? (
             <div>
               {myLeaves.map((leave) => {

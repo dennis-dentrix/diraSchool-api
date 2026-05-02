@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonList } from '@/components/shared/skeleton-list';
 import { useRouter } from 'next/navigation';
 
 const schema = z.object({
@@ -411,9 +412,7 @@ export default function ClassesPage() {
                 {/* ── Students tab ────────────────────────────────────── */}
                 <TabsContent value="students">
                   {studentsLoading ? (
-                    <div className="space-y-2">
-                      {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
-                    </div>
+                    <SkeletonList count={5} className="h-10" />
                   ) : studentContactRows.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-4 text-center">No students enrolled in this class</p>
                   ) : (

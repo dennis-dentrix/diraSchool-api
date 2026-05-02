@@ -28,7 +28,7 @@ export const enrollStudentSchema = z.object({
   gender:                 z.enum(['male', 'female'], { message: "Gender must be 'male' or 'female'" }),
   dateOfBirth:            z.string().datetime({ offset: true }).or(z.string().date()).optional(),
   birthCertificateNumber: z.string().trim().optional(),
-  assessmentNumber:       z.string().trim().optional(),
+  assessmentNumber:       z.string().trim().min(1, 'Assessment number is required'),
   enrollmentDate:         z.string().date().optional(),
   // One or more guardians — all optional at enrollment (can be added later)
   guardians:              z.array(guardianSchema).optional(),

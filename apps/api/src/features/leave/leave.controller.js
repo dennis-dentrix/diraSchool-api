@@ -29,22 +29,27 @@ function countWorkingDays(startStr, endStr, holidays = []) {
 
 // Compute leave balances for a staff member in a given year
 async function computeBalances(staffId, schoolId, year) {
-  const rows = await Leave.aggregate([
-    {
-      $match: {
-        staffId:  new mongoose.Types.ObjectId(staffId),
-        schoolId: new mongoose.Types.ObjectId(schoolId),
-        year,
-        status: 'approved',
+  const [rows, settings] = await Promise.all([
+    Leave.aggregate([
+      {
+        $match: {
+          staffId:  new mongoose.Types.ObjectId(staffId),
+          schoolId: new mongoose.Types.ObjectId(schoolId),
+          year,
+          status: 'approved',
+        },
       },
-    },
-    { $group: { _id: '$leaveType', used: { $sum: '$workingDays' } } },
+      { $group: { _id: '$leaveType', used: { $sum: '$workingDays' } } },
+    ]),
+    SchoolSettings.findOne({ schoolId: new mongoose.Types.ObjectId(schoolId) }).lean(),
   ]);
 
+  const schoolEntitlements = settings?.leaveEntitlements ?? {};
   const usedMap = Object.fromEntries(rows.map((r) => [r._id, r.used]));
 
   return LEAVE_TYPES.map((type) => {
-    const entitlement = LEAVE_ENTITLEMENTS[type];
+    // School-specific entitlement takes priority; fall back to system default
+    const entitlement = schoolEntitlements[type] ?? LEAVE_ENTITLEMENTS[type];
     const used        = usedMap[type] ?? 0;
     return { leaveType: type, entitlement, used, remaining: Math.max(0, entitlement - used) };
   });

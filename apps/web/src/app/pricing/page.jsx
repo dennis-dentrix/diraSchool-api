@@ -64,7 +64,6 @@ const PLANS = [
   },
 ];
 
-const EXAMPLE_SIZES = [100, 300, 600, 1000];
 
 const FEATURES = [
   { icon: Users, label: 'Student Records Management' },
@@ -190,39 +189,19 @@ function Hero() {
 
 // ─── Pricing Table ────────────────────────────────────────────────────────────
 function PricingTable() {
-  const [previewSize, setPreviewSize] = useState(300);
-
   return (
     <section className="bg-white py-20 px-4 sm:px-6">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">One formula, four plans</h2>
           <p className="mt-3 text-slate-500 max-w-lg mx-auto">
-            All plans use the same base formula. Optional features can be added as billed add-ons.
+            Same pricing formula for every school — your plan is just your size bracket. Use the calculator below to get your exact number.
           </p>
-          {/* Example size toggle */}
-          <div className="mt-6 inline-flex items-center gap-2 bg-slate-100 rounded-xl p-1">
-            <span className="text-xs text-slate-500 px-2">Show example for</span>
-            {EXAMPLE_SIZES.map((s) => (
-              <button
-                key={s}
-                onClick={() => setPreviewSize(s)}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150',
-                  previewSize === s
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700',
-                )}
-              >
-                {s} students
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {PLANS.map((plan) => {
-            const p = plan.custom ? null : calcPrice(previewSize, 'per-term');
+            const p = plan.custom ? null : calcPrice(plan.example, 'per-term');
             return (
               <div
                 key={plan.name}
@@ -260,7 +239,7 @@ function PricingTable() {
                         {fmt(p.total)}
                       </span>
                       <p className={cn('text-xs mt-0.5', plan.highlight ? 'text-blue-200' : 'text-slate-500')}>
-                        per term · inc. VAT · {previewSize} students
+                        per term · inc. VAT · e.g. {plan.example} students
                       </p>
                     </div>
                   )}
@@ -277,7 +256,7 @@ function PricingTable() {
                       <span>Base fee</span><span>KES 8,500</span>
                     </div>
                     <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
-                      <span>{previewSize} × KES 40</span><span>{fmt(previewSize * 40)}</span>
+                      <span>{plan.example} × KES 40</span><span>{fmt(plan.example * 40)}</span>
                     </div>
                     <div className={cn('flex justify-between font-semibold pt-1 border-t', plan.highlight ? 'text-white border-white/20' : 'text-slate-700 border-slate-200')}>
                       <span>Total (inc. VAT)</span><span>{fmt(p.total)}</span>

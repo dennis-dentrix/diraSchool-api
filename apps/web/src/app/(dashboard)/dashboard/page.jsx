@@ -1,11 +1,12 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle, AlertTriangle, ArrowRight, BookOpen, Calendar,
   CalendarCheck, CheckCircle2, Clock, CreditCard, DollarSign,
   FileText, Plus, Smartphone, TrendingUp, Users, UserPlus,
-  Bell, ClipboardList, GraduationCap,
+  Bell, ClipboardList, GraduationCap, X, Rocket,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -193,6 +194,97 @@ function FeeByClassCard({ byClass = {} }) {
   );
 }
 
+// ── Onboarding Checklist ──────────────────────────────────────────────────────
+
+function SetupChecklist({ schoolId, totalStudents, staffCount, hasFees }) {
+  const key = `setup_dismissed_${schoolId}`;
+  const [dismissed, setDismissed] = useState(false);
+
+  // Read dismissal state from localStorage after mount (SSR-safe)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setDismissed(localStorage.getItem(key) === '1');
+    }
+  }, [key]);
+
+  if (dismissed) return null;
+
+  const dismiss = () => {
+    localStorage.setItem(key, '1');
+    setDismissed(true);
+  };
+
+  const steps = [
+    {
+      label: 'Create your first class',
+      hint: 'Group students by year or stream',
+      href: '/classes',
+      done: totalStudents > 0, // if there are students, classes must exist
+    },
+    {
+      label: 'Enroll students',
+      hint: 'Add or import your student roster',
+      href: '/students',
+      done: totalStudents > 0,
+    },
+    {
+      label: 'Set up fee structures',
+      hint: 'Define what each class owes per term',
+      href: '/fees/structures',
+      done: hasFees,
+    },
+  ];
+
+  const completed = steps.filter((s) => s.done).length;
+  if (completed === steps.length) return null; // all done, hide automatically
+
+  return (
+    <Card className="border-cyan-200 bg-gradient-to-br from-cyan-50/60 to-blue-50/40 shadow-sm">
+      <CardContent className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="rounded-lg bg-cyan-100 p-2"><Rocket className="h-4 w-4 text-cyan-700" aria-hidden /></span>
+            <div>
+              <p className="font-semibold text-slate-900">Set up your school</p>
+              <p className="text-xs text-slate-500">{completed} of {steps.length} steps completed</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={dismiss}
+            className="text-slate-400 hover:text-slate-700 transition-colors"
+            aria-label="Dismiss setup checklist"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="space-y-2">
+          {steps.map((step) => (
+            <Link
+              key={step.href}
+              href={step.href}
+              className={`flex items-center gap-3 rounded-lg border p-3 transition hover:shadow-sm ${
+                step.done
+                  ? 'border-emerald-200 bg-emerald-50/60 opacity-70'
+                  : 'border-slate-200 bg-white/80 hover:bg-white'
+              }`}
+            >
+              {step.done
+                ? <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" aria-hidden />
+                : <div className="h-5 w-5 rounded-full border-2 border-slate-300 shrink-0" />}
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium ${step.done ? 'line-through text-slate-500' : 'text-slate-900'}`}>{step.label}</p>
+                <p className="text-xs text-slate-500">{step.hint}</p>
+              </div>
+              {!step.done && <ArrowRight className="h-4 w-4 text-slate-400 shrink-0" aria-hidden />}
+            </Link>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Loading / Error shared states ─────────────────────────────────────────────
 
 function DashboardSkeleton() {
@@ -361,6 +453,16 @@ export default function DashboardPage() {
         />
       }
     >
+      {/* ── Onboarding checklist — admin only, new schools ───────────────── */}
+      {isAdmin && (
+        <SetupChecklist
+          schoolId={user?._id}
+          totalStudents={totalStudents}
+          staffCount={staffData.total ?? 0}
+          hasFees={totalTarget > 0}
+        />
+      )}
+
       {/* ── Alerts ── admin / finance only ───────────────────────────────── */}
       {showFees && alerts.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -797,7 +899,7 @@ export default function DashboardPage() {
               {studentsOverdue > 0 && <Button onClick={() => router.push('/fees')} variant="outline" className="gap-2 border-rose-300 text-rose-700 hover:bg-rose-50"><AlertTriangle className="h-4 w-4" aria-hidden /> View Overdue</Button>}
               <Button onClick={() => router.push('/attendance')} variant="outline" className="gap-2"><CalendarCheck className="h-4 w-4" aria-hidden /> Mark Attendance</Button>
               <Button onClick={() => router.push('/students')} variant="outline" className="gap-2"><Plus className="h-4 w-4" aria-hidden /> Enroll Student</Button>
-              <Button onClick={() => router.push('/results')} variant="outline" className="gap-2"><FileText className="h-4 w-4" aria-hidden /> View Results</Button>
+              <Button onClick={() => router.push('/report-cards')} variant="outline" className="gap-2"><FileText className="h-4 w-4" aria-hidden /> Report Cards</Button>
             </>
           )}
           {isAccountant && (

@@ -15,6 +15,7 @@ import { RefreshButton } from '@/components/shared/refresh-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SkeletonList } from '@/components/shared/skeleton-list';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -344,9 +345,7 @@ function RecordsTab({ classes, adminView, defaultTerm, defaultAcademicYear }) {
       </div>
 
       {isLoading ? (
-        <div className="space-y-1">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
-        </div>
+        <SkeletonList count={5} className="h-12 w-full rounded-lg" spacing="space-y-1" />
       ) : registers.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
           <AlertCircle className="h-8 w-8 opacity-40" />
@@ -704,9 +703,7 @@ export default function AttendancePage() {
           )}
 
           {classesLoading || todayLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)}
-            </div>
+            <SkeletonList count={3} className="h-16 w-full rounded-xl" />
           ) : classes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
               <AlertCircle className="h-8 w-8 opacity-40" />

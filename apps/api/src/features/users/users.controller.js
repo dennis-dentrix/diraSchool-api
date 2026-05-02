@@ -201,7 +201,11 @@ export const updateUser = asyncHandler(async (req, res) => {
   const restrictionError = assertTargetManageable(req, user);
   if (restrictionError) return sendError(res, restrictionError, 403);
 
-  const { firstName, lastName, email, phone, role, isActive, staffId, tscNumber, reason } = req.body;
+  const {
+    firstName, lastName, email, phone, role, isActive, staffId, tscNumber, reason,
+    employmentType, dateOfJoining, nationalId, salaryGrade,
+    emergencyContact, bankDetails,
+  } = req.body;
   if (role !== undefined && isDeputy(req.user) && !DEPUTY_ALLOWED_TARGET_ROLES.has(role)) {
     return sendError(res, 'Deputy headteacher can only assign teacher roles.', 403);
   }
@@ -224,8 +228,18 @@ export const updateUser = asyncHandler(async (req, res) => {
   if (phone      !== undefined) user.phone      = normalisePhone(phone);
   if (role       !== undefined) user.role       = role;
   if (isActive   !== undefined) user.isActive   = isActive;
-  if (staffId    !== undefined) user.staffId    = staffId;
-  if (tscNumber  !== undefined) user.tscNumber  = tscNumber;
+  if (staffId        !== undefined) user.staffId        = staffId;
+  if (tscNumber      !== undefined) user.tscNumber      = tscNumber;
+  if (employmentType !== undefined) user.employmentType = employmentType;
+  if (dateOfJoining  !== undefined) user.dateOfJoining  = dateOfJoining ? new Date(dateOfJoining) : undefined;
+  if (nationalId     !== undefined) user.nationalId     = nationalId;
+  if (salaryGrade    !== undefined) user.salaryGrade    = salaryGrade;
+  if (emergencyContact !== undefined) {
+    user.emergencyContact = { ...((user.emergencyContact ?? {})), ...emergencyContact };
+  }
+  if (bankDetails !== undefined) {
+    user.bankDetails = { ...((user.bankDetails ?? {})), ...bankDetails };
+  }
 
   await user.save();
 

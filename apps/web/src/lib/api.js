@@ -367,6 +367,20 @@ export const geofenceApi = {
   saveTimings: (data) => api.put('/settings/checkin-times', data),
 };
 
+// ─── Payroll ──────────────────────────────────────────────────────────────────
+export const payrollApi = {
+  listGrades:   ()         => api.get('/payroll/grades'),
+  createGrade:  (data)     => api.post('/payroll/grades', data),
+  updateGrade:  (id, data) => api.patch(`/payroll/grades/${id}`, data),
+  deleteGrade:  (id)       => api.delete(`/payroll/grades/${id}`),
+  listRuns:     ()         => api.get('/payroll/runs'),
+  getRun:       (id)       => api.get(`/payroll/runs/${id}`),
+  generateRun:  (data)     => api.post('/payroll/runs', data),
+  deleteRun:    (id)       => api.delete(`/payroll/runs/${id}`),
+  approveRun:   (id)       => api.post(`/payroll/runs/${id}/approve`),
+  markPaid:     (id)       => api.post(`/payroll/runs/${id}/paid`),
+};
+
 // ─── Leave management ─────────────────────────────────────────────────────────
 export const leaveApi = {
   apply:        (data)           => api.post('/leave', data),
