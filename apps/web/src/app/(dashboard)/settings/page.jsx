@@ -251,16 +251,6 @@ export default function SettingsPage() {
           <TabsTrigger value="events" className="gap-1.5" title="Holidays, closures, and events">
             <CalendarDays className="h-3.5 w-3.5" aria-hidden />Events
           </TabsTrigger>
-          {canViewPaymentsSms && (
-            <TabsTrigger value="payments" className="gap-1.5" title="M-Pesa till or paybill number">
-              <CreditCard className="h-3.5 w-3.5" aria-hidden />Payments
-            </TabsTrigger>
-          )}
-          {canViewPaymentsSms && (
-            <TabsTrigger value="comms" className="gap-1.5" title="SMS sender ID and messaging settings">
-              <MessageSquare className="h-3.5 w-3.5" aria-hidden />Communications
-            </TabsTrigger>
-          )}
           {canEdit && (
             <TabsTrigger value="attendance" className="gap-1.5" title="School location and check-in radius">
               <MapPin className="h-3.5 w-3.5" aria-hidden />Check-in
@@ -570,105 +560,7 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* ── Payments ─────────────────────────────────────────────────────── */}
-        {canViewPaymentsSms && <TabsContent value="payments" className="mt-4">
-          <Card>
-            <CardEditHeader
-              title="M-Pesa Payment Capture"
-              description="Register your till or paybill number to receive payment SMS notifications and auto-generate receipts."
-              editing={editingMpesa}
-              canEdit={canEdit}
-              saving={savingMpesa}
-              onEdit={() => { setMpesaForm({ mpesaTillNumber: schoolData?.mpesaTillNumber ?? '' }); setEditingMpesa(true); }}
-              onCancel={() => { setEditingMpesa(false); setMpesaForm(null); }}
-              onSave={() => saveMpesa()}
-            />
-            <CardContent>
-              {editingMpesa && mpesaForm ? (
-                <div className="max-w-xs space-y-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="mpesa-number">Till / Paybill Number</Label>
-                    <Input
-                      id="mpesa-number"
-                      value={mpesaForm.mpesaTillNumber}
-                      onChange={(e) => setMpesaForm((p) => ({ ...p, mpesaTillNumber: e.target.value }))}
-                      placeholder="e.g. 0722123456 or 123456"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">Enter the till or paybill number used to collect school fees.</p>
-                </div>
-              ) : (
-                <InfoRow label="Till / Paybill Number" value={schoolData?.mpesaTillNumber} />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>}
 
-        {/* ── Communications ───────────────────────────────────────────────── */}
-        {canViewPaymentsSms && <TabsContent value="comms" className="mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">SMS Sender ID</CardTitle>
-              <CardDescription>
-                A custom sender ID (e.g. <span className="font-mono">GREENHILL</span>) replaces the generic number shown to
-                recipients. Requests are reviewed by DiraSchool within 2–3 business days.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {smsSettings?.senderIdStatus ? (() => {
-                const statusMap = {
-                  pending:  { label: 'Pending review', variant: 'secondary' },
-                  approved: { label: 'Approved',       variant: 'success' },
-                  rejected: { label: 'Rejected',       variant: 'destructive' },
-                };
-                const { label, variant } = statusMap[smsSettings.senderIdStatus] ?? statusMap.pending;
-                return (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <Badge variant={variant}>{label}</Badge>
-                      {smsSettings.senderIdApproved && (
-                        <span className="text-sm font-mono font-semibold">{smsSettings.senderIdApproved}</span>
-                      )}
-                      {smsSettings.senderIdRequested && smsSettings.senderIdStatus === 'pending' && (
-                        <span className="text-sm text-muted-foreground">
-                          Requested: <span className="font-mono">{smsSettings.senderIdRequested}</span>
-                        </span>
-                      )}
-                    </div>
-                    {smsSettings.senderIdStatus === 'rejected' && smsSettings.rejectionReason && (
-                      <p className="text-sm text-destructive">Reason: {smsSettings.rejectionReason}</p>
-                    )}
-                  </div>
-                );
-              })() : (
-                <p className="text-sm text-muted-foreground">No sender ID requested yet.</p>
-              )}
-
-              {canEdit && smsSettings?.senderIdStatus !== 'pending' && (
-                <div className="space-y-2 pt-2 border-t">
-                  <Label htmlFor="sender-id-input">
-                    {smsSettings?.senderIdStatus === 'approved' ? 'Request a Different Sender ID' : 'Request Sender ID'}
-                  </Label>
-                  <div className="flex gap-2 max-w-xs">
-                    <Input
-                      id="sender-id-input"
-                      value={senderIdForm}
-                      onChange={(e) => setSenderIdForm(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
-                      placeholder="e.g. GREENHILL"
-                      maxLength={11}
-                      className="font-mono uppercase"
-                    />
-                    <Button variant="outline" onClick={() => requestSenderId()} disabled={senderIdForm.trim().length < 1 || requestingSenderId}>
-                      {requestingSenderId ? 'Submitting…' : 'Submit'}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    1–11 alphanumeric characters. Avoid generic words like SCHOOL or SMS — operators reject these.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>}
 
         {/* ── Attendance (admin only) ───────────────────────────────────────── */}
         {canEdit && (
