@@ -1,6 +1,7 @@
 /* eslint-disable no-console */
 import 'dotenv/config';
 import { fileURLToPath } from 'url';
+import { createServer } from 'http';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -11,6 +12,8 @@ import morgan from 'morgan';
 import { validateEnv, env } from './config/env.js';
 import { connectDB } from './config/db.js';
 import { connectRedis, getRedis } from './config/redis.js';
+import { initSocket } from './config/socket.js';
+import { responseTime, getResponseTimeStats } from './middleware/responseTime.js';
 import { captureError, initSentry } from './config/sentry.js';
 import { corsOptions } from './config/cors.js';
 import logger from './config/logger.js';
@@ -110,6 +113,9 @@ if (env.NODE_ENV !== 'test') {
   app.use(morgan(morganFormat, { stream: morganStream }));
 }
 
+// ── Response time monitoring (logs slow requests, feeds health stats) ─────────
+app.use(responseTime);
+
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {
   // Redis is non-critical — a transient reconnect must not kill the container.
@@ -135,9 +141,13 @@ app.get('/health', async (req, res) => {
     logger.warn(`[Health] Redis degraded: ${err.message}`);
   }
 
+  const { avg: avgResponseMs, samples } = getResponseTimeStats();
+  const mem = process.memoryUsage();
+
   return res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
+    uptime: Math.round(process.uptime()),
     services: {
       api: 'up',
       mongodb: 'up',
@@ -147,7 +157,15 @@ app.get('/health', async (req, res) => {
           ? 'configured'
           : 'not_configured',
     },
-    // Always include redisError when present so we can debug in Railway logs
+    performance: {
+      avgResponseMs,
+      samples,
+    },
+    memory: {
+      heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+      heapTotalMb: Math.round(mem.heapTotal / 1024 / 1024),
+      rssMb: Math.round(mem.rss / 1024 / 1024),
+    },
     ...(redisError && { redisError }),
   });
 });
@@ -211,7 +229,13 @@ if (isMain) {
     //    immediately — even before MongoDB and Redis are fully connected.
     //    Without this, Railway waits for connectDB() (can take 5-15 s on Atlas cold
     //    start) before the server listens, and the health check times out.
-    const server = app.listen(env.PORT, () => {
+    // Wrap Express in a plain HTTP server so Socket.io can share the same port
+    const server = createServer(app);
+
+    // Attach Socket.io before listening — must happen before .listen()
+    initSocket(server);
+
+    server.listen(env.PORT, () => {
       logger.info(`[Boot] HTTP server listening on port ${env.PORT}`);
       logger.info(`[Boot] Health: http://localhost:${env.PORT}/health`);
     });

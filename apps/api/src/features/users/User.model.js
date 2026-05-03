@@ -162,6 +162,12 @@ const userSchema = new mongoose.Schema(
 // Email is unique per school — same email can exist in different schools
 userSchema.index({ schoolId: 1, email: 1 }, { unique: true });
 
+// User list page: filter by school + active status + role (most common list query)
+userSchema.index({ schoolId: 1, isActive: 1, role: 1 });
+// Auth middleware: after JWT verify it looks up the user by _id — _id is already indexed,
+// but this covers the common auth cache-miss path with select fields
+userSchema.index({ schoolId: 1, role: 1 });
+
 // Superadmins have no schoolId — their email must be globally unique
 // partialFilterExpression allows multiple null schoolIds without violating uniqueness
 userSchema.index(

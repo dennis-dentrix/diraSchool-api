@@ -172,20 +172,21 @@ export const listUsers = asyncHandler(async (req, res) => {
   const users = await User.find(filter)
     .sort({ lastName: 1, firstName: 1 })
     .skip(skip)
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
-  return sendSuccess(res, { users: users.map((u) => u.toSafeObject()), meta });
+  return sendSuccess(res, { users, meta });
 });
 
 /**
  * GET /api/v1/users/:id
  */
 export const getUser = asyncHandler(async (req, res) => {
-  const user = await User.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
+  const user = await User.findOne({ _id: req.params.id, schoolId: req.user.schoolId }).lean();
   if (!user) return sendError(res, 'User not found.', 404);
   const restrictionError = assertTargetManageable(req, user);
   if (restrictionError) return sendError(res, restrictionError, 403);
-  return sendSuccess(res, { user: user.toSafeObject() });
+  return sendSuccess(res, { user });
 });
 
 /**

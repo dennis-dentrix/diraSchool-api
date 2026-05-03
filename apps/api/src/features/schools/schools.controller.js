@@ -3,8 +3,8 @@ import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
-import { SUBSCRIPTION_STATUSES, AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
-import { getRedis } from '../../config/redis.js';
+import { SUBSCRIPTION_STATUSES, AUDIT_ACTIONS, AUDIT_RESOURCES, CACHE_TTL } from '../../constants/index.js';
+import { getRedis, cacheGet, cacheSet, cacheDel } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { sendSenderIdRequestNotification } from '../../services/email.service.js';
 
@@ -15,6 +15,8 @@ const bustSubCache = async (schoolId) => {
   try { await redis.del(`school:sub:${schoolId}`); } catch { /* non-fatal */ }
 };
 
+const schoolInfoKey = (schoolId) => `school:info:${schoolId}`;
+
 // ── School-admin endpoints ────────────────────────────────────────────────────
 
 /**
@@ -23,8 +25,19 @@ const bustSubCache = async (schoolId) => {
  * Any authenticated school user (all roles except superadmin).
  */
 export const getMySchool = asyncHandler(async (req, res) => {
-  const school = await School.findById(req.user.schoolId);
+  const schoolId = req.user.schoolId;
+  const cacheKey = schoolInfoKey(schoolId);
+
+  try {
+    const cached = await cacheGet(cacheKey);
+    if (cached) return sendSuccess(res, { school: cached });
+  } catch { /* Redis unavailable — fall through to DB */ }
+
+  const school = await School.findById(schoolId).lean();
   if (!school) return sendError(res, 'School not found.', 404);
+
+  try { await cacheSet(cacheKey, school, CACHE_TTL.SCHOOL_INFO); } catch { /* non-fatal */ }
+
   return sendSuccess(res, { school });
 });
 
@@ -48,7 +61,10 @@ export const updateMySchool = asyncHandler(async (req, res) => {
   if (mpesaTillNumber !== undefined) school.mpesaTillNumber = mpesaTillNumber || undefined;
 
   await school.save();
-  await bustSubCache(school._id);
+  await Promise.all([
+    bustSubCache(school._id),
+    cacheDel(schoolInfoKey(school._id)).catch(() => {}),
+  ]);
 
   return sendSuccess(res, { school });
 });

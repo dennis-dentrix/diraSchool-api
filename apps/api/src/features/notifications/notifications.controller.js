@@ -2,6 +2,7 @@ import Notification from './Notification.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
+import { emitToUser } from '../../config/socket.js';
 
 export const listNotifications = asyncHandler(async (req, res) => {
   const filter = { schoolId: req.user.schoolId, userId: req.user._id };
@@ -11,7 +12,8 @@ export const listNotifications = asyncHandler(async (req, res) => {
   const notifications = await Notification.find(filter)
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
   return sendSuccess(res, { notifications, meta });
 });
@@ -33,6 +35,15 @@ export const markNotificationRead = asyncHandler(async (req, res) => {
     { new: true }
   );
 
+  if (notification) {
+    const count = await Notification.countDocuments({
+      schoolId: req.user.schoolId,
+      userId: req.user._id,
+      readAt: null,
+    });
+    emitToUser(String(req.user._id), 'notification:count', { count });
+  }
+
   return sendSuccess(res, { notification });
 });
 
@@ -42,6 +53,7 @@ export const markAllNotificationsRead = asyncHandler(async (req, res) => {
     { $set: { readAt: new Date() } }
   );
 
+  emitToUser(String(req.user._id), 'notification:count', { count: 0 });
+
   return sendSuccess(res, { message: 'All notifications marked as read.' });
 });
-

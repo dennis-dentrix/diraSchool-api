@@ -258,3 +258,51 @@ export const cancelLeave = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, { message: 'Leave request cancelled' });
 });
+
+// ── GET /api/v1/leave/summary ─────────────────────────────────────────────────
+// Replaces three simultaneous frontend requests with one round-trip.
+// Returns pending requests, on-leave-today, and recent leave history in parallel.
+export const getLeaveSummary = asyncHandler(async (req, res) => {
+  const schoolId = req.user.schoolId;
+  const today    = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today.getTime() + 86_400_000);
+
+  const populateStaff   = { path: 'staffId',   select: 'firstName lastName role' };
+  const populateApprover = { path: 'approvedBy', select: 'firstName lastName' };
+
+  const [pending, onLeaveToday, recent] = await Promise.all([
+    // All pending requests — admins act on these
+    Leave.find({ schoolId, status: 'pending' })
+      .populate(populateStaff)
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean(),
+
+    // Staff currently on approved leave today
+    Leave.find({
+      schoolId,
+      status:    'approved',
+      startDate: { $lte: tomorrow },
+      endDate:   { $gte: today },
+    })
+      .populate(populateStaff)
+      .lean(),
+
+    // Recent leave history for the leave management table
+    Leave.find({ schoolId })
+      .populate(populateStaff)
+      .populate(populateApprover)
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean(),
+  ]);
+
+  return sendSuccess(res, {
+    pending,
+    pendingCount:      pending.length,
+    onLeaveToday,
+    onLeaveTodayCount: onLeaveToday.length,
+    recent,
+  });
+});

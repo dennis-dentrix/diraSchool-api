@@ -6,6 +6,7 @@ import { Menu, Bell, LogOut, Settings, Loader2, CheckCheck, UserPen, LogIn, MapP
 import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { authApi, notificationsApi, checkInsApi, getErrorMessage } from '@/lib/api';
+import { useSocketNotifications } from '@/hooks/use-socket-notifications';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,28 +36,12 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '' });
   const isFetching = useIsFetching();
-  const { data: unreadData } = useQuery({
-    queryKey: ['notifications-unread-count'],
-    queryFn: async () => {
-      const res = await notificationsApi.unreadCount();
-      return res.data?.count ?? res.data?.data?.count ?? 0;
-    },
-    staleTime: 10_000,
-    refetchInterval: 20_000,
-    enabled: !!user && user.role !== 'superadmin',
-  });
-  const { data: notifData } = useQuery({
-    queryKey: ['notifications-list'],
-    queryFn: async () => {
-      const res = await notificationsApi.list({ page: 1, limit: 8 });
-      return res.data?.notifications ?? res.data?.data ?? [];
-    },
-    staleTime: 10_000,
-    refetchInterval: 20_000,
-    enabled: !!user && user.role !== 'superadmin',
-  });
-  const unreadCount = unreadData ?? 0;
-  const notifications = Array.isArray(notifData) ? notifData : [];
+  const {
+    notifications,
+    unreadCount,
+    markRead:    markReadSocket,
+    markAllRead: markAllReadSocket,
+  } = useSocketNotifications({ enabled: !!user && user.role !== 'superadmin' });
 
   const { mutate: doLogout } = useMutation({
     mutationFn: () => authApi.logout(),
@@ -68,18 +53,10 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
     onError: (err) => toast.error(getErrorMessage(err)),
   });
   const { mutate: markAllRead, isPending: markingAllRead } = useMutation({
-    mutationFn: () => notificationsApi.markAllRead(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
-      queryClient.invalidateQueries({ queryKey: ['notifications-list'] });
-    },
+    mutationFn: markAllReadSocket,
   });
   const { mutate: markRead } = useMutation({
-    mutationFn: (id) => notificationsApi.markRead(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
-      queryClient.invalidateQueries({ queryKey: ['notifications-list'] });
-    },
+    mutationFn: markReadSocket,
   });
 
   // ── Check-in (header quick button) ────────────────────────────────────────

@@ -46,7 +46,10 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// List query: filter by user, sort by newest
 notificationSchema.index({ schoolId: 1, userId: 1, createdAt: -1 });
+// Unread-count query: filter by user + readAt null — sparse avoids indexing read docs
+notificationSchema.index({ schoolId: 1, userId: 1, readAt: 1 }, { sparse: true });
 
 export default mongoose.models.Notification ||
   mongoose.model('Notification', notificationSchema);

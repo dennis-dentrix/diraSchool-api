@@ -52,5 +52,6 @@ const leaveSchema = new mongoose.Schema({
 leaveSchema.index({ staffId: 1, year: 1, leaveType: 1 });
 leaveSchema.index({ schoolId: 1, status: 1, startDate: -1 });
 leaveSchema.index({ schoolId: 1, startDate: 1, endDate: 1 });
+leaveSchema.index({ schoolId: 1, createdAt: -1 }); // recent leave history sort
 
 export default mongoose.model('Leave', leaveSchema);

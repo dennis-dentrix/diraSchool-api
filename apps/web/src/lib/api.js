@@ -392,4 +392,5 @@ export const leaveApi = {
   approve:      (id, data)       => api.patch(`/leave/${id}/approve`, data),
   reject:       (id, data)       => api.patch(`/leave/${id}/reject`, data),
   cancel:       (id)             => api.delete(`/leave/${id}`),
+  summary:      ()               => api.get('/leave/summary'),
 };

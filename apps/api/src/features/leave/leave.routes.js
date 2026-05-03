@@ -8,6 +8,7 @@ import {
   getBalances,
   getPendingCount,
   getOnLeaveToday,
+  getLeaveSummary,
   approveLeave,
   rejectLeave,
   cancelLeave,
@@ -34,6 +35,7 @@ router.get('/',                    anyStaff,                    listLeaves);
 router.get('/balances',            anyStaff,                    getBalances);
 router.get('/pending-count',       canApprove,                  getPendingCount);
 router.get('/on-leave-today',      canApprove,                  getOnLeaveToday);
+router.get('/summary',             canApprove,                  getLeaveSummary);
 router.get('/:id',                 anyStaff,                    getLeave);
 router.patch('/:id/approve',       canApprove, validateApprove, approveLeave);
 router.patch('/:id/reject',        canApprove, validateReject,  rejectLeave);
