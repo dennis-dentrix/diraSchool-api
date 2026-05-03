@@ -4,7 +4,7 @@ import { LEVEL_CATEGORIES, TERMS } from '../../constants/index.js';
 
 const createClassSchema = z.object({
   name: z.string().trim().min(1, 'Class name is required'),
-  stream: z.string().trim().min(1).optional(),
+  stream: z.string().trim().transform((v) => v || undefined).optional(),
   levelCategory: z.enum(Object.values(LEVEL_CATEGORIES), {
     message: `Level category must be one of: ${Object.values(LEVEL_CATEGORIES).join(', ')}`,
   }),
@@ -17,7 +17,7 @@ const createClassSchema = z.object({
 
 const updateClassSchema = z.object({
   name: z.string().trim().min(1).optional(),
-  stream: z.string().trim().min(1).optional(),
+  stream: z.string().trim().transform((v) => v || undefined).optional(),
   levelCategory: z.enum(Object.values(LEVEL_CATEGORIES)).optional(),
   academicYear: z.string().regex(/^\d{4}$/).optional(),
   term: z.enum(TERMS).optional(),

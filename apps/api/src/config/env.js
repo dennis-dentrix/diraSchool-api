@@ -91,8 +91,6 @@ export const env = {
     ? process.env.AT_TEST_NUMBERS.split(',').map((n) => n.trim()).filter(Boolean)
     : null,
   EMAIL_FROM: process.env.EMAIL_FROM,
-  ZEPTOMAIL_SERVER: process.env.ZEPTOMAIL_SERVER || 'smtp.zeptomail.com',
-  ZEPTOMAIL_USERNAME: process.env.ZEPTOMAIL_USERNAME || 'emailapikey',
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
   DO_SPACES_KEY: process.env.DO_SPACES_KEY,
   DO_SPACES_SECRET: process.env.DO_SPACES_SECRET,

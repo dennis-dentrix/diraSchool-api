@@ -1,25 +1,36 @@
-import nodemailer from 'nodemailer';
+import { SendMailClient } from 'zeptomail';
 import { env } from '../config/env.js';
 import logger from '../config/logger.js';
 import EmailEvent from '../features/email/EmailEvent.model.js';
 
-const FROM = env.EMAIL_FROM ?? 'Diraschool <noreply@contact.diraschool.com>';
+// Parse "Name <addr>" → { name, address }
+const parseFrom = (raw) => {
+  const match = raw?.match(/^(.+?)\s*<([^>]+)>$/);
+  return match
+    ? { name: match[1].trim(), address: match[2].trim() }
+    : { name: 'Diraschool', address: raw ?? 'noreply@contact.diraschool.com' };
+};
 
-let _transport = null;
+const FROM_RAW = env.EMAIL_FROM ?? 'Diraschool <noreply@contact.diraschool.com>';
+const FROM = parseFrom(FROM_RAW);
 
-const getTransport = () => {
-  if (!_transport) {
-    _transport = nodemailer.createTransport({
-      host: env.ZEPTOMAIL_SERVER,
-      port: 465,
-      secure: true,
-      auth: {
-        user: env.ZEPTOMAIL_USERNAME,
-        pass: env.ZEPTOMAIL_API_KEY,
-      },
-    });
-  }
-  return _transport;
+const zeptoClient = new SendMailClient({
+  url: 'https://api.zeptomail.com/v1.1/email',
+  token: env.ZEPTOMAIL_API_KEY,
+});
+
+const sendViaZeptoApi = async ({ to, subject, html }) => {
+  const data = await zeptoClient.sendMail({
+    from: { address: FROM.address, name: FROM.name },
+    to: [{ email_address: { address: to } }],
+    subject,
+    htmlbody: html,
+  });
+
+  return {
+    providerMessageId: data?.data?.[0]?.message_id ?? data?.request_id,
+    providerStatus: 'accepted',
+  };
 };
 
 const normalizeError = (err) => ({
@@ -71,21 +82,20 @@ const persistEmailEvent = async ({
 
 const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
   try {
-    const info = await getTransport().sendMail({ from: FROM, to, subject, html });
+    const result = await sendViaZeptoApi({ to, subject, html });
 
     await persistEmailEvent({
       to, subject, template,
       provider: 'zeptomail',
       status: 'sent',
-      providerMessageId: info?.messageId,
-      accepted: Array.isArray(info?.accepted) ? info.accepted : [],
-      rejected: Array.isArray(info?.rejected) ? info.rejected : [],
-      providerStatus: info?.response ?? 'accepted',
+      accepted: [to],
+      rejected: [],
+      ...result,
       meta,
     });
 
-    logger.info('[Email] Sent email', { to, template, providerMessageId: info?.messageId });
-    return info;
+    logger.info('[Email] Sent email', { to, template, providerMessageId: result.providerMessageId });
+    return result;
   } catch (err) {
     const normalized = normalizeError(err);
     await persistEmailEvent({
