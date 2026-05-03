@@ -153,6 +153,56 @@ export const broadcastSms = asyncHandler(async (req, res) => {
 });
 
 /**
+ * POST /api/v1/sms/test-direct
+ * Sends via Africa's Talking synchronously (no queue) and returns the raw AT response.
+ * Use this to verify credentials and diagnose delivery failures.
+ * Body: { to: string, message: string }
+ */
+export const testSendDirect = asyncHandler(async (req, res) => {
+  if (!atConfigured()) {
+    return sendError(res, 'AT_USERNAME / AT_API_KEY not set in server env.', 503);
+  }
+
+  const { to, message = 'Test SMS from Diraschool' } = req.body;
+  const phone = normalisePhone(to);
+
+  if (!phone) {
+    return sendError(res, `Cannot normalise phone: ${to}`, 400);
+  }
+
+  const recipients = env.AT_TEST_NUMBERS?.length
+    ? env.AT_TEST_NUMBERS
+    : [phone];
+
+  logger.info('[SMS-TEST] Direct send', { recipients, from: env.AT_SENDER_ID ?? '(none)' });
+
+  let atResult, atError;
+  try {
+    const AfricasTalking = (await import('africastalking')).default ?? await import('africastalking');
+    const AT = AfricasTalking({ username: env.AT_USERNAME, apiKey: env.AT_API_KEY });
+    const sms = AT.SMS;
+    const params = { to: recipients, message };
+    if (env.AT_SENDER_ID) params.from = env.AT_SENDER_ID;
+    atResult = await sms.send(params);
+  } catch (err) {
+    atError = err.message;
+    logger.error('[SMS-TEST] Direct send failed', { err: err.message });
+  }
+
+  return sendSuccess(res, {
+    config: {
+      username: env.AT_USERNAME,
+      senderId: env.AT_SENDER_ID ?? null,
+      testMode: !!(env.AT_TEST_NUMBERS?.length),
+      testNumbers: env.AT_TEST_NUMBERS ?? null,
+      recipients,
+    },
+    atResult: atResult ?? null,
+    atError: atError ?? null,
+  });
+});
+
+/**
  * GET /api/v1/sms/history
  * Returns paginated SMS log for the school.
  */

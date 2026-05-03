@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 import { feesApi, schoolsApi, settingsApi } from '@/lib/api';
 import { formatDate, formatCurrency, capitalize } from '@/lib/utils';
 import { SchoolDocumentHeader } from '@/components/shared/school-document-header';
@@ -66,8 +67,9 @@ export default function PaymentReceiptPrintPage() {
 
   if (isLoading || !payment || issuingReceipt) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500 text-sm">Preparing receipt…</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="text-sm">Preparing receipt…</span>
       </div>
     );
   }

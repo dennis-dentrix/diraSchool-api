@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { protect, blockIfMustChangePassword, authorize } from '../../middleware/auth.js';
 import { ROLES } from '../../constants/index.js';
 import { handleInboundSms } from './sms-inbound.controller.js';
-import { sendSingle, broadcastSms, smsHistory } from './sms.controller.js';
+import { sendSingle, broadcastSms, smsHistory, testSendDirect } from './sms.controller.js';
 import { validateSend, validateBroadcast } from './sms.validator.js';
 
 const router = Router();
@@ -23,8 +23,10 @@ const canSms = authorize(
   ROLES.ACCOUNTANT,
 );
 
-router.post('/send',      canSms, validateSend,      sendSingle);
-router.post('/broadcast', canSms, validateBroadcast, broadcastSms);
-router.get('/history',    canSms,                    smsHistory);
+router.post('/send',        canSms, validateSend,      sendSingle);
+router.post('/broadcast',   canSms, validateBroadcast, broadcastSms);
+router.get('/history',      canSms,                    smsHistory);
+// Direct AT test — bypasses queue, returns raw AT response for debugging
+router.post('/test-direct', canSms,                    testSendDirect);
 
 export default router;

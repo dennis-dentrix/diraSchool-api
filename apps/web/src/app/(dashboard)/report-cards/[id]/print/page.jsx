@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import { reportCardsApi, settingsApi, schoolsApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { SchoolDocumentHeader } from '@/components/shared/school-document-header';
@@ -62,8 +63,9 @@ export default function ReportCardPrintPage() {
 
   if (isLoading || !rc) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-500 text-sm">Loading report card…</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="text-sm">Preparing report card…</span>
       </div>
     );
   }

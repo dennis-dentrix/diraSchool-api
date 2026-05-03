@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   MessageSquare, Send, Users, User, Clock,
-  CheckCircle2, AlertCircle, Loader2, School, Search, X,
+  CheckCircle2, AlertCircle, Loader2, School, Search, X, FlaskConical,
+  Sparkles, ArrowRight,
 } from 'lucide-react';
 import { smsApi, classesApi, studentsApi, usersApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -37,16 +38,16 @@ function CharCounter({ text }) {
 
 function StatusBadge({ status }) {
   const map = {
-    queued:  { label: 'Queued',  variant: 'secondary',    icon: Clock },
-    sent:    { label: 'Sent',    variant: 'success',      icon: CheckCircle2 },
-    partial: { label: 'Partial', variant: 'warning',      icon: AlertCircle },
-    failed:  { label: 'Failed',  variant: 'destructive',  icon: AlertCircle },
+    queued:  { label: 'Queued',  className: 'bg-slate-100 text-slate-700 border-slate-200',     icon: Clock },
+    sent:    { label: 'Sent',    className: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+    partial: { label: 'Partial', className: 'bg-amber-100 text-amber-700 border-amber-200',     icon: AlertCircle },
+    failed:  { label: 'Failed',  className: 'bg-red-100 text-red-700 border-red-200',           icon: AlertCircle },
   };
-  const { label, variant, icon: Icon } = map[status] ?? map.queued;
+  const { label, className, icon: Icon } = map[status] ?? map.queued;
   return (
-    <Badge variant={variant} className="gap-1">
-      <Icon className="h-3 w-3" /> {label}
-    </Badge>
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${className}`}>
+      <Icon className="h-3 w-3" aria-hidden /> {label}
+    </span>
   );
 }
 
@@ -478,14 +479,72 @@ function HistoryTab() {
   );
 }
 
+const MESSAGING_ENABLED = process.env.NEXT_PUBLIC_MESSAGING_ENABLED === 'true';
+const TEST_NUMBERS = process.env.NEXT_PUBLIC_SMS_TEST_NUMBERS;
+
+// ── Coming Soon ───────────────────────────────────────────────────────────────
+function ComingSoon() {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 gap-6 text-center max-w-lg mx-auto">
+      <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+        <MessageSquare className="h-8 w-8 text-primary" />
+      </div>
+      <div className="space-y-2">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold mb-2">
+          <Sparkles className="h-3 w-3" /> Coming Soon
+        </div>
+        <h2 className="text-2xl font-bold text-foreground tracking-tight">SMS Messaging</h2>
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          Send individual and bulk SMS messages to parents and staff directly from DiraSchool.
+          Fee reminders, announcements, and event notices — all in one place.
+        </p>
+      </div>
+      <ul className="text-sm text-muted-foreground space-y-1.5 text-left w-full max-w-xs">
+        {[
+          'Broadcast to all parents or a specific class',
+          'Direct messages to individual guardians or staff',
+          'Message history and delivery tracking',
+          'Quick templates for common notices',
+        ].map((item) => (
+          <li key={item} className="flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted-foreground">
+        This feature is currently being rolled out. Contact{' '}
+        <a href="mailto:support@diraschool.com" className="underline hover:text-foreground">
+          support@diraschool.com
+        </a>{' '}
+        to join the early access list.
+      </p>
+    </div>
+  );
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function MessagingPage() {
+  if (!MESSAGING_ENABLED) return <ComingSoon />;
+
   return (
     <div className="space-y-6 max-w-3xl">
       <PageHeader
         title="Messaging"
         description="Send SMS messages to parents and staff"
       />
+
+      {TEST_NUMBERS && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+          <FlaskConical className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" aria-hidden />
+          <div>
+            <p className="text-sm font-semibold text-amber-900">Test mode active</p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              All SMS (including broadcasts) are redirected to: <strong>{TEST_NUMBERS}</strong>. Remove <code>AT_TEST_NUMBERS</code> from the server env to send to real recipients.
+            </p>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="single">
         <TabsList className="grid grid-cols-3 w-full max-w-sm">

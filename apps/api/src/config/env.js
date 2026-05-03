@@ -86,7 +86,12 @@ export const env = {
   // AfricasTalking — optional until SMS feature is activated
   AT_USERNAME: process.env.AT_USERNAME,
   AT_API_KEY: process.env.AT_API_KEY,
-  AT_SENDER_ID: process.env.AT_SENDER_ID || 'SCHOOL',
+  AT_SENDER_ID: process.env.AT_SENDER_ID || null,
+  // Comma-separated E.164 numbers. When set, ALL SMS (including broadcasts) are
+  // redirected to only these numbers — use during development/QA to avoid spamming.
+  AT_TEST_NUMBERS: process.env.AT_TEST_NUMBERS
+    ? process.env.AT_TEST_NUMBERS.split(',').map((n) => n.trim()).filter(Boolean)
+    : null,
   // ZeptoMail is primary; Resend is automatic fallback when RESEND_API_KEY is set.
   EMAIL_FROM: process.env.EMAIL_FROM,
   ZEPTOMAIL_SERVER: process.env.ZEPTOMAIL_SERVER || 'smtp.zeptomail.com',

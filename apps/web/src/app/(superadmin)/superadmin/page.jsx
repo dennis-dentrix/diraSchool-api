@@ -8,6 +8,7 @@ import { StatCard } from '@/components/shared/stat-card';
 import { PageHeader } from '@/components/shared/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building2, CheckCircle, Clock, TrendingUp, Users, UserCheck } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const statusBadge = {
@@ -102,7 +103,7 @@ export default function SuperadminDashboardPage() {
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Top Counties</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
+              <div className="space-y-3 pt-1">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />)}</div>
             ) : topCounties.length ? (
               <div className="space-y-3 pt-1">
                 {topCounties.map((c, i) => (
@@ -137,7 +138,7 @@ export default function SuperadminDashboardPage() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
+              <div className="space-y-3 pt-1">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-5 w-full" />)}</div>
             ) : roleRows.length ? (
               <div className="space-y-2.5 pt-1">
                 {roleRows.map(([role, count]) => (
@@ -166,7 +167,7 @@ export default function SuperadminDashboardPage() {
           </CardHeader>
           <CardContent>
             {schoolsLoading ? (
-              <p className="text-sm text-muted-foreground">Loading…</p>
+              <div className="divide-y">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-10 w-full my-1" />)}</div>
             ) : (recentData?.schools ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">No schools registered yet</p>
             ) : (

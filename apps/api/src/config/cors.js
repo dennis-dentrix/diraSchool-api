@@ -12,6 +12,9 @@ const allowedOrigins = [
   // Temporary: direct IP access before DNS propagation
   'https://159.89.230.170',
   'https://159.89.230.170:443',
+
+  //staging
+  'https://staging.diraschool.com',
 ].filter(Boolean);
 
 export const corsOptions = {
