@@ -8,17 +8,13 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
-import { sendInviteEmail, sendParentEnrollmentEmail } from '../../services/email.service.js';
 import { ROLES, STUDENT_STATUSES, JOB_NAMES, AUDIT_ACTIONS, AUDIT_RESOURCES } from '../../constants/index.js';
-import { importQueue, emailQueue } from '../../jobs/queues.js';
+import { importQueue } from '../../jobs/queues.js';
 import { getRedis } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { env } from '../../config/env.js';
-import logger from '../../config/logger.js';
+import { queueEmailWithDirectFallback } from '../../utils/emailJobs.js';
 import { uploadBuffer } from '../../jobs/helpers/spacesUpload.js';
-
-const enqueueEmail = async (type, payload) =>
-  emailQueue.add(type, { type, payload });
 
 /**
  * POST /api/v1/students
@@ -268,27 +264,19 @@ export const enrollStudent = asyncHandler(async (req, res) => {
 
     // ── Fire invite emails after commit (fire-and-forget) ─────────────────────
     for (const invite of pendingInvites.values()) {
-      sendInviteEmail(invite).catch((err) => {
-        logger.error('[Students] Parent invite email direct send failed, falling back to queue', {
-          err: err.message,
-          to: invite.to,
-        });
-        enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invite).catch((qErr) =>
-          logger.error('[Students] Parent invite email queue fallback also failed:', qErr.message)
-        );
-      });
+      queueEmailWithDirectFallback(
+        JOB_NAMES.SEND_INVITE_EMAIL,
+        invite,
+        'Students parent invite'
+      );
     }
 
     for (const notice of pendingEnrollmentNotices.values()) {
-      sendParentEnrollmentEmail(notice).catch((err) => {
-        logger.error('[Students] Parent enrollment notice direct send failed, falling back to queue', {
-          err: err.message,
-          to: notice.to,
-        });
-        enqueueEmail(JOB_NAMES.SEND_PARENT_ENROLLMENT_EMAIL, notice).catch((qErr) =>
-          logger.error('[Students] Parent enrollment notice queue fallback also failed:', qErr.message)
-        );
-      });
+      queueEmailWithDirectFallback(
+        JOB_NAMES.SEND_PARENT_ENROLLMENT_EMAIL,
+        notice,
+        'Students enrollment notice'
+      );
     }
 
     const populated = await Student.findById(student._id)
@@ -503,27 +491,19 @@ export const updateStudent = asyncHandler(async (req, res) => {
     await session.commitTransaction();
 
     for (const invite of pendingInvites.values()) {
-      sendInviteEmail(invite).catch((err) => {
-        logger.error('[Students] Updated guardian invite email direct send failed, falling back to queue', {
-          err: err.message,
-          to: invite.to,
-        });
-        enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invite).catch((qErr) =>
-          logger.error('[Students] Updated guardian invite email queue fallback also failed:', qErr.message)
-        );
-      });
+      queueEmailWithDirectFallback(
+        JOB_NAMES.SEND_INVITE_EMAIL,
+        invite,
+        'Students updated guardian invite'
+      );
     }
 
     for (const notice of pendingEnrollmentNotices.values()) {
-      sendParentEnrollmentEmail(notice).catch((err) => {
-        logger.error('[Students] Updated guardian enrollment notice direct send failed, falling back to queue', {
-          err: err.message,
-          to: notice.to,
-        });
-        enqueueEmail(JOB_NAMES.SEND_PARENT_ENROLLMENT_EMAIL, notice).catch((qErr) =>
-          logger.error('[Students] Updated guardian enrollment notice queue fallback also failed:', qErr.message)
-        );
-      });
+      queueEmailWithDirectFallback(
+        JOB_NAMES.SEND_PARENT_ENROLLMENT_EMAIL,
+        notice,
+        'Students updated enrollment notice'
+      );
     }
 
     const populated = await Student.findById(student._id)

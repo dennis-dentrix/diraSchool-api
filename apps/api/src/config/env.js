@@ -92,6 +92,7 @@ export const env = {
     : null,
   EMAIL_FROM: process.env.EMAIL_FROM,
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
+  ZEPTOMAIL_API_URL: process.env.ZEPTOMAIL_API_URL || 'api.zeptomail.com/',
   DO_SPACES_KEY: process.env.DO_SPACES_KEY,
   DO_SPACES_SECRET: process.env.DO_SPACES_SECRET,
   DO_SPACES_BUCKET: process.env.DO_SPACES_BUCKET,

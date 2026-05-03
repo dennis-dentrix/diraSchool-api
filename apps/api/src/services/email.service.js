@@ -14,9 +14,49 @@ const parseFrom = (raw) => {
 const FROM_RAW = env.EMAIL_FROM ?? 'Diraschool <noreply@contact.diraschool.com>';
 const FROM = parseFrom(FROM_RAW);
 
+const normalizeZeptoUrl = (url) => {
+  const trimmed = String(url || '').trim() || 'api.zeptomail.com/';
+  return trimmed.includes('/v1.1') || trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
+};
+
+const normalizeZeptoToken = (token) => {
+  const trimmed = String(token || '').trim();
+  if (!trimmed || trimmed.toLowerCase().startsWith('zoho-enczapikey ')) return trimmed;
+  return `Zoho-enczapikey ${trimmed}`;
+};
+
+const decodeHtmlEntities = (value) =>
+  value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+
+const stripHtml = (value) => decodeHtmlEntities(String(value || '').replace(/<[^>]+>/g, ''));
+
+const htmlToText = (html) => {
+  const text = String(html || '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
+      const cleanLabel = stripHtml(label).trim();
+      return cleanLabel ? `${cleanLabel}: ${href}` : href;
+    })
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|tr|table|li)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  return decodeHtmlEntities(text);
+};
+
 const zeptoClient = new SendMailClient({
-  url: 'https://api.zeptomail.com/v1.1/email',
-  token: env.ZEPTOMAIL_API_KEY,
+  url: normalizeZeptoUrl(env.ZEPTOMAIL_API_URL),
+  token: normalizeZeptoToken(env.ZEPTOMAIL_API_KEY),
 });
 
 const sendViaZeptoApi = async ({ to, subject, html }) => {
@@ -24,19 +64,47 @@ const sendViaZeptoApi = async ({ to, subject, html }) => {
     from: { address: FROM.address, name: FROM.name },
     to: [{ email_address: { address: to } }],
     subject,
+    textbody: htmlToText(html),
     htmlbody: html,
   });
 
   return {
+    provider: 'zeptomail',
     providerMessageId: data?.data?.[0]?.message_id ?? data?.request_id,
     providerStatus: 'accepted',
   };
 };
 
-const normalizeError = (err) => ({
-  message: err?.message ?? 'Unknown email delivery error',
-  code: err?.code ? String(err.code) : undefined,
-});
+const safeJson = (value) => {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
+const normalizeError = (err) => {
+  if (typeof err === 'string') {
+    return { message: err, code: undefined, details: err };
+  }
+
+  const firstData = Array.isArray(err?.data) ? err.data[0] : undefined;
+  const message =
+    err?.message ||
+    err?.error?.message ||
+    err?.details?.message ||
+    firstData?.message ||
+    err?.errors?.[0]?.message ||
+    'Unknown email delivery error';
+
+  const code = err?.code || err?.error?.code || firstData?.code || err?.status;
+
+  return {
+    message,
+    code: code ? String(code) : undefined,
+    details: err ? safeJson(err) : undefined,
+  };
+};
 
 const persistEmailEvent = async ({
   to,
@@ -107,7 +175,12 @@ const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
       meta,
     });
     logger.warn('[Email] Email failed', { to, template, err: normalized.message });
-    throw err;
+    const wrapped = new Error(normalized.message);
+    wrapped.code = normalized.code;
+    wrapped.provider = 'zeptomail';
+    wrapped.providerError = normalized.details;
+    wrapped.cause = err;
+    throw wrapped;
   }
 };
 
@@ -381,11 +454,11 @@ const _newSchoolTemplate = ({ schoolName, schoolEmail, schoolPhone, county, admi
     `
   );
 
-const _fmtKes = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
+const _fmtAmount = (n, currency = 'KES') => `${currency} ${Math.round(n).toLocaleString('en-KE')}`;
 const _fmtCycle = (c) => ({ 'per-term': 'Per Term', annual: 'Annual (3 terms, 15% off)', 'multi-year': '3-Year Annual (20% off)' }[c] ?? c);
 const _fmtDate = (d) => new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' });
 
-const _subscriptionConfirmTemplate = ({ schoolName, amount, currency, billingCycle, studentCount, merchantReference, paidAt }) =>
+const _subscriptionConfirmTemplate = ({ schoolName, amount, currency = 'KES', billingCycle, studentCount, merchantReference, paidAt }) =>
   _shell(
     `Subscription confirmed — ${schoolName}`,
     `
@@ -398,7 +471,7 @@ const _subscriptionConfirmTemplate = ({ schoolName, amount, currency, billingCyc
              style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:24px;">
         <tr style="background:#f0f4ff;">
           <td style="padding:10px 14px;font-weight:600;color:#374151;width:160px;border:1px solid #dbeafe;">Amount paid</td>
-          <td style="padding:10px 14px;color:#111827;font-weight:700;border:1px solid #dbeafe;">${_fmtKes(amount)} (incl. 16% VAT)</td>
+          <td style="padding:10px 14px;color:#111827;font-weight:700;border:1px solid #dbeafe;">${_fmtAmount(amount, currency)} (incl. 16% VAT)</td>
         </tr>
         <tr>
           <td style="padding:10px 14px;font-weight:600;color:#374151;border:1px solid #e5e7eb;">Billing cycle</td>

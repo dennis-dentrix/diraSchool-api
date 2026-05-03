@@ -7,13 +7,8 @@ import { paginate } from '../../utils/pagination.js';
 import { normalisePhone } from '../../utils/phone.js';
 import { JOB_NAMES, AUDIT_ACTIONS, AUDIT_RESOURCES, ROLES } from '../../constants/index.js';
 import { logAction } from '../../utils/auditLogger.js';
-import { sendInviteEmail } from '../../services/email.service.js';
-import { emailQueue } from '../../jobs/queues.js';
+import { queueEmailWithDirectFallback } from '../../utils/emailJobs.js';
 import { env } from '../../config/env.js';
-import logger from '../../config/logger.js';
-
-const enqueueEmail = async (type, payload) =>
-  emailQueue.add(type, { type, payload });
 
 const DEPUTY_ALLOWED_TARGET_ROLES = new Set([
   ROLES.TEACHER,
@@ -88,8 +83,7 @@ export const createUser = asyncHandler(async (req, res) => {
   });
 
   // Fire-and-forget — a mail failure must never fail the 201 response.
-  // Send directly first so the email goes out even if the worker process is down.
-  // Fall back to the queue only when the direct send itself fails (worker will retry).
+  // Queue first so one worker owns delivery/retries; send directly only if Redis is down.
   const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
   const invitePayload = {
     to:           user.email,
@@ -104,14 +98,7 @@ export const createUser = asyncHandler(async (req, res) => {
       initiatedBy: req.user._id,
     },
   };
-  sendInviteEmail(invitePayload).catch((err) => {
-    logger.error('[Users] Invite email direct send failed, falling back to queue', {
-      err: err.message,
-    });
-    enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, invitePayload).catch((qErr) =>
-      logger.error('[Users] Invite email queue fallback also failed:', qErr.message)
-    );
-  });
+  queueEmailWithDirectFallback(JOB_NAMES.SEND_INVITE_EMAIL, invitePayload, 'Users invite');
 
   return sendSuccess(
     res,
@@ -332,14 +319,11 @@ export const resendInvite = asyncHandler(async (req, res) => {
       initiatedBy: req.user._id,
     },
   };
-  sendInviteEmail(resendInvitePayload).catch((err) => {
-    logger.error('[Users] Resend invite email direct send failed, falling back to queue', {
-      err: err.message,
-    });
-    enqueueEmail(JOB_NAMES.SEND_INVITE_EMAIL, resendInvitePayload).catch((qErr) =>
-      logger.error('[Users] Resend invite email queue fallback also failed:', qErr.message)
-    );
-  });
+  queueEmailWithDirectFallback(
+    JOB_NAMES.SEND_INVITE_EMAIL,
+    resendInvitePayload,
+    'Users resend invite'
+  );
 
   return sendSuccess(res, {
     message: `A new invitation link has been sent to ${user.email}.`,
@@ -362,17 +346,25 @@ export const adminResetPassword = asyncHandler(async (req, res) => {
   const restrictionError = assertTargetManageable(req, user);
   if (restrictionError) return sendError(res, restrictionError, 403);
 
-  const { sendPasswordResetEmail } = await import('../../services/email.service.js');
-
   const rawToken  = crypto.randomBytes(32).toString('hex');
-  user.resetPasswordToken  = crypto.createHash('sha256').update(rawToken).digest('hex');
-  user.resetPasswordExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  user.passwordResetToken  = crypto.createHash('sha256').update(rawToken).digest('hex');
+  user.passwordResetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
   await user.save({ validateBeforeSave: false });
 
   const resetUrl = `${env.CLIENT_URL}/reset-password/${rawToken}`;
-  sendPasswordResetEmail({ to: user.email, firstName: user.firstName, resetUrl }).catch((err) =>
-    logger.error('[Users] Admin reset-password email failed:', err.message)
-  );
+  const resetPayload = {
+    to: user.email,
+    firstName: user.firstName,
+    resetUrl,
+    expiresInHours: 1,
+    meta: {
+      schoolId: req.user.schoolId,
+      userId: user._id,
+      flow: 'admin-reset-password',
+      initiatedBy: req.user._id,
+    },
+  };
+  queueEmailWithDirectFallback(JOB_NAMES.SEND_RESET_EMAIL, resetPayload, 'Users admin reset');
 
   return sendSuccess(res, {
     message: `A password reset link has been sent to ${user.email}.`,

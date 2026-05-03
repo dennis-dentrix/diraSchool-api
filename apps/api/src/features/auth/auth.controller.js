@@ -10,12 +10,8 @@ import { env } from '../../config/env.js';
 import { ROLES, SUBSCRIPTION_STATUSES, PLAN_TIERS, JOB_NAMES, CACHE_TTL } from '../../constants/index.js';
 import { cacheGet, cacheSet } from '../../config/redis.js';
 import { normalisePhone } from '../../utils/phone.js';
-import {
-  sendVerificationEmail,
-  sendPasswordResetEmail as sendResetEmail,
-  sendNewSchoolNotification,
-} from '../../services/email.service.js';
-import { emailQueue } from '../../jobs/queues.js';
+import { sendNewSchoolNotification } from '../../services/email.service.js';
+import { queueEmailWithDirectFallback } from '../../utils/emailJobs.js';
 import logger from '../../config/logger.js';
 import { logAction } from '../../utils/auditLogger.js';
 
@@ -48,9 +44,6 @@ const attachCookie = (res, token) => {
     domain: getCookieDomain(), // undefined in dev; '.diraschool.com' in prod
   });
 };
-
-const enqueueEmail = async (type, payload) =>
-  emailQueue.add(type, { type, payload });
 
 const SCHOOL_SAFE_FIELDS =
   'name email phone county constituency registrationNumber address isActive subscriptionStatus planTier trialExpiry';
@@ -153,8 +146,7 @@ export const registerSchool = asyncHandler(async (req, res) => {
 
     await session.commitTransaction();
 
-    // Queue verification email asynchronously so worker handles delivery/retries.
-    // Fallback to direct send only if enqueue fails.
+    // Queue verification email asynchronously; send directly only if Redis/queueing fails.
     const verifyUrl = `${env.CLIENT_URL}/verify-email/${rawToken}`;
     const verificationPayload = {
       to: user.email,
@@ -169,12 +161,11 @@ export const registerSchool = asyncHandler(async (req, res) => {
         flow: 'register',
       },
     };
-    // Send directly — do not depend on the worker process being up.
-    // Also enqueue for audit logging (fire-and-forget).
-    sendVerificationEmail(verificationPayload).catch((sendErr) =>
-      logger.error('[Auth] Verification email failed:', sendErr.message)
+    queueEmailWithDirectFallback(
+      JOB_NAMES.SEND_VERIFICATION_EMAIL,
+      verificationPayload,
+      'Auth verification'
     );
-    enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, verificationPayload).catch(() => {});
 
     // Notify the DiraSchool admin of the new registration (fire-and-forget)
     sendNewSchoolNotification({
@@ -334,12 +325,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
       flow: 'forgot-password',
     },
   };
-  // Send directly — do not depend on the worker process being up.
-  // Also enqueue for audit logging (fire-and-forget).
-  sendResetEmail(resetPayload).catch((sendErr) =>
-    logger.error('[Auth] Reset email failed:', sendErr.message)
-  );
-  enqueueEmail(JOB_NAMES.SEND_RESET_EMAIL, resetPayload).catch(() => {});
+  queueEmailWithDirectFallback(JOB_NAMES.SEND_RESET_EMAIL, resetPayload, 'Auth reset');
 
   return sendSuccess(res, {
     message: 'If an account with that email exists, a password reset link has been sent.',
@@ -587,10 +573,11 @@ export const resendVerification = asyncHandler(async (req, res) => {
       flow: 'resend-verification',
     },
   };
-  sendVerificationEmail(resendPayload).catch((sendErr) =>
-    logger.error('[Auth] Resend verification email failed:', sendErr.message)
+  queueEmailWithDirectFallback(
+    JOB_NAMES.SEND_VERIFICATION_EMAIL,
+    resendPayload,
+    'Auth resend verification'
   );
-  enqueueEmail(JOB_NAMES.SEND_VERIFICATION_EMAIL, resendPayload).catch(() => {});
 
   return sendSuccess(res, {
     message:

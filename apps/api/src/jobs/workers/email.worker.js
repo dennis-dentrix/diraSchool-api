@@ -64,7 +64,10 @@ export const startEmailWorker = () => {
     logger.error('[Email Worker] Job failed', {
       jobId: job?.id,
       type: job?.data?.type,
-      err: err.message,
+      err: err?.message ?? String(err),
+      code: err?.code,
+      provider: err?.provider,
+      providerError: err?.providerError,
     });
   });
 
