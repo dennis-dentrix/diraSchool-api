@@ -38,10 +38,10 @@ function CharCounter({ text }) {
 
 function StatusBadge({ status }) {
   const map = {
-    queued:  { label: 'Queued',  className: 'bg-slate-100 text-slate-700 border-slate-200',     icon: Clock },
-    sent:    { label: 'Sent',    className: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
-    partial: { label: 'Partial', className: 'bg-amber-100 text-amber-700 border-amber-200',     icon: AlertCircle },
-    failed:  { label: 'Failed',  className: 'bg-red-100 text-red-700 border-red-200',           icon: AlertCircle },
+    queued: { label: 'Queued', className: 'bg-slate-100 text-slate-700 border-slate-200', icon: Clock },
+    sent: { label: 'Sent', className: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+    partial: { label: 'Partial', className: 'bg-amber-100 text-amber-700 border-amber-200', icon: AlertCircle },
+    failed: { label: 'Failed', className: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle },
   };
   const { label, className, icon: Icon } = map[status] ?? map.queued;
   return (
@@ -271,8 +271,8 @@ function BroadcastTab() {
 
   const targets = [
     { value: 'class_parents', label: 'Class Parents', icon: School, desc: 'All parents/guardians of students in a specific class' },
-    { value: 'all_parents',   label: 'All Parents',   icon: Users,  desc: 'All parents and guardians school-wide' },
-    { value: 'all_staff',     label: 'All Staff',     icon: Users,  desc: 'All active staff members with a registered phone' },
+    { value: 'all_parents', label: 'All Parents', icon: Users, desc: 'All parents and guardians school-wide' },
+    { value: 'all_staff', label: 'All Staff', icon: Users, desc: 'All active staff members with a registered phone' },
   ];
 
   const needsClass = form.target === 'class_parents';
@@ -303,11 +303,10 @@ function BroadcastTab() {
                 key={value}
                 type="button"
                 onClick={() => setForm((p) => ({ ...p, target: value, classId: '' }))}
-                className={`text-left rounded-lg border p-3 transition-all ${
-                  form.target === value
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                    : 'border-border hover:border-primary/40 hover:bg-muted/50'
-                }`}
+                className={`text-left rounded-lg border p-3 transition-all ${form.target === value
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border hover:border-primary/40 hover:bg-muted/50'
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Icon className="h-4 w-4 text-muted-foreground" />
@@ -409,10 +408,10 @@ function HistoryTab() {
   const logs = data?.logs ?? [];
 
   const targetLabel = {
-    single:        'Single',
+    single: 'Single',
     class_parents: 'Class Parents',
-    all_parents:   'All Parents',
-    all_staff:     'All Staff',
+    all_parents: 'All Parents',
+    all_staff: 'All Staff',
   };
 
   if (isLoading) {
@@ -514,8 +513,8 @@ function ComingSoon() {
       </ul>
       <p className="text-xs text-muted-foreground">
         This feature is currently being rolled out. Contact{' '}
-        <a href="mailto:support@diraschool.com" className="underline hover:text-foreground">
-          support@diraschool.com
+        <a href="mailto:admin@diraschool.com" className="underline hover:text-foreground">
+          admin@diraschool.com
         </a>{' '}
         to join the early access list.
       </p>
