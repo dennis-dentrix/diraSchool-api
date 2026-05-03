@@ -32,10 +32,8 @@ export const validateEnv = () => {
     process.exit(1);
   }
 
-  if (!process.env.ZEPTOMAIL_API_KEY && !process.env.RESEND_API_KEY) {
-    writeStderr(
-      '\n[ENV ERROR] Configure at least one email provider: ZEPTOMAIL_API_KEY or RESEND_API_KEY.\n'
-    );
+  if (!process.env.ZEPTOMAIL_API_KEY) {
+    writeStderr('\n[ENV ERROR] ZEPTOMAIL_API_KEY is required.\n');
     process.exit(1);
   }
 
@@ -83,7 +81,7 @@ export const env = {
   CLIENT_URL: process.env.CLIENT_URL,
   CLIENT_URL_STAGING: process.env.CLIENT_URL_STAGING,
   REDIS_URL: process.env.REDIS_URL,
-  // AfricasTalking — optional until SMS feature is activated
+  // Africa's Talking — optional until SMS feature is activated
   AT_USERNAME: process.env.AT_USERNAME,
   AT_API_KEY: process.env.AT_API_KEY,
   AT_SENDER_ID: process.env.AT_SENDER_ID || null,
@@ -92,12 +90,10 @@ export const env = {
   AT_TEST_NUMBERS: process.env.AT_TEST_NUMBERS
     ? process.env.AT_TEST_NUMBERS.split(',').map((n) => n.trim()).filter(Boolean)
     : null,
-  // ZeptoMail is primary; Resend is automatic fallback when RESEND_API_KEY is set.
   EMAIL_FROM: process.env.EMAIL_FROM,
   ZEPTOMAIL_SERVER: process.env.ZEPTOMAIL_SERVER || 'smtp.zeptomail.com',
   ZEPTOMAIL_USERNAME: process.env.ZEPTOMAIL_USERNAME || 'emailapikey',
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
-  RESEND_API_KEY: process.env.RESEND_API_KEY,
   DO_SPACES_KEY: process.env.DO_SPACES_KEY,
   DO_SPACES_SECRET: process.env.DO_SPACES_SECRET,
   DO_SPACES_BUCKET: process.env.DO_SPACES_BUCKET,
