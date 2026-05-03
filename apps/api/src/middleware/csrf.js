@@ -1,16 +1,4 @@
-import { env } from '../config/env.js';
-
-// Must stay in sync with config/cors.js
-const ALLOWED_ORIGINS = [
-  env.CLIENT_URL,
-  env.CLIENT_URL_STAGING,
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:5173',
-  'https://diraschool.com',
-  'diraschool.com',
-  'www.diraschool.com',
-].filter(Boolean);
+import { allowedOrigins as ALLOWED_ORIGINS } from '../config/cors.js';
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 

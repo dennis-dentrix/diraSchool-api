@@ -1,20 +1,20 @@
 import { env } from './env.js';
 
-const allowedOrigins = [
+export const allowedOrigins = [
   env.CLIENT_URL,
   env.CLIENT_URL_STAGING,
   // Local dev
+  'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:5173',
-  // Production — browsers always include scheme, so both www and bare domain needed
+  // Production
   'https://diraschool.com',
   'https://www.diraschool.com',
+  // Staging
+  'https://staging.diraschool.com',
   // Temporary: direct IP access before DNS propagation
   'https://159.89.230.170',
   'https://159.89.230.170:443',
-
-  //staging
-  'https://staging.diraschool.com',
 ].filter(Boolean);
 
 export const corsOptions = {
