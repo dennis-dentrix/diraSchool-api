@@ -11,6 +11,7 @@ import {
   validateBalanceQuery,
   validateFinanceDashboardSummaryQuery,
   validateAdaptFeeStructures,
+  validateListPaymentNotifications,
 } from './fees.validator.js';
 import {
   createFeeStructure,
@@ -26,6 +27,7 @@ import {
   issueReceipt,
   getStudentBalance,
   getFinanceDashboardSummary,
+  listPaymentNotifications,
 } from './fees.controller.js';
 
 const router = express.Router();
@@ -62,6 +64,7 @@ router.route('/payments/:id').all(canManageFees).get(getPayment);
 router.post('/payments/:id/reverse', canManageFees, validateReversePayment, reversePayment);
 router.post('/payments/:id/issue-receipt', canIssueReceipts, issueReceipt);
 router.get('/dashboard-summary', canManageFees, validateFinanceDashboardSummaryQuery, getFinanceDashboardSummary);
+router.get('/payment-notifications', canManageFees, validateListPaymentNotifications, listPaymentNotifications);
 
 // ── Balance ───────────────────────────────────────────────────────────────────
 router.get('/balance', canManageFees, validateBalanceQuery, getStudentBalance);

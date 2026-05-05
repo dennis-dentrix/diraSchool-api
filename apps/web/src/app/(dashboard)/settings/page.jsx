@@ -136,9 +136,17 @@ export default function SettingsPage() {
   });
 
   const { mutate: saveMpesa, isPending: savingMpesa } = useMutation({
-    mutationFn: () => schoolsApi.updateMe({ mpesaTillNumber: mpesaForm.mpesaTillNumber }),
+    mutationFn: () => schoolsApi.updateMe({
+      mpesaTillNumber: mpesaForm.provider === 'mpesa' ? mpesaForm.phoneNumber : '',
+      paymentSmsSettings: {
+        enabled: !!mpesaForm.enabled,
+        provider: mpesaForm.provider,
+        phoneNumber: mpesaForm.phoneNumber,
+        bankName: mpesaForm.provider === 'bank' ? mpesaForm.bankName : '',
+      },
+    }),
     onSuccess: () => {
-      toast.success('M-Pesa configuration saved');
+      toast.success('Payment SMS configuration saved');
       queryClient.invalidateQueries({ queryKey: ['school-me'] });
       setEditingMpesa(false); setMpesaForm(null);
     },
@@ -235,6 +243,9 @@ export default function SettingsPage() {
   }
 
   const smsSettings = schoolData?.smsSettings;
+  const paymentSmsSettings = schoolData?.paymentSmsSettings ?? {};
+  const paymentSmsProvider = paymentSmsSettings.provider ?? (schoolData?.mpesaTillNumber ? 'mpesa' : 'auto');
+  const paymentSmsPhone = paymentSmsSettings.phoneNumber ?? schoolData?.mpesaTillNumber;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -254,6 +265,11 @@ export default function SettingsPage() {
           {canEdit && (
             <TabsTrigger value="attendance" className="gap-1.5" title="School location and check-in radius">
               <MapPin className="h-3.5 w-3.5" aria-hidden />Check-in
+            </TabsTrigger>
+          )}
+          {canViewPaymentsSms && (
+            <TabsTrigger value="payments" className="gap-1.5" title="Payment SMS automation">
+              <CreditCard className="h-3.5 w-3.5" aria-hidden />Payments
             </TabsTrigger>
           )}
         </TabsList>
@@ -560,12 +576,107 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* ── Payments ─────────────────────────────────────────────────────── */}
+        {canViewPaymentsSms && (
+          <TabsContent value="payments" className="space-y-4 mt-4">
+            <Card>
+              <CardEditHeader
+                title="Payment SMS Automation"
+                description="Temporarily auto-record payments from forwarded M-Pesa or bank SMS notifications."
+                editing={editingMpesa}
+                canEdit={canEdit}
+                saving={savingMpesa}
+                onEdit={() => {
+                  setMpesaForm({
+                    enabled: !!paymentSmsSettings.enabled || !!schoolData?.mpesaTillNumber,
+                    provider: paymentSmsProvider,
+                    phoneNumber: paymentSmsPhone ?? '',
+                    bankName: paymentSmsSettings.bankName ?? '',
+                  });
+                  setEditingMpesa(true);
+                }}
+                onCancel={() => { setEditingMpesa(false); setMpesaForm(null); }}
+                onSave={() => saveMpesa()}
+              />
+              <CardContent>
+                {editingMpesa && mpesaForm ? (
+                  <div className="space-y-4">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={!!mpesaForm.enabled}
+                        onChange={(e) => setMpesaForm((p) => ({ ...p, enabled: e.target.checked }))}
+                        className="mt-1"
+                      />
+                      <span>
+                        Enable auto-recording from payment SMS
+                        <span className="block text-xs text-muted-foreground">
+                          Messages are only posted when the system can match exactly one active student.
+                        </span>
+                      </span>
+                    </label>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label>Notification Source</Label>
+                        <Select
+                          value={mpesaForm.provider}
+                          onValueChange={(v) => setMpesaForm((p) => ({ ...p, provider: v }))}
+                        >
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mpesa">M-Pesa SMS</SelectItem>
+                            <SelectItem value="bank">Bank SMS</SelectItem>
+                            <SelectItem value="auto">Auto-detect</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label>Receiving Phone / Till</Label>
+                        <Input
+                          value={mpesaForm.phoneNumber}
+                          onChange={(e) => setMpesaForm((p) => ({ ...p, phoneNumber: e.target.value }))}
+                          placeholder="+254700000000 or till/paybill"
+                        />
+                      </div>
+
+                      {mpesaForm.provider === 'bank' && (
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <Label>Bank Name</Label>
+                          <Input
+                            value={mpesaForm.bankName}
+                            onChange={(e) => setMpesaForm((p) => ({ ...p, bankName: e.target.value }))}
+                            placeholder="e.g. KCB, Equity, Co-op"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <InfoRow
+                      label="Auto-recording"
+                      value={<Badge variant={paymentSmsSettings.enabled || schoolData?.mpesaTillNumber ? 'secondary' : 'outline'}>
+                        {paymentSmsSettings.enabled || schoolData?.mpesaTillNumber ? 'Enabled' : 'Disabled'}
+                      </Badge>}
+                    />
+                    <InfoRow label="Source" value={paymentSmsProvider === 'auto' ? 'Auto-detect' : paymentSmsProvider === 'bank' ? 'Bank SMS' : 'M-Pesa SMS'} />
+                    <InfoRow label="Receiving Number" value={paymentSmsPhone} />
+                    {paymentSmsProvider === 'bank' && <InfoRow label="Bank" value={paymentSmsSettings.bankName} />}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
 
         {/* ── Attendance (admin only) ───────────────────────────────────────── */}
         {canEdit && (
           <TabsContent value="attendance" className="mt-4">
-            <GeofenceSettings settings={data} canEdit={canEdit} />
+            <div data-tour="geofence-settings">
+              <GeofenceSettings settings={data} canEdit={canEdit} />
+            </div>
           </TabsContent>
         )}
       </Tabs>

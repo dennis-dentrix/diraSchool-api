@@ -44,7 +44,7 @@ const jsonLd = {
         'Complete CBC school management system for Kenyan schools including attendance, report cards, fee management, and parent portal.',
       offers: {
         '@type': 'Offer',
-        price: '8500',
+        price: '10000',
         priceCurrency: 'KES',
         description: 'Base fee per term plus KES 40 per enrolled student',
       },

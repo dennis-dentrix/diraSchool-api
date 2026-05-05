@@ -28,6 +28,29 @@ import { startEmailWorker } from './workers/email.worker.js';
 validateEnv();
 initSentry('diraschool-worker');
 
+const serializeWorkerError = (err) => {
+  if (err instanceof Error) {
+    return {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      provider: err.provider,
+      providerError: err.providerError,
+    };
+  }
+
+  if (typeof err === 'string') {
+    return { message: err };
+  }
+
+  return {
+    message: err?.message ?? JSON.stringify(err ?? {}),
+    code: err?.code,
+    provider: err?.provider,
+    providerError: err?.providerError,
+  };
+};
+
 // Must be a Redis *instance* — see redis.js createBullMQConnection() for details.
 const connection = createBullMQConnection();
 
@@ -70,8 +93,9 @@ for (const [name, worker] of [
     logger.info(`[Worker:${name}] Job ${job.id} completed`);
   });
   worker.on('failed', (job, err) => {
-    logger.error(`[Worker:${name}] Job ${job?.id} failed: ${err.message}`, {
-      stack: err.stack,
+    const serializedError = serializeWorkerError(err);
+    logger.error(`[Worker:${name}] Job ${job?.id} failed: ${serializedError.message}`, {
+      ...serializedError,
     });
     captureError(err, {
       worker: { name, jobId: job?.id?.toString(), queue: job?.queueName },

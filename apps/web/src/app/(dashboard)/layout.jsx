@@ -11,6 +11,8 @@ import { useAuth } from '@/hooks/use-auth';
 import { settingsApi } from '@/lib/api';
 import { schoolNavItems, superadminNavItems } from '@/components/layout/nav-items';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TourProvider } from '@/components/tour/TourProvider';
+import { TourBanner } from '@/components/tour/TourTrigger';
 
 function getPageTitle(pathname, user) {
   const allItems = user?.role === 'superadmin' ? superadminNavItems : schoolNavItems;
@@ -160,33 +162,38 @@ export default function DashboardLayout({ children }) {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <NavigationProgress />
-      {/* Desktop sidebar */}
-      <div className="hidden lg:flex">
-        <Sidebar user={user} />
-      </div>
-
-      {/* Mobile sidebar (sheet) */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="p-0 w-64">
+    <TourProvider>
+      <div className="flex h-screen overflow-hidden bg-background">
+        <NavigationProgress />
+        {/* Desktop sidebar */}
+        <div className="hidden lg:flex">
           <Sidebar user={user} />
-        </SheetContent>
-      </Sheet>
+        </div>
 
-      {/* Main content */}
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header
-          onMenuClick={() => setMobileOpen(true)}
-          title={title}
-          schoolName={schoolName}
-          termLabel={termLabel}
-          schoolDayStatus={schoolDayStatus}
-        />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          {children}
-        </main>
+        {/* Mobile sidebar (sheet) */}
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent side="left" className="p-0 w-64">
+            <Sidebar user={user} />
+          </SheetContent>
+        </Sheet>
+
+        {/* Main content */}
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+          <Header
+            onMenuClick={() => setMobileOpen(true)}
+            title={title}
+            schoolName={schoolName}
+            termLabel={termLabel}
+            schoolDayStatus={schoolDayStatus}
+          />
+          <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="space-y-4">
+              <TourBanner />
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </TourProvider>
   );
 }

@@ -17,13 +17,13 @@ import { logAction } from '../../utils/auditLogger.js';
 import { initializeTransaction, verifyTransaction } from './paystack.service.js';
 import { sendSubscriptionConfirmationEmail } from '../../services/email.service.js';
 
-const BASE_FEE = 8500;
+const BASE_FEE = 10000;
 const PER_STUDENT_RATE = 40;
 const VAT_RATE = 0.16;
 const MULTIPLIERS = {
   'per-term': 1,
-  annual: 2.55,   // 3 terms × 0.85 = 15% off
-  'multi-year': 2.40, // 3 terms × 0.80 = 20% off (per year)
+  annual: 2.55, // 3 terms × 0.85 = 15% off
+  'multi-year': 2.4, // 3 terms × 0.80 = 20% off (per year)
 };
 
 const normalizeAddOns = (addOns = {}) => ({

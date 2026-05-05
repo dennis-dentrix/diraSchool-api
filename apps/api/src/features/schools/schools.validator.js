@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SUBSCRIPTION_STATUSES } from '../../constants/index.js';
+import { SUBSCRIPTION_STATUSES, PAYMENT_SMS_PROVIDERS } from '../../constants/index.js';
 import { sendError } from '../../utils/response.js';
 
 // ── Shared field definitions ──────────────────────────────────────────────────
@@ -10,6 +10,19 @@ const phoneField = z
   .string()
   .trim()
   .regex(/^\+?[\d\s\-()]{7,15}$/, 'Invalid phone number');
+const paymentNotificationNumberField = z
+  .string()
+  .trim()
+  .regex(/^\+?[\d\s\-()]{5,15}$/, 'Invalid payment notification number');
+
+const paymentSmsSettingsSchema = z
+  .object({
+    enabled: z.coerce.boolean().optional(),
+    provider: z.enum(Object.values(PAYMENT_SMS_PROVIDERS)).optional(),
+    phoneNumber: paymentNotificationNumberField.optional().or(z.literal('')),
+    bankName: z.string().trim().max(80).optional().or(z.literal('')),
+  })
+  .strict();
 
 // ── Create school (superadmin only) ──────────────────────────────────────────
 
@@ -34,6 +47,8 @@ const updateMySchoolSchema = z
     constituency: z.string().trim().min(1).optional(),
     registrationNumber: z.string().trim().min(1).optional(),
     address: z.string().trim().min(1).optional(),
+    mpesaTillNumber: paymentNotificationNumberField.optional().or(z.literal('')),
+    paymentSmsSettings: paymentSmsSettingsSchema.optional(),
   })
   .strict();
 
@@ -49,6 +64,8 @@ const superadminUpdateSchoolSchema = z
     constituency: z.string().trim().min(1).optional(),
     registrationNumber: z.string().trim().min(1).optional(),
     address: z.string().trim().min(1).optional(),
+    mpesaTillNumber: paymentNotificationNumberField.optional().or(z.literal('')),
+    paymentSmsSettings: paymentSmsSettingsSchema.optional(),
     isActive: z.boolean().optional(),
   })
   .strict();

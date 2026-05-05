@@ -30,7 +30,7 @@ const TEACHER_ROLES = ['teacher', 'department_head'];
 function DashboardShell({ title, subtitle, rightMeta, actions, children }) {
   return (
     <div className="space-y-6">
-      <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40">
+      <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40" data-tour="dashboard-header">
         <CardContent className="p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -239,7 +239,7 @@ function SetupChecklist({ schoolId, totalStudents, staffCount, hasFees }) {
   if (completed === steps.length) return null; // all done, hide automatically
 
   return (
-    <Card className="border-cyan-200 bg-gradient-to-br from-cyan-50/60 to-blue-50/40 shadow-sm">
+    <Card className="border-cyan-200 bg-gradient-to-br from-cyan-50/60 to-blue-50/40 shadow-sm" data-tour="setup-checklist">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
@@ -545,14 +545,17 @@ export default function DashboardPage() {
 
       {/* ── Fee progress bar ── admin + finance ──────────────────────────── */}
       {showFees && totalTarget > 0 && (
-        <CollectionProgressBar collected={totalCollected} target={totalTarget} percent={feeCollectionPct} />
+        <div data-tour="fee-health-widget">
+          <CollectionProgressBar collected={totalCollected} target={totalTarget} percent={feeCollectionPct} />
+        </div>
       )}
 
       {/* ── Stat cards ───────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" data-tour="stats-grid">
         {/* Admin */}
         {isAdmin && (
           <>
+            <div data-tour="staff-attendance-widget" className="contents">
             <StatCard
               label="Fee Collection"
               value={formatCurrency(totalCollected)}
@@ -565,6 +568,7 @@ export default function DashboardPage() {
             <StatCard label="Active Students" value={activeStudents} hint={`${Math.max(0, totalStudents - activeStudents)} inactive`} icon={BookOpen} tone="blue" onClick={() => router.push('/students')} />
             <StatCard label="Staff Members" value={staffData.active ?? staffData.total ?? 0} hint={`${staffData.pendingOnboarding ?? 0} pending onboarding`} icon={Users} badge={`${staffData.total ?? 0} total`} tone="slate" onClick={() => router.push('/staff')} />
             <StatCard label="Defaulters" value={studentsOverdue} hint={amountOverdue > 0 ? `${formatCurrency(amountOverdue)} outstanding` : 'Students with unpaid fees'} icon={AlertCircle} tone={studentsOverdue > 20 ? 'rose' : studentsOverdue > 5 ? 'amber' : 'slate'} onClick={() => router.push('/fees')} />
+            </div>
           </>
         )}
 
@@ -613,6 +617,7 @@ export default function DashboardPage() {
         {/* ── Accountant: M-Pesa + collections by method ───────────────── */}
         {isAccountant && (
           <>
+            <div data-tour="mpesa-setup-card">
             <SectionCard title="M-Pesa Reconciliation" icon={Smartphone}>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -634,6 +639,7 @@ export default function DashboardPage() {
                 </Button>
               </div>
             </SectionCard>
+            </div>
 
             <SectionCard title="Collections by Method" icon={CreditCard}>
               {Object.keys(methodBreakdown).length > 0 ? (
@@ -697,6 +703,7 @@ export default function DashboardPage() {
         {/* ── Teacher: timetable + tasks & events ──────────────────────── */}
         {isTeacher && (
           <>
+            <div data-tour="timetable-widget">
             <SectionCard
               title="Today's Timetable"
               icon={Clock}
@@ -732,8 +739,9 @@ export default function DashboardPage() {
                 </div>
               )}
             </SectionCard>
+            </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4" data-tour="pending-actions-widget">
               <SectionCard title="Pending Tasks" icon={Bell}>
                 {pendingTasks.length > 0 ? (
                   <div className="space-y-2">
@@ -859,6 +867,7 @@ export default function DashboardPage() {
 
       {/* Secretary: attendance breakdown */}
       {isSecretary && attendance.total > 0 && (
+        <div data-tour="student-attendance-widget">
         <SectionCard
           title="Today's Attendance Breakdown"
           icon={CalendarCheck}
@@ -885,10 +894,13 @@ export default function DashboardPage() {
             </div>
           )}
         </SectionCard>
+        </div>
       )}
 
       {/* ── Check-in widget (all roles) ───────────────────────────────────── */}
-      <CheckInWidget hideButton />
+      <div data-tour="checkin-widget">
+        <CheckInWidget hideButton />
+      </div>
 
       {/* ── Quick actions ─────────────────────────────────────────────────── */}
       <nav aria-label="Quick actions">

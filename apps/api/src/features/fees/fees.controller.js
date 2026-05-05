@@ -1,5 +1,6 @@
 import FeeStructure from './FeeStructure.model.js';
 import Payment from './Payment.model.js';
+import PaymentNotification from './PaymentNotification.model.js';
 import Student from '../students/Student.model.js';
 import Class from '../classes/Class.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
@@ -569,4 +570,27 @@ export const getFinanceDashboardSummary = asyncHandler(async (req, res) => {
     },
     recentPayments,
   });
+});
+
+/**
+ * GET /api/v1/fees/payment-notifications
+ * Lists payment SMS notifications parsed by the interim SMS automation.
+ */
+export const listPaymentNotifications = asyncHandler(async (req, res) => {
+  const filter = { schoolId: req.user.schoolId };
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.provider) filter.provider = req.query.provider;
+
+  const total = await PaymentNotification.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const notifications = await PaymentNotification.find(filter)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('matchedStudentId', 'firstName lastName admissionNumber')
+    .populate('paymentId', 'amount method reference receiptNumber status')
+    .lean();
+
+  return sendSuccess(res, { notifications, meta });
 });

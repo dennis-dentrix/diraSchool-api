@@ -59,6 +59,14 @@ const zeptoClient = new SendMailClient({
   token: normalizeZeptoToken(env.ZEPTOMAIL_API_KEY),
 });
 
+logger.info('[Email] ZeptoMail configured', {
+  url: normalizeZeptoUrl(env.ZEPTOMAIL_API_URL),
+  from: FROM.address,
+  tokenFormat: String(env.ZEPTOMAIL_API_KEY || '').trim().toLowerCase().startsWith('zoho-enczapikey ')
+    ? 'authorization-header'
+    : 'raw-token',
+});
+
 const sendViaZeptoApi = async ({ to, subject, html }) => {
   const data = await zeptoClient.sendMail({
     from: { address: FROM.address, name: FROM.name },
@@ -89,15 +97,25 @@ const normalizeError = (err) => {
   }
 
   const firstData = Array.isArray(err?.data) ? err.data[0] : undefined;
+  const firstErrorDetail = Array.isArray(err?.error?.details) ? err.error.details[0] : undefined;
+  const firstDetail = Array.isArray(err?.details) ? err.details[0] : undefined;
   const message =
     err?.message ||
     err?.error?.message ||
     err?.details?.message ||
+    firstErrorDetail?.message ||
+    firstDetail?.message ||
     firstData?.message ||
     err?.errors?.[0]?.message ||
     'Unknown email delivery error';
 
-  const code = err?.code || err?.error?.code || firstData?.code || err?.status;
+  const code =
+    err?.code ||
+    err?.error?.code ||
+    firstErrorDetail?.code ||
+    firstDetail?.code ||
+    firstData?.code ||
+    err?.status;
 
   return {
     message,
@@ -174,7 +192,13 @@ const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
       errorCode: normalized.code,
       meta,
     });
-    logger.warn('[Email] Email failed', { to, template, err: normalized.message });
+    logger.warn('[Email] Email failed', {
+      to,
+      template,
+      err: normalized.message,
+      code: normalized.code,
+      providerError: normalized.details,
+    });
     const wrapped = new Error(normalized.message);
     wrapped.code = normalized.code;
     wrapped.provider = 'zeptomail';

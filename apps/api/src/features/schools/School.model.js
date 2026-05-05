@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { SUBSCRIPTION_STATUSES, PLAN_TIERS } from '../../constants/index.js';
+import { SUBSCRIPTION_STATUSES, PLAN_TIERS, PAYMENT_SMS_PROVIDERS } from '../../constants/index.js';
 
 const schoolSchema = new mongoose.Schema(
   {
@@ -62,6 +62,27 @@ const schoolSchema = new mongoose.Schema(
     mpesaTillNumber: {
       type: String,
       trim: true,
+    },
+    // Interim payment automation: SMS notifications forwarded from the school
+    // payment phone are parsed into fee payments when they match one student.
+    paymentSmsSettings: {
+      enabled: {
+        type: Boolean,
+        default: false,
+      },
+      provider: {
+        type: String,
+        enum: Object.values(PAYMENT_SMS_PROVIDERS),
+        default: PAYMENT_SMS_PROVIDERS.MPESA,
+      },
+      phoneNumber: {
+        type: String,
+        trim: true,
+      },
+      bankName: {
+        type: String,
+        trim: true,
+      },
     },
     // SMS Settings — per-school sender ID management
     smsSettings: {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { sendError } from '../../utils/response.js';
-import { TERMS, PAYMENT_METHODS } from '../../constants/index.js';
+import { TERMS, PAYMENT_METHODS, PAYMENT_SMS_PROVIDERS } from '../../constants/index.js';
 import { objectIdRegex, yearRegex } from '@diraschool/shared/schemas';
 
 // ── Fee Structure ─────────────────────────────────────────────────────────────
@@ -82,6 +82,13 @@ const financeDashboardSummaryQuerySchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100).optional(),
 });
 
+const listPaymentNotificationsSchema = z.object({
+  status: z.enum(['matched', 'unmatched', 'duplicate', 'parse_failed', 'ambiguous']).optional(),
+  provider: z.enum(Object.values(PAYMENT_SMS_PROVIDERS)).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().optional(),
+});
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validateBody = (schema) => (req, res, next) => {
@@ -108,3 +115,4 @@ export const validateReversePayment = validateBody(reversePaymentSchema);
 export const validateListPayments = validateQuery(listPaymentsSchema);
 export const validateBalanceQuery = validateQuery(balanceQuerySchema);
 export const validateFinanceDashboardSummaryQuery = validateQuery(financeDashboardSummaryQuerySchema);
+export const validateListPaymentNotifications = validateQuery(listPaymentNotificationsSchema);

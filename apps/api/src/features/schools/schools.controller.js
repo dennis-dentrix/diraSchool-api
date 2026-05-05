@@ -7,6 +7,7 @@ import { SUBSCRIPTION_STATUSES, AUDIT_ACTIONS, AUDIT_RESOURCES, CACHE_TTL } from
 import { getRedis, cacheGet, cacheSet, cacheDel } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { sendSenderIdRequestNotification } from '../../services/email.service.js';
+import { normalisePhone } from '../../utils/phone.js';
 
 // Bust the subscription cache for a school after any admin change.
 const bustSubCache = async (schoolId) => {
@@ -50,7 +51,16 @@ export const updateMySchool = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId);
   if (!school) return sendError(res, 'School not found.', 404);
 
-  const { name, phone, county, constituency, registrationNumber, address, mpesaTillNumber } = req.body;
+  const {
+    name,
+    phone,
+    county,
+    constituency,
+    registrationNumber,
+    address,
+    mpesaTillNumber,
+    paymentSmsSettings,
+  } = req.body;
 
   if (name !== undefined) school.name = name;
   if (phone !== undefined) school.phone = phone;
@@ -58,7 +68,18 @@ export const updateMySchool = asyncHandler(async (req, res) => {
   if (constituency !== undefined) school.constituency = constituency;
   if (registrationNumber !== undefined) school.registrationNumber = registrationNumber;
   if (address !== undefined) school.address = address;
-  if (mpesaTillNumber !== undefined) school.mpesaTillNumber = mpesaTillNumber || undefined;
+  if (mpesaTillNumber !== undefined) school.mpesaTillNumber = normalisePhone(mpesaTillNumber) || undefined;
+  if (paymentSmsSettings !== undefined) {
+    const existing = school.paymentSmsSettings?.toObject?.() ?? school.paymentSmsSettings ?? {};
+    school.paymentSmsSettings = {
+      ...existing,
+      ...paymentSmsSettings,
+      phoneNumber: paymentSmsSettings.phoneNumber !== undefined
+        ? normalisePhone(paymentSmsSettings.phoneNumber) || undefined
+        : existing.phoneNumber,
+      bankName: paymentSmsSettings.bankName || undefined,
+    };
+  }
 
   await school.save();
   await Promise.all([

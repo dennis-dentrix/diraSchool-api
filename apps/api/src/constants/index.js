@@ -111,6 +111,12 @@ export const PAYMENT_SOURCE = {
   SMS_WEBHOOK: 'sms_webhook',
 };
 
+export const PAYMENT_SMS_PROVIDERS = {
+  MPESA: 'mpesa',
+  BANK: 'bank',
+  AUTO: 'auto',
+};
+
 export const QUEUE_NAMES = {
   SMS: 'sms',
   REPORT: 'report',

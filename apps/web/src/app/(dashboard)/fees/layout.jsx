@@ -22,10 +22,15 @@ export default function FeesLayout({ children }) {
               item.href === '/fees'
                 ? pathname === '/fees'
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const tourAttr =
+              item.href === '/fees/structures' ? 'fee-structure-nav' :
+              item.href === '/fees/payments'   ? 'mpesa-reconciliation' :
+              undefined;
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={tourAttr}
                 className={cn(
                   'px-3 py-1.5 text-sm rounded-md transition-colors',
                   isActive

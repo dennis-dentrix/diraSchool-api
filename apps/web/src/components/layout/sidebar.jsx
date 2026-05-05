@@ -7,6 +7,22 @@ import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { schoolNavItems, superadminNavItems } from './nav-items';
 
+// Map nav hrefs to data-tour attribute values for the product tour
+const NAV_TOUR_ATTRS = {
+  '/dashboard':   'dashboard-nav-item',
+  '/students':    'students-nav-item',
+  '/staff':       'staff-nav-item',
+  '/fees':        'finance-nav',
+  '/attendance':  'attendance-nav-item',
+  '/exams':       'exams-nav-item',
+  '/leave':       'leave-nav-item',
+  '/timetable':   'timetable-nav-item',
+  '/messaging':   'messaging-nav-item',
+  '/payroll':     'payroll-nav-item',
+  '/settings':    'settings-nav-item',
+  '/users':       'users-nav-item',
+};
+
 function NavItem({ item, pathname }) {
   const isActive =
     item.href === '/dashboard'
@@ -14,12 +30,14 @@ function NavItem({ item, pathname }) {
       : pathname.startsWith(item.href);
 
   const hasChildren = item.children?.length > 0;
+  const tourAttr = NAV_TOUR_ATTRS[item.href];
 
   if (hasChildren) {
     return (
       <div>
         <Link
           href={item.href}
+          data-tour={tourAttr}
           className={cn(
             'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
             isActive
@@ -62,6 +80,7 @@ function NavItem({ item, pathname }) {
   return (
     <Link
       href={item.href}
+      data-tour={tourAttr}
       className={cn(
         'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
         isActive

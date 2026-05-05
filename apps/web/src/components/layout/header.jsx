@@ -6,6 +6,7 @@ import { Menu, Bell, LogOut, Settings, Loader2, CheckCheck, UserPen, LogIn, MapP
 import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { authApi, notificationsApi, checkInsApi, getErrorMessage } from '@/lib/api';
+import { TakeTourMenuItem } from '@/components/tour/TourTrigger';
 import { useSocketNotifications } from '@/hooks/use-socket-notifications';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
@@ -197,6 +198,7 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
               className={`gap-1.5 h-8 px-3 text-xs font-medium ${morningIn ? 'border-slate-300' : 'bg-cyan-700 hover:bg-cyan-800 text-white'}`}
               disabled={ciState !== 'idle'}
               onClick={handleHeaderCheckIn}
+              data-tour="checkin-button"
             >
               {ciState === 'locating' || ciState === 'submitting' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -289,6 +291,7 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </DropdownMenuItem>
+            <TakeTourMenuItem />
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => doLogout()} className="text-destructive">
               <LogOut className="mr-2 h-4 w-4" />

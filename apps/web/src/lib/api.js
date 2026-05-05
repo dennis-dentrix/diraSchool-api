@@ -225,6 +225,7 @@ export const feesApi = {
   getPayment: (id) => api.get(`/fees/payments/${id}`),
   issueReceipt: (id) => api.post(`/fees/payments/${id}/issue-receipt`),
   reversePayment: (id, data) => api.post(`/fees/payments/${id}/reverse`, data),
+  listPaymentNotifications: (params) => api.get('/fees/payment-notifications', { params }),
   getBalance: (params) => api.get('/fees/balance', { params }),
   dashboardSummary: (params) => api.get('/fees/dashboard-summary', { params }),
 };
@@ -294,6 +295,12 @@ export const subscriptionsApi = {
   createCheckout: (data) => api.post('/subscriptions/paystack/checkout', data),
   getStatus: (merchantReference) => api.get(`/subscriptions/paystack/status/${merchantReference}`),
   listPayments: (params) => api.get('/subscriptions/payments', { params }),
+};
+
+// ─── Onboarding tour ──────────────────────────────────────────────────────────
+export const onboardingApi = {
+  status:   () => api.get('/onboarding/status'),
+  complete: (data) => api.post('/onboarding/complete', data),
 };
 
 // ─── Audit ────────────────────────────────────────────────────────────────────

@@ -153,6 +153,15 @@ const userSchema = new mongoose.Schema(
       accountNumber: { type: String, trim: true },
       branchCode:    { type: String, trim: true },
     },
+
+    // ── Onboarding tour ───────────────────────────────────────────────────────
+    has_completed_onboarding_tour: {
+      type: Boolean,
+      default: false,
+    },
+    tour_completed_at: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );

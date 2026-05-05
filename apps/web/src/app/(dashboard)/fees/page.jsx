@@ -79,7 +79,7 @@ export default function FeesPage() {
   const followUpCount = financeSummary?.summary?.students?.followUpCount ?? 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-tour="finance-dashboard">
       <PageHeader title="Fees & Payments" description="Track fee collection and structures">
         <Link href="/fees/structures">
           <Button variant="outline" size="sm"><FileText className="h-4 w-4" /> Fee Structures</Button>
@@ -92,10 +92,24 @@ export default function FeesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard title="This Month Collected" value={formatCurrency(monthCollected)} icon={TrendingUp} color="green" loading={summaryLoading} description="Server-side totals" />
         <StatCard title="Fee Structures" value={structures?.pagination?.total ?? '—'} icon={FileText} color="blue" description="Configured" />
-        <StatCard title="Need Follow-up" value={followUpCount} icon={AlertCircle} color="orange" loading={summaryLoading} description="Active students unpaid this month" />
+        <StatCard
+          data-tour="fee-balances-widget"
+          title="Need Follow-up"
+          value={followUpCount}
+          icon={AlertCircle}
+          color="orange"
+          loading={summaryLoading}
+          description="Active students unpaid this month"
+        />
       </div>
 
-      <Card>
+      {/* Finance tour target: unallocated payments shortcut */}
+      <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm" data-tour="unallocated-payments">
+        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+        <span className="text-amber-800 flex-1">Payments not matched to a student appear here. <Link href="/fees/payments?filter=unallocated" className="font-semibold underline hover:no-underline">Review unallocated payments →</Link></span>
+      </div>
+
+      <Card data-tour="todays-collections">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">Recent Payments</CardTitle>
           <Link href="/fees/payments" className="text-sm text-blue-600 hover:underline">View all</Link>
@@ -104,6 +118,17 @@ export default function FeesPage() {
           <DataTable columns={paymentColumns} data={payments?.data} loading={isLoading} error={isError ? error : null} />
         </CardContent>
       </Card>
+
+      {/* Finance tour target: reports quick access */}
+      <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3" data-tour="finance-reports">
+        <div>
+          <p className="text-sm font-medium">Financial Reports</p>
+          <p className="text-xs text-muted-foreground">Export fee collection, defaulter lists, and payment summaries</p>
+        </div>
+        <Link href="/fees/payments">
+          <Button variant="outline" size="sm"><TrendingUp className="h-4 w-4 mr-1.5" /> View Reports</Button>
+        </Link>
+      </div>
     </div>
   );
 }

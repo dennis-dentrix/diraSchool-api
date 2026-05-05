@@ -25,7 +25,7 @@ import { useSearchParams } from 'next/navigation';
 const BILLING_ROLES = ['school_admin', 'director', 'headteacher'];
 
 // ── Pricing constants ────────────────────────────────────────────────────────
-const BASE_FEE = 8500;
+const BASE_FEE = 10000;
 const PER_STUDENT = 40;
 const VAT = 0.16;
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
@@ -216,11 +216,11 @@ const INVOICE_SCHEDULE = [
 ];
 
 const PAYMENT_STATUS_CONFIG = {
-  pending:    { label: 'Pending',    color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pending: { label: 'Pending', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   processing: { label: 'Processing', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-  completed:  { label: 'Paid',       color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  failed:     { label: 'Failed',     color: 'bg-red-50 text-red-700 border-red-200' },
-  cancelled:  { label: 'Cancelled',  color: 'bg-slate-100 text-slate-600 border-slate-200' },
+  completed: { label: 'Paid', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  failed: { label: 'Failed', color: 'bg-red-50 text-red-700 border-red-200' },
+  cancelled: { label: 'Cancelled', color: 'bg-slate-100 text-slate-600 border-slate-200' },
 };
 
 function PaymentHistory() {

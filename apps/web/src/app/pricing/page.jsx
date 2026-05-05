@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const BASE_FEE = 8500;
+const BASE_FEE = 10000;
 const PER_STUDENT = 40;
 const VAT = 0.16;
 const SCHOOL_FEE_PER_STUDENT = 10000;
