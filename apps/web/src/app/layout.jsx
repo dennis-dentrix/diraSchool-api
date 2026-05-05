@@ -1,5 +1,6 @@
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { Providers } from '@/providers/providers';
+import 'leaflet/dist/leaflet.css';
 import './globals.css';
 
 const font = Plus_Jakarta_Sans({
@@ -72,12 +73,28 @@ export const metadata = {
   verification: {
     // google: 'your-google-site-verification-token',
   },
+
 };
+
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: SITE_NAME,
+  url: SITE_URL,
+  logo: `${SITE_URL}/icon.svg`,
+};
+
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${font.variable} font-sans antialiased`}>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationSchema),
+          }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

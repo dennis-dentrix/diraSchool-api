@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -29,6 +29,18 @@ export default function LoginPage() {
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const allowedNext = url.searchParams.get('next');
+    const unsafeParams = [...url.searchParams.keys()].some((key) => key !== 'next');
+    if (!unsafeParams) return;
+
+    const cleanUrl = new URL('/login', window.location.origin);
+    if (allowedNext) cleanUrl.searchParams.set('next', allowedNext);
+    window.history.replaceState(null, '', cleanUrl.toString());
+  }, []);
 
   const { register, handleSubmit, getValues, formState: { errors } } = useForm({
     resolver: zodResolver(schema),

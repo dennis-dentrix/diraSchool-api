@@ -1,57 +1,50 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { CreditCard, FileText, TrendingUp, AlertCircle } from 'lucide-react';
+import { CreditCard, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react';
 import { feesApi } from '@/lib/api';
-import { formatCurrency, formatDate, getStatusColor } from '@/lib/utils';
-import { PageHeader } from '@/components/shared/page-header';
-import { StatCard } from '@/components/shared/stat-card';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DataTable } from '@/components/shared/data-table';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const paymentColumns = [
-  {
-    id: 'student',
-    header: 'Student',
-    cell: ({ row }) => (
-      <div>
-        <p className="font-medium text-sm">
-          {row.original.studentId?.firstName ?? '—'} {row.original.studentId?.lastName ?? ''}
+function PaymentRow({ payment }) {
+  const method = payment.method ?? '';
+  const isMpesa = method.toLowerCase() === 'mpesa';
+  return (
+    <div className="flex items-center justify-between py-3 border-b last:border-0">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">
+          {payment.studentId?.firstName ?? '—'} {payment.studentId?.lastName ?? ''}
         </p>
-        <p className="text-xs text-muted-foreground">{row.original.term} · {row.original.academicYear}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {payment.studentId?.admissionNumber ?? ''}
+          {payment.term ? ` · ${payment.term}` : ''}
+        </p>
       </div>
-    ),
-  },
-  {
-    accessorKey: 'amount',
-    header: 'Amount',
-    cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amount)}</span>,
-  },
-  {
-    accessorKey: 'method',
-    header: 'Method',
-    cell: ({ row }) => <span className="capitalize text-sm">{row.original.method}</span>,
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
-    cell: ({ row }) => (
-      <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(row.original.status)}`}>
-        {row.original.status}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'createdAt',
-    header: 'Date',
-    cell: ({ row }) => <span className="text-sm">{formatDate(row.original.createdAt)}</span>,
-  },
-];
+      <div className="flex items-center gap-3 shrink-0 ml-3">
+        <span
+          className={`hidden sm:inline text-xs px-2 py-0.5 rounded-full font-medium ${
+            isMpesa ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {isMpesa ? 'M-Pesa' : method || 'Cash'}
+        </span>
+        <span className="text-sm font-semibold tabular-nums">{formatCurrency(payment.amount)}</span>
+        <span className="text-xs text-muted-foreground w-20 text-right hidden md:block">
+          {formatDate(payment.createdAt)}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function FeesPage() {
-  const { data: payments, isLoading, isError, error } = useQuery({
+  const router = useRouter();
+
+  const { data: paymentsRes, isLoading: paymentsLoading } = useQuery({
     queryKey: ['payments', 'recent'],
     queryFn: async () => {
       const res = await feesApi.listPayments({ limit: 10 });
@@ -59,7 +52,7 @@ export default function FeesPage() {
     },
   });
 
-  const { data: financeSummary, isLoading: summaryLoading } = useQuery({
+  const { data: summaryRes, isLoading: summaryLoading } = useQuery({
     queryKey: ['fees-dashboard-summary'],
     queryFn: async () => {
       const res = await feesApi.dashboardSummary();
@@ -67,68 +60,144 @@ export default function FeesPage() {
     },
   });
 
-  const { data: structures } = useQuery({
-    queryKey: ['fee-structures', 'count'],
-    queryFn: async () => {
-      const res = await feesApi.listStructures({ limit: 1 });
-      return res.data;
-    },
-  });
+  const payments = paymentsRes?.data ?? paymentsRes ?? [];
+  const monthCollected = summaryRes?.summary?.monthToDate?.totalAmount ?? 0;
+  const followUpCount  = summaryRes?.summary?.students?.followUpCount  ?? 0;
 
-  const monthCollected = financeSummary?.summary?.monthToDate?.totalAmount ?? 0;
-  const followUpCount = financeSummary?.summary?.students?.followUpCount ?? 0;
+  // Count today's payments from the loaded list for a live subtitle
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayCount = Array.isArray(payments)
+    ? payments.filter((p) => String(p.createdAt ?? '').slice(0, 10) === todayStr).length
+    : 0;
 
   return (
-    <div className="space-y-6" data-tour="finance-dashboard">
-      <PageHeader title="Fees & Payments" description="Track fee collection and structures">
-        <Link href="/fees/structures">
-          <Button variant="outline" size="sm"><FileText className="h-4 w-4" /> Fee Structures</Button>
-        </Link>
-        <Link href="/fees/payments">
-          <Button size="sm"><CreditCard className="h-4 w-4" /> Record Payment</Button>
-        </Link>
-      </PageHeader>
+    <div className="space-y-5" data-tour="finance-dashboard">
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="This Month Collected" value={formatCurrency(monthCollected)} icon={TrendingUp} color="green" loading={summaryLoading} description="Server-side totals" />
-        <StatCard title="Fee Structures" value={structures?.pagination?.total ?? '—'} icon={FileText} color="blue" description="Configured" />
-        <StatCard
+      {/* ── Page header ─────────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Fees &amp; Payments</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {todayCount > 0
+              ? `${todayCount} payment${todayCount !== 1 ? 's' : ''} recorded today`
+              : 'No payments recorded today yet'}
+          </p>
+        </div>
+        <Button onClick={() => router.push('/fees/payments')} className="shrink-0 gap-2">
+          <CreditCard className="h-4 w-4" />
+          <span>Record Payment</span>
+        </Button>
+      </div>
+
+      {/* ── Two key numbers ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-4">
+
+        {/* Collected this month */}
+        <Card data-tour="todays-collections">
+          <CardContent className="pt-5 pb-4">
+            {summaryLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-8 w-24" />
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
+                  Collected this month
+                </p>
+                <p className="text-3xl font-bold mt-1 tabular-nums">{formatCurrency(monthCollected)}</p>
+                <div className="flex items-center gap-1 mt-2">
+                  <TrendingUp className="h-3.5 w-3.5 text-green-600" />
+                  <span className="text-xs text-green-700 font-medium">All payment methods</span>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Students needing follow-up */}
+        <Card
           data-tour="fee-balances-widget"
-          title="Need Follow-up"
-          value={followUpCount}
-          icon={AlertCircle}
-          color="orange"
-          loading={summaryLoading}
-          description="Active students unpaid this month"
-        />
+          className={followUpCount > 0 ? 'cursor-pointer hover:shadow-md transition-shadow border-orange-200' : ''}
+          onClick={followUpCount > 0 ? () => router.push('/fees/payments') : undefined}
+        >
+          <CardContent className="pt-5 pb-4">
+            {summaryLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-8 w-16" />
+              </div>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
+                  Need follow-up
+                </p>
+                <p className={`text-3xl font-bold mt-1 ${followUpCount > 0 ? 'text-orange-600' : ''}`}>
+                  {followUpCount}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {followUpCount > 0 ? 'Students with unpaid fees — tap to view' : 'All students up to date'}
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Finance tour target: unallocated payments shortcut */}
-      <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm" data-tour="unallocated-payments">
-        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-        <span className="text-amber-800 flex-1">Payments not matched to a student appear here. <Link href="/fees/payments?filter=unallocated" className="font-semibold underline hover:no-underline">Review unallocated payments →</Link></span>
+      {/* ── Unallocated payments notice (only shown when relevant) ─────────── */}
+      <div className="hidden" data-tour="unallocated-payments">
+        {/* Referenced by the tour; shown in the Payments sub-page */}
       </div>
 
-      <Card data-tour="todays-collections">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Recent Payments</CardTitle>
-          <Link href="/fees/payments" className="text-sm text-blue-600 hover:underline">View all</Link>
+      {/* ── Recent payments ──────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-base font-semibold">Recent Payments</CardTitle>
+          <Link
+            href="/fees/payments"
+            className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+          >
+            View all <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </CardHeader>
-        <CardContent>
-          <DataTable columns={paymentColumns} data={payments?.data} loading={isLoading} error={isError ? error : null} />
+        <CardContent className="pt-0">
+          {paymentsLoading ? (
+            <div className="space-y-3 py-2">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Skeleton className="h-3.5 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                  <Skeleton className="h-5 w-20" />
+                </div>
+              ))}
+            </div>
+          ) : !Array.isArray(payments) || payments.length === 0 ? (
+            <div className="py-10 text-center">
+              <CreditCard className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
+              <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => router.push('/fees/payments')}
+              >
+                Record the first payment
+              </Button>
+            </div>
+          ) : (
+            <div>
+              {payments.map((p) => (
+                <PaymentRow key={p._id} payment={p} />
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Finance tour target: reports quick access */}
-      <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3" data-tour="finance-reports">
-        <div>
-          <p className="text-sm font-medium">Financial Reports</p>
-          <p className="text-xs text-muted-foreground">Export fee collection, defaulter lists, and payment summaries</p>
-        </div>
-        <Link href="/fees/payments">
-          <Button variant="outline" size="sm"><TrendingUp className="h-4 w-4 mr-1.5" /> View Reports</Button>
-        </Link>
-      </div>
+      {/* ── Tour anchor: finance reports ─────────────────────────────────────── */}
+      <div data-tour="finance-reports" className="hidden" />
     </div>
   );
 }

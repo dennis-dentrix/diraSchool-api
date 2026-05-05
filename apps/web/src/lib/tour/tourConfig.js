@@ -43,7 +43,7 @@ const schoolAdminSteps = buildSteps([
     id: 'admin-3',
     attachTo: { element: '[data-tour="staff-nav-item"]', on: 'right' },
     title: 'Manage Your Staff',
-    text: 'Add teachers and staff, manage their profiles, track leave requests, and run payroll from this section.',
+    text: 'Add teachers and staff, manage their profiles, and track leave requests from this section.',
   },
   {
     id: 'admin-4',
@@ -66,8 +66,8 @@ const schoolAdminSteps = buildSteps([
   {
     id: 'admin-7',
     attachTo: { element: '[data-tour="geofence-settings"]', on: 'bottom' },
-    title: 'Set Your School Boundary',
-    text: 'Draw your school boundary on the map. Staff can only check in when they are physically on school premises.',
+    title: 'Set Check-In Location',
+    text: 'Drop a pin on the school and choose the check-in radius. Staff must be inside that radius to check in.',
   },
   {
     id: 'admin-8',
@@ -131,7 +131,7 @@ const principalSteps = buildSteps([
     id: 'principal-7',
     attachTo: { element: '[data-tour="checkin-widget"]', on: 'bottom' },
     title: 'Live Check-In Status',
-    text: 'See a real-time view of staff check-ins against your school geofence boundary.',
+    text: 'See a real-time view of staff check-ins against your school check-in radius.',
   },
 ]);
 
@@ -169,18 +169,12 @@ const financeSteps = buildSteps([
   },
   {
     id: 'finance-6',
-    attachTo: { element: '[data-tour="payroll-nav-item"]', on: 'right' },
-    title: 'Track School Expenses',
-    text: 'Log school expenditures and payroll here. Track spending against your budget for each department.',
-  },
-  {
-    id: 'finance-7',
     attachTo: { element: '[data-tour="finance-reports"]', on: 'bottom' },
     title: 'Financial Reports',
     text: 'Generate term-end collection reports, defaulter lists, and income summaries — exportable to PDF or Excel.',
   },
   {
-    id: 'finance-8',
+    id: 'finance-7',
     attachTo: { element: '[data-tour="help-menu"]', on: 'bottom' },
     title: 'Need Help?',
     text: 'Access guides, contact support, or restart this tour anytime from the help menu at the top right.',

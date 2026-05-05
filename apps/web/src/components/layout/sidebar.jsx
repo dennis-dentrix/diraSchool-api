@@ -18,7 +18,6 @@ const NAV_TOUR_ATTRS = {
   '/leave':       'leave-nav-item',
   '/timetable':   'timetable-nav-item',
   '/messaging':   'messaging-nav-item',
-  '/payroll':     'payroll-nav-item',
   '/settings':    'settings-nav-item',
   '/users':       'users-nav-item',
 };

@@ -4,10 +4,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
+// Ordered by daily-use frequency: Payments (daily) → Overview (summary) → Fee Structures (setup)
 const ITEMS = [
-  { label: 'Overview', href: '/fees' },
+  { label: 'Payments',       href: '/fees/payments'   },
+  { label: 'Overview',       href: '/fees'            },
   { label: 'Fee Structures', href: '/fees/structures' },
-  { label: 'Payments', href: '/fees/payments' },
 ];
 
 export default function FeesLayout({ children }) {
@@ -24,7 +25,7 @@ export default function FeesLayout({ children }) {
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
             const tourAttr =
               item.href === '/fees/structures' ? 'fee-structure-nav' :
-              item.href === '/fees/payments'   ? 'mpesa-reconciliation' :
+              item.href === '/fees/payments'   ? 'todays-collections-tab' :
               undefined;
             return (
               <Link

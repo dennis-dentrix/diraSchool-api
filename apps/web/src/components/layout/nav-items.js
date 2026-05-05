@@ -18,7 +18,6 @@ import {
   MessageSquare,
   UserCheck,
   Umbrella,
-  Banknote,
 } from 'lucide-react';
 
 // Role groups
@@ -26,12 +25,20 @@ const ADMIN     = ['school_admin', 'director', 'headteacher', 'deputy_headteache
 const FINANCE   = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'accountant', 'secretary'];
 const ACADEMIC  = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'department_head', 'secretary'];
 const ALL_STAFF = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'teacher', 'department_head', 'secretary', 'accountant'];
-// Transport: operational staff who manage student pickups
 const TRANSPORT_ACCESS = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'];
-// Audit logs: senior leadership only (no deputy)
 const AUDIT_ACCESS = ['school_admin', 'director', 'headteacher'];
 
+// Items are ordered by daily-use frequency.
+// High-frequency daily tasks appear first; setup / admin-only items sink to the bottom.
+//
+// Frequency tiers:
+//   DAILY      — Dashboard, Students, Attendance, Fees, Staff, Messaging
+//   REGULAR    — Timetable, Leave
+//   PERIODIC   — Classes, Subjects, Exams, Lesson Plans
+//   RARELY     — Transport, Visitors, Audit Logs, Billing, Settings
+
 export const schoolNavItems = [
+  // ── Daily ──────────────────────────────────────────────────────────────────
   {
     label: 'Dashboard',
     href: '/dashboard',
@@ -45,16 +52,55 @@ export const schoolNavItems = [
     roles: ALL_STAFF,
   },
   {
-    label: 'Classes',
-    href: '/classes',
-    icon: BookOpen,
-    roles: ALL_STAFF,
-  },
-  {
     label: 'Attendance',
     href: '/attendance',
     icon: ClipboardList,
     roles: ACADEMIC,
+  },
+  {
+    label: 'Fees',
+    href: '/fees',
+    icon: CreditCard,
+    roles: FINANCE,
+    children: [
+      { label: 'Payments',       href: '/fees/payments'   },
+      { label: 'Overview',       href: '/fees'            },
+      { label: 'Fee Structures', href: '/fees/structures' },
+    ],
+  },
+  {
+    label: 'Staff',
+    href: '/staff',
+    icon: Users,
+    roles: ADMIN,
+  },
+  {
+    label: 'Messaging',
+    href: '/messaging',
+    icon: MessageSquare,
+    roles: ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'],
+  },
+
+  // ── Regular ────────────────────────────────────────────────────────────────
+  {
+    label: 'Timetable',
+    href: '/timetable',
+    icon: Calendar,
+    roles: ALL_STAFF,
+  },
+  {
+    label: 'Leave',
+    href: '/leave',
+    icon: Umbrella,
+    roles: ALL_STAFF,
+  },
+
+  // ── Periodic ───────────────────────────────────────────────────────────────
+  {
+    label: 'Classes',
+    href: '/classes',
+    icon: BookOpen,
+    roles: ALL_STAFF,
   },
   {
     label: 'Subjects',
@@ -74,52 +120,12 @@ export const schoolNavItems = [
     icon: Image,
     roles: ACADEMIC,
   },
-  {
-    label: 'Fees',
-    href: '/fees',
-    icon: CreditCard,
-    roles: FINANCE,
-    children: [
-      { label: 'Overview', href: '/fees' },
-      { label: 'Fee Structures', href: '/fees/structures' },
-      { label: 'Payments', href: '/fees/payments' },
-    ],
-  },
-  {
-    label: 'Staff',
-    href: '/staff',
-    icon: Users,
-    roles: ADMIN,
-  },
-  {
-    label: 'Payroll',
-    href: '/payroll',
-    icon: Banknote,
-    roles: FINANCE,
-  },
-  {
-    label: 'Leave',
-    href: '/leave',
-    icon: Umbrella,
-    roles: ALL_STAFF,
-  },
-  {
-    label: 'Timetable',
-    href: '/timetable',
-    icon: Calendar,
-    roles: ALL_STAFF,
-  },
+  // ── Rarely / admin-only ────────────────────────────────────────────────────
   {
     label: 'Transport',
     href: '/transport',
     icon: Bus,
     roles: TRANSPORT_ACCESS,
-  },
-  {
-    label: 'Messaging',
-    href: '/messaging',
-    icon: MessageSquare,
-    roles: ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'],
   },
   {
     label: 'Visitors',

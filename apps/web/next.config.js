@@ -30,7 +30,7 @@ module.exports = withSentryConfig(nextConfig, {
   project: process.env.SENTRY_PROJECT,
   silent: true,
   widenClientFileUpload: true,
-  tunnelRoute: '/monitoring',
+  tunnelRoute: process.env.SENTRY_TUNNEL_ROUTE || '/_client-events',
 }, {
   hideSourceMaps: true,
 });

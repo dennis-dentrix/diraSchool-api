@@ -256,17 +256,17 @@ export default function SettingsPage() {
           <TabsTrigger value="general" className="gap-1.5" title="School name, contact, and logo">
             <Building2 className="h-3.5 w-3.5" aria-hidden />General
           </TabsTrigger>
+          {canEdit && (
+            <TabsTrigger value="attendance" className="gap-1.5" title="School pin and check-in radius">
+              <MapPin className="h-3.5 w-3.5" aria-hidden />Location
+            </TabsTrigger>
+          )}
           <TabsTrigger value="academic" className="gap-1.5" title="Term dates and academic year">
             <BookOpen className="h-3.5 w-3.5" aria-hidden />Academic
           </TabsTrigger>
           <TabsTrigger value="events" className="gap-1.5" title="Holidays, closures, and events">
             <CalendarDays className="h-3.5 w-3.5" aria-hidden />Events
           </TabsTrigger>
-          {canEdit && (
-            <TabsTrigger value="attendance" className="gap-1.5" title="School location and check-in radius">
-              <MapPin className="h-3.5 w-3.5" aria-hidden />Check-in
-            </TabsTrigger>
-          )}
           {canViewPaymentsSms && (
             <TabsTrigger value="payments" className="gap-1.5" title="Payment SMS automation">
               <CreditCard className="h-3.5 w-3.5" aria-hidden />Payments

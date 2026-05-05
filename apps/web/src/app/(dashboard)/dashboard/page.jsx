@@ -25,6 +25,14 @@ import { CheckInWidget } from '@/components/shared/check-in-widget';
 const ADMIN_ROLES   = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
 const TEACHER_ROLES = ['teacher', 'department_head'];
 
+const METHOD_LABELS = {
+  cash: 'Cash',
+  mpesa: 'M-Pesa',
+  cheque: 'Cheque',
+  bank_transfer: 'Bank Transfer',
+  bank: 'Bank',
+};
+
 // ── Shared primitives ─────────────────────────────────────────────────────────
 
 function DashboardShell({ title, subtitle, rightMeta, actions, children }) {
@@ -194,6 +202,90 @@ function FeeByClassCard({ byClass = {} }) {
   );
 }
 
+function AdminWorkQueue({ tasks = [] }) {
+  return (
+    <SectionCard title="Needs Attention" icon={Bell}>
+      {tasks.length > 0 ? (
+        <div className="space-y-2">
+          {tasks.slice(0, 6).map((task) => {
+            const Icon = task.icon;
+            const tone = {
+              high: 'border-rose-200 bg-rose-50/70 text-rose-700',
+              medium: 'border-amber-200 bg-amber-50/70 text-amber-700',
+              low: 'border-blue-200 bg-blue-50/70 text-blue-700',
+            }[task.priority] ?? 'border-slate-200 bg-white text-slate-700';
+
+            return (
+              <button
+                key={`${task.href}-${task.title}`}
+                type="button"
+                onClick={() => task.onClick?.()}
+                className={`w-full rounded-lg border p-3 text-left transition hover:shadow-sm ${tone}`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="rounded-md bg-white/80 p-2">
+                    <Icon className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{task.title}</p>
+                      <span className="shrink-0 text-xs font-medium">{task.cta}</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600">{task.detail}</p>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3">
+          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+          <div>
+            <p className="text-sm font-semibold text-emerald-900">No urgent setup or finance issues</p>
+            <p className="mt-1 text-xs text-emerald-800/80">Students, fees, staff access, and check-in location look ready.</p>
+          </div>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function RecentPaymentsCard({ payments = [] }) {
+  return (
+    <SectionCard
+      title="Recent Collections"
+      icon={CreditCard}
+      action={<Link href="/fees/payments" className="text-xs font-medium text-cyan-700 hover:underline">View all</Link>}
+    >
+      {payments.length > 0 ? (
+        <div className="space-y-2">
+          {payments.slice(0, 5).map((payment, i) => (
+            <div key={payment.receiptNumber ?? `${payment.name}-${payment.time}-${i}`} className="flex items-center justify-between rounded-lg border border-slate-200/80 p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-900">{payment.name}</p>
+                <p className="text-xs text-slate-500 capitalize">
+                  {METHOD_LABELS[payment.method] ?? payment.method}
+                  {payment.date || payment.time ? ` · ${[payment.date, payment.time].filter(Boolean).join(' ')}` : ''}
+                </p>
+              </div>
+              <div className="ml-3 shrink-0 text-right">
+                <p className="text-sm font-semibold text-slate-900">{formatCurrency(payment.amount)}</p>
+                {payment.receiptNumber && <p className="text-xs text-slate-400">{payment.receiptNumber}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="py-4 text-center">
+          <p className="text-sm text-slate-500">No recent collections yet.</p>
+          <Link href="/fees/payments" className="mt-1 inline-flex text-xs text-cyan-700 hover:underline">Record the first payment</Link>
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 // ── Onboarding Checklist ──────────────────────────────────────────────────────
 
 function SetupChecklist({ schoolId, totalStudents, staffCount, hasFees }) {
@@ -356,7 +448,7 @@ export default function DashboardPage() {
   });
 
   // School settings (events) — shared, fetched once at this level
-  const { data: schoolSettings } = useQuery({
+  const { data: schoolSettings, isLoading: settingsLoading } = useQuery({
     queryKey: ['school-settings'],
     queryFn: async () => {
       const res = await settingsApi.get();
@@ -392,13 +484,13 @@ export default function DashboardPage() {
   const recentPayments     = feeData.recentPayments     ?? [];
   const mpesaToday         = feeData.mpesaToday         ?? 0;
   const mpesaTodayAmount   = feeData.mpesaTodayAmount   ?? 0;
-  const methodLabels       = { cash: 'Cash', mpesa: 'M-Pesa', cheque: 'Cheque', bank_transfer: 'Bank Transfer', bank: 'Bank' };
 
   // Student / staff data
   const studentData   = summary?.students ?? {};
   const staffData     = summary?.staff    ?? {};
   const activeStudents = studentData.byStatus?.active ?? studentData.total ?? 0;
   const totalStudents  = studentData.total ?? 0;
+  const staffAwaitingFirstLogin = summary?.alerts?.staffAwaitingFirstLogin ?? staffData.pendingOnboarding ?? 0;
 
   // Secretary data
   const secretaryData  = summary?.secretary ?? {};
@@ -411,6 +503,16 @@ export default function DashboardPage() {
   const myClass            = teacherData?.myClass            ?? null;
   const lessonPlansThisWeek = teacherData?.lessonPlansThisWeek ?? 0;
   const att                = myClass?.attendanceToday ?? null;
+
+  const configuredTerms = Array.isArray(schoolSettings?.terms) ? schoolSettings.terms : [];
+  const currentTerm = configuredTerms.find(
+    (term) => now >= new Date(term.startDate) && now <= new Date(term.endDate)
+  );
+  const hasGeofence = Number.isFinite(Number(schoolSettings?.geofence?.latitude)) &&
+    Number.isFinite(Number(schoolSettings?.geofence?.longitude));
+  const termContext = currentTerm
+    ? `${currentTerm.name} · ${schoolSettings?.currentAcademicYear ?? now.getFullYear()}`
+    : (schoolSettings?.currentAcademicYear ? `Academic Year ${schoolSettings.currentAcademicYear}` : 'Academic calendar not set');
 
   const pendingTasks = [];
   if (myClass && !att) pendingTasks.push({ label: `Mark today's attendance for ${myClass.fullName}`, href: '/attendance', urgent: true });
@@ -425,11 +527,75 @@ export default function DashboardPage() {
     href: '/fees',
   }] : [];
 
+  const adminTasks = [
+    totalTarget <= 0 && {
+      icon: DollarSign,
+      title: "Set this year's fee structures",
+      detail: 'No fee target is configured, so collection progress cannot be measured.',
+      href: '/fees/structures',
+      cta: 'Set fees',
+      priority: 'high',
+    },
+    configuredTerms.length === 0 && {
+      icon: Calendar,
+      title: 'Add term dates',
+      detail: 'Term dates power attendance, fees, exams, and report periods.',
+      href: '/settings',
+      cta: 'Open settings',
+      priority: 'high',
+    },
+    studentsOverdue > 0 && {
+      icon: AlertTriangle,
+      title: `${studentsOverdue} students need fee follow-up`,
+      detail: amountOverdue > 0 ? `${formatCurrency(amountOverdue)} remains outstanding.` : 'Open the fees list and follow up with parents.',
+      href: '/fees',
+      cta: 'Review',
+      priority: studentsOverdue > 20 ? 'high' : 'medium',
+    },
+    staffAwaitingFirstLogin > 0 && {
+      icon: Users,
+      title: `${staffAwaitingFirstLogin} staff accounts not activated`,
+      detail: 'These users have not completed their first login yet.',
+      href: '/staff',
+      cta: 'Follow up',
+      priority: 'medium',
+    },
+    totalStudents === 0 && {
+      icon: UserPlus,
+      title: 'Enroll students',
+      detail: 'Add learners before setting class attendance and fee tracking live.',
+      href: '/students',
+      cta: 'Enroll',
+      priority: 'high',
+    },
+    !hasGeofence && {
+      icon: CalendarCheck,
+      title: 'Set staff check-in location',
+      detail: 'Drop the school pin and radius so staff check-ins can be verified.',
+      href: '/settings',
+      cta: 'Set location',
+      priority: 'low',
+    },
+    summary?.alerts?.trialExpiringSoon && {
+      icon: AlertCircle,
+      title: 'Trial is ending soon',
+      detail: summary?.school?.trialDaysLeft === 0
+        ? 'Your trial expires today. Review billing to avoid interruption.'
+        : `${summary?.school?.trialDaysLeft} day${summary?.school?.trialDaysLeft === 1 ? '' : 's'} left in the trial.`,
+      href: '/billing',
+      cta: 'Billing',
+      priority: 'medium',
+    },
+  ]
+    .filter(Boolean)
+    .map((task) => ({ ...task, onClick: () => router.push(task.href) }));
+
   // ── Loading / error guards ────────────────────────────────────────────────
 
-  const isLoading = summaryLoading || teacherLoading;
+  const isLoading = summaryLoading || teacherLoading || (isAdmin && settingsLoading);
   const displayName = user?.firstName ?? 'there';
-  const subtitle = isAdmin     ? 'School overview — fees, students, and staff'
+  const adminTitle = summary?.school?.name ? `Today at ${summary.school.name}` : `Welcome, ${displayName}`;
+  const subtitle = isAdmin     ? `${termContext} · ${activeStudents} active students · ${staffData.total ?? 0} staff`
                  : isAccountant ? 'Finance overview — collections and reconciliation'
                  : isSecretary  ? 'School operations — admissions and attendance'
                  : isTeacher    ? (myClass ? `Class teacher · ${myClass.fullName}` : 'Teacher overview')
@@ -442,25 +608,43 @@ export default function DashboardPage() {
 
   return (
     <DashboardShell
-      title={`Welcome, ${displayName}`}
+      title={isAdmin ? adminTitle : `Welcome, ${displayName}`}
       subtitle={subtitle}
       rightMeta={dateLabel}
       actions={
-        <RefreshButton
-          queryKeys={isTeacher
-            ? [['teacher-dashboard']]
-            : [['dashboard-summary', role]]}
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {isAdmin && (
+            <>
+              <Button size="sm" onClick={() => router.push('/fees/payments')} className="gap-2 bg-cyan-700 hover:bg-cyan-800">
+                <CreditCard className="h-4 w-4" aria-hidden /> Record Payment
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => router.push('/students')} className="gap-2">
+                <UserPlus className="h-4 w-4" aria-hidden /> Enroll Student
+              </Button>
+            </>
+          )}
+          <RefreshButton
+            queryKeys={isTeacher
+              ? [['teacher-dashboard']]
+              : [['dashboard-summary', role]]}
+          />
+        </div>
       }
     >
       {/* ── Onboarding checklist — admin only, new schools ───────────────── */}
       {isAdmin && (
         <SetupChecklist
-          schoolId={user?._id}
+          schoolId={summary?.school?._id ?? user?._id}
           totalStudents={totalStudents}
           staffCount={staffData.total ?? 0}
           hasFees={totalTarget > 0}
         />
+      )}
+
+      {isAdmin && (
+        <div data-tour="admin-work-queue">
+          <AdminWorkQueue tasks={adminTasks} />
+        </div>
       )}
 
       {/* ── Alerts ── admin / finance only ───────────────────────────────── */}
@@ -557,16 +741,16 @@ export default function DashboardPage() {
           <>
             <div data-tour="staff-attendance-widget" className="contents">
             <StatCard
-              label="Fee Collection"
-              value={formatCurrency(totalCollected)}
-              hint={`Target ${formatCurrency(totalTarget)}`}
+              label="Today's Collections"
+              value={formatCurrency(feeData.todayAmount ?? 0)}
+              hint={`${formatCurrency(totalCollected)} collected against ${formatCurrency(totalTarget)} target`}
               icon={DollarSign}
               badge={`${feeCollectionPct}%`}
               tone={feeCollectionPct >= 80 ? 'green' : feeCollectionPct >= 50 ? 'amber' : 'rose'}
-              onClick={() => router.push('/fees')}
+              onClick={() => router.push('/fees/payments')}
             />
             <StatCard label="Active Students" value={activeStudents} hint={`${Math.max(0, totalStudents - activeStudents)} inactive`} icon={BookOpen} tone="blue" onClick={() => router.push('/students')} />
-            <StatCard label="Staff Members" value={staffData.active ?? staffData.total ?? 0} hint={`${staffData.pendingOnboarding ?? 0} pending onboarding`} icon={Users} badge={`${staffData.total ?? 0} total`} tone="slate" onClick={() => router.push('/staff')} />
+            <StatCard label="Staff Accounts" value={staffData.active ?? staffData.total ?? 0} hint={`${staffAwaitingFirstLogin} awaiting first login`} icon={Users} badge={`${staffData.total ?? 0} total`} tone={staffAwaitingFirstLogin > 0 ? 'amber' : 'slate'} onClick={() => router.push('/staff')} />
             <StatCard label="Defaulters" value={studentsOverdue} hint={amountOverdue > 0 ? `${formatCurrency(amountOverdue)} outstanding` : 'Students with unpaid fees'} icon={AlertCircle} tone={studentsOverdue > 20 ? 'rose' : studentsOverdue > 5 ? 'amber' : 'slate'} onClick={() => router.push('/fees')} />
             </div>
           </>
@@ -610,6 +794,7 @@ export default function DashboardPage() {
         {isAdmin && (
           <>
             <FeeByClassCard byClass={feeData.byClass} />
+            <RecentPaymentsCard payments={recentPayments} />
             <UpcomingEventsCard events={upcomingEvents} pastEvents={pastEvents} />
           </>
         )}
@@ -651,7 +836,7 @@ export default function DashboardPage() {
                       return (
                         <div key={method} className="rounded-lg border border-slate-200/80 p-3">
                           <div className="mb-1.5 flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium text-slate-900">{methodLabels[method] ?? method}</p>
+                            <p className="text-sm font-medium text-slate-900">{METHOD_LABELS[method] ?? method}</p>
                             <p className="text-xs font-semibold text-slate-700">{formatCurrency(amount)}</p>
                           </div>
                           <div className="h-1.5 rounded-full bg-slate-100">
@@ -850,7 +1035,7 @@ export default function DashboardPage() {
                 <div key={i} className="flex items-center justify-between rounded-lg border border-slate-200/80 p-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900">{payment.name}</p>
-                    <p className="text-xs text-slate-500 capitalize">{methodLabels[payment.method] ?? payment.method} · {payment.date} {payment.time}</p>
+                    <p className="text-xs text-slate-500 capitalize">{METHOD_LABELS[payment.method] ?? payment.method} · {payment.date} {payment.time}</p>
                   </div>
                   <div className="text-right shrink-0 ml-3">
                     <p className="text-sm font-semibold text-slate-900">{formatCurrency(payment.amount)}</p>
@@ -903,44 +1088,37 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Quick actions ─────────────────────────────────────────────────── */}
-      <nav aria-label="Quick actions">
-        <div className="flex flex-wrap gap-2">
-          {isAdmin && (
-            <>
-              <Button onClick={() => router.push('/fees/payments')} className="gap-2 bg-cyan-700 hover:bg-cyan-800"><CreditCard className="h-4 w-4" aria-hidden /> Record Payment</Button>
-              {studentsOverdue > 0 && <Button onClick={() => router.push('/fees')} variant="outline" className="gap-2 border-rose-300 text-rose-700 hover:bg-rose-50"><AlertTriangle className="h-4 w-4" aria-hidden /> View Overdue</Button>}
-              <Button onClick={() => router.push('/attendance')} variant="outline" className="gap-2"><CalendarCheck className="h-4 w-4" aria-hidden /> Mark Attendance</Button>
-              <Button onClick={() => router.push('/students')} variant="outline" className="gap-2"><Plus className="h-4 w-4" aria-hidden /> Enroll Student</Button>
-              <Button onClick={() => router.push('/report-cards')} variant="outline" className="gap-2"><FileText className="h-4 w-4" aria-hidden /> Report Cards</Button>
-            </>
-          )}
-          {isAccountant && (
-            <>
-              <Button onClick={() => router.push('/fees/payments')} className="gap-2 bg-cyan-700 hover:bg-cyan-800"><CreditCard className="h-4 w-4" aria-hidden /> Record Payment</Button>
-              <Button onClick={() => router.push('/fees/payments')} variant="outline" className="gap-2"><FileText className="h-4 w-4" aria-hidden /> Issue Receipts</Button>
-              <Button onClick={() => router.push('/fees')} variant="outline" className="gap-2"><TrendingUp className="h-4 w-4" aria-hidden /> Fee Reports</Button>
-              {studentsOverdue > 0 && <Button onClick={() => router.push('/fees')} variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"><AlertTriangle className="h-4 w-4" aria-hidden /> Follow-up List</Button>}
-            </>
-          )}
-          {isSecretary && (
-            <>
-              <Button onClick={() => router.push('/students')} className="gap-2 bg-cyan-700 hover:bg-cyan-800"><Plus className="h-4 w-4" aria-hidden /> Enroll Student</Button>
-              <Button onClick={() => router.push('/attendance')} variant="outline" className="gap-2"><CalendarCheck className="h-4 w-4" aria-hidden /> Attendance</Button>
-              <Button onClick={() => router.push('/students')} variant="outline" className="gap-2"><Users className="h-4 w-4" aria-hidden /> Student Records</Button>
-              <Button onClick={() => router.push('/fees/payments')} variant="outline" className="gap-2"><CreditCard className="h-4 w-4" aria-hidden /> Record Payment</Button>
-            </>
-          )}
-          {isTeacher && (
-            <>
-              <Button onClick={() => router.push('/attendance')} className="gap-2 bg-cyan-700 hover:bg-cyan-800"><CalendarCheck className="h-4 w-4" aria-hidden /> Attendance</Button>
-              <Button onClick={() => router.push('/lesson-plans')} variant="outline" className="gap-2"><ClipboardList className="h-4 w-4" aria-hidden /> Lesson Plans</Button>
-              <Button onClick={() => router.push('/exams')} variant="outline" className="gap-2"><FileText className="h-4 w-4" aria-hidden /> Exams</Button>
-              <Button onClick={() => router.push('/report-cards')} variant="outline" className="gap-2"><BookOpen className="h-4 w-4" aria-hidden /> Report Cards</Button>
-              <Button onClick={() => router.push('/timetable')} variant="outline" className="gap-2"><Clock className="h-4 w-4" aria-hidden /> Timetable</Button>
-            </>
-          )}
-        </div>
-      </nav>
+      {!isAdmin && (
+        <nav aria-label="Quick actions">
+          <div className="flex flex-wrap gap-2">
+            {isAccountant && (
+              <>
+                <Button onClick={() => router.push('/fees/payments')} className="gap-2 bg-cyan-700 hover:bg-cyan-800"><CreditCard className="h-4 w-4" aria-hidden /> Record Payment</Button>
+                <Button onClick={() => router.push('/fees/payments')} variant="outline" className="gap-2"><FileText className="h-4 w-4" aria-hidden /> Issue Receipts</Button>
+                <Button onClick={() => router.push('/fees')} variant="outline" className="gap-2"><TrendingUp className="h-4 w-4" aria-hidden /> Fee Reports</Button>
+                {studentsOverdue > 0 && <Button onClick={() => router.push('/fees')} variant="outline" className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"><AlertTriangle className="h-4 w-4" aria-hidden /> Follow-up List</Button>}
+              </>
+            )}
+            {isSecretary && (
+              <>
+                <Button onClick={() => router.push('/students')} className="gap-2 bg-cyan-700 hover:bg-cyan-800"><Plus className="h-4 w-4" aria-hidden /> Enroll Student</Button>
+                <Button onClick={() => router.push('/attendance')} variant="outline" className="gap-2"><CalendarCheck className="h-4 w-4" aria-hidden /> Attendance</Button>
+                <Button onClick={() => router.push('/students')} variant="outline" className="gap-2"><Users className="h-4 w-4" aria-hidden /> Student Records</Button>
+                <Button onClick={() => router.push('/fees/payments')} variant="outline" className="gap-2"><CreditCard className="h-4 w-4" aria-hidden /> Record Payment</Button>
+              </>
+            )}
+            {isTeacher && (
+              <>
+                <Button onClick={() => router.push('/attendance')} className="gap-2 bg-cyan-700 hover:bg-cyan-800"><CalendarCheck className="h-4 w-4" aria-hidden /> Attendance</Button>
+                <Button onClick={() => router.push('/lesson-plans')} variant="outline" className="gap-2"><ClipboardList className="h-4 w-4" aria-hidden /> Lesson Plans</Button>
+                <Button onClick={() => router.push('/exams')} variant="outline" className="gap-2"><FileText className="h-4 w-4" aria-hidden /> Exams</Button>
+                <Button onClick={() => router.push('/report-cards')} variant="outline" className="gap-2"><BookOpen className="h-4 w-4" aria-hidden /> Report Cards</Button>
+                <Button onClick={() => router.push('/timetable')} variant="outline" className="gap-2"><Clock className="h-4 w-4" aria-hidden /> Timetable</Button>
+              </>
+            )}
+          </div>
+        </nav>
+      )}
     </DashboardShell>
   );
 }

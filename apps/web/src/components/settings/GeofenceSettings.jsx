@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { MapPin, Navigation, Save, Clock, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
@@ -10,11 +11,22 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
-const RADIUS_OPTIONS = [
-  { value: 50,  label: 'Small',  desc: 'Single building or gate',          example: 'e.g. one classroom block' },
-  { value: 150, label: 'Medium', desc: 'Several buildings or a small field', example: 'e.g. most day schools' },
-  { value: 300, label: 'Large',  desc: 'Wide campus or boarding school',    example: 'e.g. large compounds' },
-];
+const GeofencePinMap = dynamic(
+  () => import('./GeofencePinMap').then((mod) => mod.GeofencePinMap),
+  {
+    ssr: false,
+    loading: () => <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading map...</div>,
+  }
+);
+
+const clampRadius = (value) => {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return 150;
+  return Math.min(500, Math.max(50, Math.round(next)));
+};
+
+const formatCoordinate = (value) =>
+  Number.isFinite(Number(value)) ? Number(value).toFixed(6) : null;
 
 export function GeofenceSettings({ settings, canEdit }) {
   const queryClient = useQueryClient();
@@ -28,7 +40,13 @@ export function GeofenceSettings({ settings, canEdit }) {
   const [locating,        setLocating]        = useState(false);
   const [locError,        setLocError]        = useState('');
 
-  const alreadyConfigured = !!(saved.latitude && saved.longitude);
+  const hasPinnedLocation = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+  const alreadyConfigured = Number.isFinite(Number(saved.latitude)) && Number.isFinite(Number(saved.longitude));
+
+  const setPinnedLocation = ({ latitude, longitude }) => {
+    setLat(latitude);
+    setLng(longitude);
+  };
 
   const detectLocation = () => {
     if (!navigator.geolocation) {
@@ -42,12 +60,12 @@ export function GeofenceSettings({ settings, canEdit }) {
         setLat(pos.coords.latitude);
         setLng(pos.coords.longitude);
         setLocating(false);
-        toast.success('Location detected — confirm on the map below, then save.');
+        toast.success('School pin set from your current location.');
       },
       () => {
         setLocating(false);
         setLocError(
-          'Could not get your location. Make sure you allowed location access in your browser, then try again.'
+          'Could not get your location. Allow location access or place the pin on the map.'
         );
       },
       { enableHighAccuracy: true, timeout: 15_000 }
@@ -57,7 +75,13 @@ export function GeofenceSettings({ settings, canEdit }) {
   const { mutate: saveAll, isPending: saving } = useMutation({
     mutationFn: async () => {
       const tasks = [];
-      if (lat && lng) tasks.push(geofenceApi.save({ latitude: lat, longitude: lng, radius_meters: radius }));
+      if (hasPinnedLocation) {
+        tasks.push(geofenceApi.save({
+          latitude: Number(lat),
+          longitude: Number(lng),
+          radius_meters: clampRadius(radius),
+        }));
+      }
       tasks.push(geofenceApi.saveTimings({ checkInDeadline, checkOutTime }));
       await Promise.all(tasks);
     },
@@ -71,43 +95,23 @@ export function GeofenceSettings({ settings, canEdit }) {
   return (
     <div className="space-y-4">
 
-      {/* ── Step 1: Set location ─────────────────────────────────────────────── */}
+      {/* ── Location and radius ──────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <MapPin className="h-4 w-4 text-cyan-700" />
-            Step 1 — Set School Location
+            Check-in Location
           </CardTitle>
-          <CardDescription>
-            Stand at your school's main entrance or gate, then tap the button below. Your phone or computer will detect where you are.
-          </CardDescription>
+          <CardDescription>Set the school pin and check-in radius.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-
-          {/* Already configured notice */}
-          {alreadyConfigured && !lat && (
+          {alreadyConfigured && hasPinnedLocation && (
             <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              Location is already set. You can tap below to update it.
+              School location is configured.
             </div>
           )}
 
-          {/* Detect button */}
-          {canEdit && (
-            <Button
-              onClick={detectLocation}
-              disabled={locating}
-              size="lg"
-              className="w-full sm:w-auto gap-2 bg-cyan-700 hover:bg-cyan-800"
-            >
-              {locating
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Detecting location…</>
-                : <><Navigation className="h-4 w-4" /> Detect My Location</>
-              }
-            </Button>
-          )}
-
-          {/* Error feedback */}
           {locError && (
             <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -115,80 +119,86 @@ export function GeofenceSettings({ settings, canEdit }) {
             </div>
           )}
 
-          {/* Map preview */}
-          {lat && lng && (
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-700">Confirm this is your school:</p>
-              <div className="overflow-hidden rounded-lg border h-52">
-                <iframe
-                  title="School location"
-                  src={`https://maps.google.com/maps?q=${lat},${lng}&z=18&output=embed`}
-                  width="100%"
-                  height="100%"
-                  className="border-0"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                If the pin is in the wrong place, move to the correct spot and tap "Detect My Location" again.
-              </p>
-            </div>
-          )}
-
-          {!lat && !lng && !canEdit && (
-            <p className="text-sm text-muted-foreground">No location configured yet.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Step 2: Campus size ──────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Step 2 — Choose Campus Size</CardTitle>
-          <CardDescription>
-            Staff must be within this distance of the entrance to check in. When in doubt, pick Medium.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {RADIUS_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                disabled={!canEdit}
-                onClick={() => setRadius(opt.value)}
-                className={[
-                  'rounded-lg border-2 p-4 text-left transition-colors',
-                  radius === opt.value
-                    ? 'border-cyan-600 bg-cyan-50'
-                    : 'border-border bg-background hover:border-slate-300',
-                  !canEdit ? 'opacity-60 cursor-default' : 'cursor-pointer',
-                ].join(' ')}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">{opt.label}</p>
-                  <span className="text-xs font-mono text-muted-foreground">{opt.value} m</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1 leading-snug">{opt.desc}</p>
-                <p className="text-[11px] text-muted-foreground/70 mt-0.5 italic">{opt.example}</p>
-              </button>
-            ))}
+          <div className="overflow-hidden rounded-md border h-72 sm:h-80">
+            <GeofencePinMap
+              latitude={lat}
+              longitude={lng}
+              radius={radius}
+              canEdit={canEdit}
+              onChange={setPinnedLocation}
+            />
           </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-muted-foreground">
+              {hasPinnedLocation
+                ? `Pin: ${formatCoordinate(lat)}, ${formatCoordinate(lng)}`
+                : 'Place the pin on the school compound.'}
+            </div>
+            {canEdit && (
+              <Button
+                onClick={detectLocation}
+                disabled={locating}
+                variant="outline"
+                className="w-full sm:w-auto gap-2"
+              >
+                {locating
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Locating...</>
+                  : <><Navigation className="h-4 w-4" /> Use Current Location</>
+                }
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-3 rounded-md border bg-muted/30 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="geofence-radius">Radius</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="geofence-radius-value"
+                  type="number"
+                  min="50"
+                  max="500"
+                  step="10"
+                  value={radius}
+                  disabled={!canEdit}
+                  onChange={(event) => setRadius(clampRadius(event.target.value))}
+                  className="h-9 w-24"
+                />
+                <span className="text-sm text-muted-foreground">m</span>
+              </div>
+            </div>
+            <Input
+              id="geofence-radius"
+              type="range"
+              min="50"
+              max="500"
+              step="10"
+              value={radius}
+              disabled={!canEdit}
+              onChange={(event) => setRadius(clampRadius(event.target.value))}
+              className="h-2 cursor-pointer p-0"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>50 m</span>
+              <span>500 m</span>
+            </div>
+          </div>
+
+          {!hasPinnedLocation && !canEdit && (
+            <p className="text-sm text-muted-foreground">No check-in location configured yet.</p>
+          )}
         </CardContent>
       </Card>
 
-      {/* ── Step 3: Times ────────────────────────────────────────────────────── */}
+      {/* ── Times ───────────────────────────────────────────────────────────── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Clock className="h-4 w-4 text-cyan-700" />
-            Step 3 — Set Check-In Times
+            Check-in Times
           </CardTitle>
-          <CardDescription>
-            Staff who check in after the morning deadline will be marked <strong>Late</strong>.
-            All times are Kenya time (EAT).
-          </CardDescription>
+          <CardDescription>Set the daily staff attendance times.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -222,7 +232,7 @@ export function GeofenceSettings({ settings, canEdit }) {
       {canEdit && (
         <Button
           onClick={() => saveAll()}
-          disabled={saving || (!lat && !lng && !alreadyConfigured)}
+          disabled={saving || (!hasPinnedLocation && !alreadyConfigured)}
           className="w-full sm:w-auto gap-2"
           size="lg"
         >

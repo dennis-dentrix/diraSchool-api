@@ -12,10 +12,21 @@ const PUBLIC_PATHS = [
 
 // Paths where an already-authenticated user should be bounced to the dashboard
 const AUTH_PATHS = ['/', '/login', '/register'];
+const HIDDEN_FEATURE_PATHS = ['/payroll'];
 
 export function middleware(request) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get('token');
+
+  if (pathname === '/login') {
+    const allowedNext = request.nextUrl.searchParams.get('next');
+    const hasUnsafeParams = [...request.nextUrl.searchParams.keys()].some((key) => key !== 'next');
+    if (hasUnsafeParams) {
+      const cleanLoginUrl = new URL('/login', request.url);
+      if (allowedNext) cleanLoginUrl.searchParams.set('next', allowedNext);
+      return NextResponse.redirect(cleanLoginUrl);
+    }
+  }
 
   // If user has a token and hits the landing page or auth pages, send them home
   if (token && AUTH_PATHS.some((p) => pathname === p)) {
@@ -31,6 +42,10 @@ export function middleware(request) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  if (HIDDEN_FEATURE_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   return NextResponse.next();
