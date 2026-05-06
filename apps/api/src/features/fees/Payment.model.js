@@ -96,7 +96,7 @@ const paymentSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
-    // Staff member who issued the printed receipt (secretary/accountant only)
+    // Staff member who first issued the printed receipt.
     receiptIssuedByUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

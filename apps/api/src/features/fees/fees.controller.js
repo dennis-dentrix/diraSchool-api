@@ -382,7 +382,7 @@ export const reversePayment = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/fees/payments/:id/issue-receipt
- * Marks a payment receipt as issued by the currently logged-in finance user.
+ * Marks a payment receipt as issued. Reprints keep the original issuer.
  */
 export const issueReceipt = asyncHandler(async (req, res) => {
   const payment = await Payment.findOne({
@@ -392,9 +392,11 @@ export const issueReceipt = asyncHandler(async (req, res) => {
 
   if (!payment) return sendError(res, 'Payment not found.', 404);
 
-  payment.receiptIssuedByUserId = req.user._id;
-  payment.receiptIssuedAt = new Date();
-  await payment.save();
+  if (!payment.receiptIssuedByUserId) {
+    payment.receiptIssuedByUserId = req.user._id;
+    payment.receiptIssuedAt = new Date();
+    await payment.save();
+  }
 
   const populated = await Payment.findById(payment._id)
     .populate('studentId', 'firstName lastName admissionNumber')

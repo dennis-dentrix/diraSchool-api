@@ -8,7 +8,7 @@ import {
   CalendarDays, Users, BookOpen, Clock, AlertTriangle,
 } from 'lucide-react';
 import { timetableApi, classesApi, subjectsApi, usersApi, settingsApi, getErrorMessage } from '@/lib/api';
-import { useAuthStore, isAdmin } from '@/store/auth.store';
+import { useAuthStore } from '@/store/auth.store';
 import { ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { useSchoolTermDefaults } from '@/hooks/use-school-term-defaults';
 import { formatDate } from '@/lib/utils';
@@ -22,6 +22,7 @@ import { SkeletonList } from '@/components/shared/skeleton-list';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
@@ -42,6 +43,19 @@ const DAY_HEADER = {
 
 const BREAK_MARKER = '__BREAK__';
 const SLOT_INIT = { day: 'monday', period: 1, startTime: '08:00', endTime: '08:40', subjectId: '', teacherId: '', room: '', isBreak: false };
+const TIMETABLE_WRITE_ROLES = ['school_admin', 'headteacher', 'deputy_headteacher'];
+const DEFAULT_PERIOD_PLAN = [
+  { period: 1, startTime: '08:00', endTime: '08:40', isBreak: false },
+  { period: 2, startTime: '08:40', endTime: '09:20', isBreak: false },
+  { period: 3, startTime: '09:20', endTime: '09:40', isBreak: true },
+  { period: 4, startTime: '09:40', endTime: '10:20', isBreak: false },
+  { period: 5, startTime: '10:20', endTime: '11:00', isBreak: false },
+  { period: 6, startTime: '11:00', endTime: '11:40', isBreak: false },
+  { period: 7, startTime: '11:40', endTime: '12:20', isBreak: false },
+  { period: 8, startTime: '12:20', endTime: '13:20', isBreak: true },
+  { period: 9, startTime: '13:20', endTime: '14:00', isBreak: false },
+  { period: 10, startTime: '14:00', endTime: '14:40', isBreak: false },
+];
 const firstArray = (...candidates) => {
   for (const value of candidates) {
     if (Array.isArray(value)) return value;
@@ -60,6 +74,77 @@ const toIdString = (value) => {
 const dayLabel = (value) => {
   const day = normalizeDay(value);
   return `${day[0].toUpperCase()}${day.slice(1)}`;
+};
+const sortPlan = (plan) => [...plan].sort((a, b) => a.period - b.period);
+const renumberPlan = (plan) =>
+  plan.map((row, index) => ({
+    period: index + 1,
+    startTime: row.startTime || '08:00',
+    endTime: row.endTime || row.startTime || '08:40',
+    isBreak: !!row.isBreak,
+  }));
+const addMinutes = (time, minutes) => {
+  const [hours = 0, mins = 0] = String(time || '08:00').split(':').map(Number);
+  const total = Math.max(0, hours * 60 + mins + minutes);
+  const nextHours = Math.floor(total / 60) % 24;
+  const nextMinutes = total % 60;
+  return `${String(nextHours).padStart(2, '0')}:${String(nextMinutes).padStart(2, '0')}`;
+};
+const derivePeriodPlan = (slots = []) => {
+  const map = new Map();
+  for (const slot of slots) {
+    if (!slot?.period) continue;
+    const existing = map.get(slot.period) ?? {
+      period: slot.period,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      isBreak: false,
+    };
+    map.set(slot.period, {
+      ...existing,
+      startTime: existing.startTime || slot.startTime,
+      endTime: existing.endTime || slot.endTime,
+      isBreak: existing.isBreak || slot.room === BREAK_MARKER,
+    });
+  }
+  const plan = sortPlan(Array.from(map.values()));
+  return plan.length ? plan : DEFAULT_PERIOD_PLAN;
+};
+const serializeSlots = (lessonSlots, periodPlan) => {
+  const rows = sortPlan(periodPlan);
+  const slots = [];
+
+  for (const row of rows) {
+    if (row.isBreak) {
+      for (const day of DAYS) {
+        slots.push({
+          day,
+          period: row.period,
+          startTime: row.startTime,
+          endTime: row.endTime,
+          room: BREAK_MARKER,
+        });
+      }
+      continue;
+    }
+
+    for (const slot of lessonSlots.filter((s) => Number(s.period) === Number(row.period))) {
+      const next = {
+        day: normalizeDay(slot.day),
+        period: row.period,
+        startTime: row.startTime,
+        endTime: row.endTime,
+      };
+      const subjectId = toIdString(slot.subjectId);
+      const teacherId = toIdString(slot.teacherId);
+      if (subjectId) next.subjectId = subjectId;
+      if (teacherId) next.teacherId = teacherId;
+      if (slot.room) next.room = slot.room;
+      slots.push(next);
+    }
+  }
+
+  return slots;
 };
 
 // ── Slot card ──────────────────────────────────────────────────────────────────
@@ -106,19 +191,135 @@ function SlotCard({ slot, onEdit, onDelete, canEdit, showTeacher = true, showCla
   );
 }
 
+// ── Day structure editor ──────────────────────────────────────────────────────
+function PeriodPlanEditor({ periodPlan, onChange }) {
+  const rows = sortPlan(periodPlan);
+
+  const updateRow = (period, patch) => {
+    onChange(rows.map((row) => (row.period === period ? { ...row, ...patch } : row)));
+  };
+
+  const deleteRow = (period) => {
+    onChange(rows.filter((row) => row.period !== period));
+  };
+
+  const addRow = () => {
+    const last = rows[rows.length - 1];
+    const startTime = last?.endTime ?? '08:00';
+    onChange([
+      ...rows,
+      {
+        period: rows.length + 1,
+        startTime,
+        endTime: addMinutes(startTime, 40),
+        isBreak: false,
+      },
+    ]);
+  };
+
+  return (
+    <Card className="border-cyan-200 bg-cyan-50/30">
+      <CardHeader className="py-3 px-4 border-b border-cyan-100">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Clock className="h-4 w-4 text-cyan-700" /> School Day Pattern
+            </CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Set lesson and break times once, then fill subjects directly in the grid below.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={addRow} disabled={rows.length >= 12}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />Add Period
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-3">
+        <div className="space-y-2">
+          {rows.map((row) => (
+            <div key={row.period} className="grid grid-cols-1 sm:grid-cols-[92px_1fr_1fr_112px_34px] gap-2 items-center rounded-md border bg-white/80 p-2">
+              <Badge variant={row.isBreak ? 'secondary' : 'outline'} className="h-9 justify-center">
+                {row.isBreak ? 'Break' : `Period ${row.period}`}
+              </Badge>
+              <Input
+                type="time"
+                value={row.startTime}
+                onChange={(event) => updateRow(row.period, { startTime: event.target.value })}
+                className="h-9"
+                aria-label={`Start time for period ${row.period}`}
+              />
+              <Input
+                type="time"
+                value={row.endTime}
+                onChange={(event) => updateRow(row.period, { endTime: event.target.value })}
+                className="h-9"
+                aria-label={`End time for period ${row.period}`}
+              />
+              <Select
+                value={row.isBreak ? 'break' : 'lesson'}
+                onValueChange={(value) => updateRow(row.period, { isBreak: value === 'break' })}
+              >
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lesson">Lesson</SelectItem>
+                  <SelectItem value="break">Break</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-9 w-9 text-destructive"
+                onClick={() => deleteRow(row.period)}
+                disabled={rows.length <= 1}
+                title="Remove period"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Timetable grid (period-row × day-column) ───────────────────────────────────
-function TimetableGrid({ slots, canEdit, onEdit, onDelete, showTeacher = true, showClass = false, canCreateTimetable = false }) {
+function TimetableGrid({
+  slots,
+  canEdit,
+  onEdit,
+  onDelete,
+  onAddCell,
+  showTeacher = true,
+  showClass = false,
+  canCreateTimetable = false,
+  periodPlan,
+}) {
   const periods = useMemo(() => {
+    if (periodPlan?.length) return sortPlan(periodPlan);
     const map = new Map();
     for (const s of slots) {
-      if (!map.has(s.period)) map.set(s.period, { period: s.period, startTime: s.startTime, endTime: s.endTime });
+      const existing = map.get(s.period) ?? {
+        period: s.period,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        isBreak: false,
+      };
+      map.set(s.period, {
+        ...existing,
+        startTime: existing.startTime || s.startTime,
+        endTime: existing.endTime || s.endTime,
+        isBreak: existing.isBreak || s.room === BREAK_MARKER,
+      });
     }
-    return Array.from(map.values()).sort((a, b) => a.period - b.period);
-  }, [slots]);
+    return sortPlan(Array.from(map.values()));
+  }, [slots, periodPlan]);
 
   const lookup = useMemo(() => {
     const m = {};
     for (const s of slots) {
+      if (s.room === BREAK_MARKER) continue;
       const day = normalizeDay(s.day);
       if (!m[day]) m[day] = {};
       m[day][s.period] = s;
@@ -183,8 +384,8 @@ function TimetableGrid({ slots, canEdit, onEdit, onDelete, showTeacher = true, s
           </tr>
         </thead>
         <tbody>
-          {periods.map(({ period, startTime, endTime }) => {
-            const isBreakRow = DAYS.some((d) => lookup[d]?.[period]?.room === BREAK_MARKER);
+          {periods.map(({ period, startTime, endTime, isBreak }) => {
+            const isBreakRow = !!isBreak;
             return (
               <tr key={period} className={isBreakRow ? 'bg-amber-50/40' : 'hover:bg-muted/10'}>
                 <td className="border-r border-b px-3 py-2 align-top text-[11px] text-muted-foreground whitespace-nowrap">
@@ -202,7 +403,11 @@ function TimetableGrid({ slots, canEdit, onEdit, onDelete, showTeacher = true, s
                   const slot = lookup[day]?.[period];
                   return (
                     <td key={day} className="border-r border-b px-1.5 py-1.5 align-top">
-                      {slot ? (
+                      {isBreakRow ? (
+                        <div className="min-h-[36px] rounded border bg-amber-50 border-amber-200 px-2 py-2 text-xs text-center text-amber-700 font-medium">
+                          Break
+                        </div>
+                      ) : slot ? (
                         <SlotCard
                           slot={slot}
                           onEdit={onEdit}
@@ -211,6 +416,14 @@ function TimetableGrid({ slots, canEdit, onEdit, onDelete, showTeacher = true, s
                           showTeacher={showTeacher}
                           showClass={showClass}
                         />
+                      ) : canEdit ? (
+                        <button
+                          type="button"
+                          onClick={() => onAddCell?.({ day, period, startTime, endTime })}
+                          className="min-h-[36px] w-full rounded border border-dashed border-slate-300 text-xs text-muted-foreground transition hover:border-cyan-500 hover:bg-cyan-50 hover:text-cyan-700"
+                        >
+                          + Add
+                        </button>
                       ) : (
                         <div className="min-h-[36px]" />
                       )}
@@ -244,6 +457,7 @@ function SlotDialog({ open, onClose, initial, subjects, teachers, onSave, teache
 
   const handleSave = () => {
     if (!form.startTime || !form.endTime) { toast.error('Start and end time are required'); return; }
+    if (!form.isBreak && !form.subjectId) { toast.error('Select a subject for this slot'); return; }
     const slot = { day: normalizeDay(form.day), period: form.period, startTime: form.startTime, endTime: form.endTime };
     if (form.isBreak) {
       slot.room = BREAK_MARKER;
@@ -273,42 +487,50 @@ function SlotDialog({ open, onClose, initial, subjects, teachers, onSave, teache
           <DialogTitle>{initial?._isEdit ? 'Edit Slot' : 'Add Slot'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
-          {/* Break toggle */}
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-input accent-primary"
-              checked={form.isBreak}
-              onChange={(e) => set('isBreak', e.target.checked)}
-            />
-            <span className="text-sm font-medium">Mark as break period (e.g. lunch, recess)</span>
-          </label>
+          {initial?._fixedCell ? (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <span className="font-medium">{dayLabel(form.day)}</span>
+              <span className="text-muted-foreground"> · Period {form.period} · {form.startTime} - {form.endTime}</span>
+            </div>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-input accent-primary"
+                  checked={form.isBreak}
+                  onChange={(e) => set('isBreak', e.target.checked)}
+                />
+                <span className="text-sm font-medium">Mark as break period (e.g. lunch, recess)</span>
+              </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Day</Label>
-              <Select value={form.day} onValueChange={(v) => set('day', v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{DAYS.map((d) => <SelectItem key={d} value={d}>{dayLabel(d)}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Period #</Label>
-              <Input type="number" min="1" max="12" value={form.period}
-                onChange={(e) => set('period', Number(e.target.value))} />
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Day</Label>
+                  <Select value={form.day} onValueChange={(v) => set('day', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>{DAYS.map((d) => <SelectItem key={d} value={d}>{dayLabel(d)}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Period #</Label>
+                  <Input type="number" min="1" max="12" value={form.period}
+                    onChange={(e) => set('period', Number(e.target.value))} />
+                </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Start Time</Label>
-              <Input type="time" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>End Time</Label>
-              <Input type="time" value={form.endTime} onChange={(e) => set('endTime', e.target.value)} />
-            </div>
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Start Time</Label>
+                  <Input type="time" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>End Time</Label>
+                  <Input type="time" value={form.endTime} onChange={(e) => set('endTime', e.target.value)} />
+                </div>
+              </div>
+            </>
+          )}
 
           {!form.isBreak && (
             <>
@@ -378,6 +600,7 @@ function ClassTimetableTab({ canWrite }) {
   const [selectedYear, setSelectedYear] = useState(defaultAcademicYear);
   const [editMode, setEditMode] = useState(false);
   const [localSlots, setLocalSlots] = useState([]);
+  const [periodPlan, setPeriodPlan] = useState(DEFAULT_PERIOD_PLAN);
   const [slotDialog, setSlotDialog] = useState({ open: false, initial: null });
 
   useEffect(() => {
@@ -472,10 +695,13 @@ function ClassTimetableTab({ canWrite }) {
 
   const { mutate: createTimetable, isPending: creating } = useMutation({
     mutationFn: () => timetableApi.create({ classId: selectedClass, term: selectedTerm, academicYear: selectedYear, slots: [] }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const created = res.data?.timetable ?? res.data?.data?.timetable ?? res.data?.data ?? res.data;
       toast.success('Timetable created');
+      queryClient.setQueryData(['timetable', selectedClass, selectedTerm, selectedYear], created);
       queryClient.invalidateQueries({ queryKey: ['timetable'] });
       setEditMode(true);
+      setPeriodPlan(DEFAULT_PERIOD_PLAN);
       setLocalSlots([]);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
@@ -484,7 +710,7 @@ function ClassTimetableTab({ canWrite }) {
   const { mutate: saveSlots, isPending: saving } = useMutation({
     mutationFn: () =>
       timetableApi.updateSlots(timetable._id, {
-        slots: localSlots.map((slot) => ({ ...slot, day: normalizeDay(slot.day) })),
+        slots: serializeSlots(localSlots, periodPlan),
       }),
     onSuccess: () => {
       toast.success('Timetable saved');
@@ -496,20 +722,28 @@ function ClassTimetableTab({ canWrite }) {
   });
 
   const startEdit = () => {
+    const plan = derivePeriodPlan(timetable?.slots ?? []);
+    const breakPeriods = new Set(plan.filter((row) => row.isBreak).map((row) => row.period));
     setLocalSlots(
-      timetable?.slots?.map((s) => ({
-        ...s,
-        day: normalizeDay(s.day),
-        subjectId: toIdString(s.subjectId),
-        teacherId: toIdString(s.teacherId),
-      })) ?? []
+      timetable?.slots
+        ?.filter((s) => s.room !== BREAK_MARKER && !breakPeriods.has(s.period))
+        .map((s) => ({
+          ...s,
+          day: normalizeDay(s.day),
+          subjectId: toIdString(s.subjectId),
+          teacherId: toIdString(s.teacherId),
+        })) ?? []
     );
+    setPeriodPlan(plan);
     setEditMode(true);
   };
 
   const cancelEdit = () => { setEditMode(false); setLocalSlots([]); };
 
-  const addSlot = (slot) => setLocalSlots((prev) => [...prev, slot]);
+  const addSlot = (slot) => setLocalSlots((prev) => [
+    ...prev.filter((s) => !(normalizeDay(s.day) === normalizeDay(slot.day) && Number(s.period) === Number(slot.period))),
+    slot,
+  ]);
 
   const editSlot = (slot) => {
     const idx = slot._editIdx;
@@ -531,6 +765,8 @@ function ClassTimetableTab({ canWrite }) {
     ? localSlots.map((s, i) => ({
       ...s,
       _editIdx: i,
+      startTime: periodPlan.find((row) => row.period === s.period)?.startTime ?? s.startTime,
+      endTime: periodPlan.find((row) => row.period === s.period)?.endTime ?? s.endTime,
       subjectId: subjects?.find((sub) => toIdString(sub._id) === toIdString(s.subjectId)) ?? s.subjectId,
       teacherId: teachers?.find((t) => toIdString(t._id) === toIdString(s.teacherId)) ?? s.teacherId,
     }))
@@ -538,7 +774,28 @@ function ClassTimetableTab({ canWrite }) {
 
   const classes = classesData ?? [];
 
-  const openAddSlot = () => setSlotDialog({ open: true, initial: null });
+  const handlePeriodPlanChange = (draftPlan) => {
+    const sortedDraft = sortPlan(draftPlan);
+    const periodMap = new Map(sortedDraft.map((row, index) => [row.period, index + 1]));
+    const nextPlan = renumberPlan(sortedDraft);
+    const breakPeriods = new Set(nextPlan.filter((row) => row.isBreak).map((row) => row.period));
+    setPeriodPlan(nextPlan);
+    setLocalSlots((prev) => prev
+      .map((slot) => ({ ...slot, period: periodMap.get(slot.period) }))
+      .filter((slot) => slot.period && !breakPeriods.has(slot.period)));
+  };
+
+  const openAddCell = ({ day, period, startTime, endTime }) => setSlotDialog({
+    open: true,
+    initial: {
+      ...SLOT_INIT,
+      day,
+      period,
+      startTime,
+      endTime,
+      _fixedCell: true,
+    },
+  });
   const openEditSlot = (slot) => setSlotDialog({
     open: true,
     initial: {
@@ -549,6 +806,7 @@ function ClassTimetableTab({ canWrite }) {
       room: slot.room === BREAK_MARKER ? '' : (slot.room ?? ''),
       isBreak: slot.room === BREAK_MARKER,
       _isEdit: true,
+      _fixedCell: true,
     },
   });
 
@@ -580,10 +838,7 @@ function ClassTimetableTab({ canWrite }) {
         )}
         {editMode && (
           <>
-            <Button size="sm" variant="outline" onClick={openAddSlot}>
-              <Plus className="h-3.5 w-3.5 mr-1.5" />Add Slot
-            </Button>
-            <Button size="sm" onClick={() => saveSlots()} disabled={saving}>
+            <Button size="sm" onClick={() => saveSlots()} disabled={saving || !timetable}>
               <Save className="h-3.5 w-3.5 mr-1.5" />{saving ? 'Saving…' : 'Save'}
             </Button>
             <Button size="sm" variant="ghost" onClick={cancelEdit}>
@@ -594,9 +849,12 @@ function ClassTimetableTab({ canWrite }) {
       </div>
 
       {editMode && (
-        <p className="text-xs text-muted-foreground">
-          Hover over a slot to edit or delete it. ⚠️ marks indicate teacher schedule conflicts.
-        </p>
+        <>
+          <PeriodPlanEditor periodPlan={periodPlan} onChange={handlePeriodPlanChange} />
+          <p className="text-xs text-muted-foreground">
+            Click an empty cell to add a lesson. Hover over a filled cell to edit or delete it. Warning marks indicate teacher schedule conflicts.
+          </p>
+        </>
       )}
 
       {classesError ? (
@@ -635,6 +893,8 @@ function ClassTimetableTab({ canWrite }) {
           slots={displaySlots}
           canEdit={editMode}
           canCreateTimetable={canWrite}
+          periodPlan={editMode ? periodPlan : undefined}
+          onAddCell={openAddCell}
           onEdit={openEditSlot}
           onDelete={deleteSlot}
         />
@@ -836,9 +1096,8 @@ function SchoolCalendarTab() {
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function TimetablePage() {
   const { user } = useAuthStore();
-  const adminView = isAdmin(user);
   const isTeacher = ['teacher', 'department_head'].includes(user?.role);
-  const canWrite = adminView || user?.role === 'deputy_headteacher';
+  const canWrite = TIMETABLE_WRITE_ROLES.includes(user?.role);
 
   const defaultTab = isTeacher ? 'my-schedule' : 'class';
 

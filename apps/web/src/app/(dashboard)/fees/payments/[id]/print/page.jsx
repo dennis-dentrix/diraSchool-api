@@ -33,7 +33,7 @@ export default function PaymentReceiptPrintPage() {
       return res.data?.payment ?? res.data?.data ?? res.data;
     },
     onError: () => {
-      toast.error('Only secretary or accountant can issue receipts');
+      toast.error('You do not have permission to issue this receipt');
     },
   });
 
@@ -78,7 +78,7 @@ export default function PaymentReceiptPrintPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 text-center">
         <p className="text-sm text-red-600">
-          You do not have permission to issue this receipt. Only secretary or accountant can issue receipts.
+          You do not have permission to issue this receipt.
         </p>
       </div>
     );

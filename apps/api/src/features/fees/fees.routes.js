@@ -36,7 +36,7 @@ const router = express.Router();
 router.use(protect, blockIfMustChangePassword);
 
 const canManageFees = authorize(...ADMIN_ROLES, ROLES.SECRETARY, ROLES.ACCOUNTANT);
-const canIssueReceipts = authorize(ROLES.SECRETARY, ROLES.ACCOUNTANT);
+const canIssueReceipts = authorize(...ADMIN_ROLES, ROLES.SECRETARY, ROLES.ACCOUNTANT);
 
 // ── Fee Structures ────────────────────────────────────────────────────────────
 router
