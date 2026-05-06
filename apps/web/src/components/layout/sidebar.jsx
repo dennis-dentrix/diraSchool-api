@@ -22,7 +22,7 @@ const NAV_TOUR_ATTRS = {
   '/users':       'users-nav-item',
 };
 
-function NavItem({ item, pathname }) {
+function NavItem({ item, pathname, onNavigate }) {
   const isActive =
     item.href === '/dashboard'
       ? pathname === '/dashboard'
@@ -37,6 +37,7 @@ function NavItem({ item, pathname }) {
         <Link
           href={item.href}
           data-tour={tourAttr}
+          onClick={onNavigate}
           className={cn(
             'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
             isActive
@@ -59,6 +60,7 @@ function NavItem({ item, pathname }) {
                 <Link
                   key={child.href}
                   href={child.href}
+                  onClick={onNavigate}
                   className={cn(
                     'block px-2 py-1.5 rounded-md text-xs font-medium transition-colors',
                     childActive
@@ -80,6 +82,7 @@ function NavItem({ item, pathname }) {
     <Link
       href={item.href}
       data-tour={tourAttr}
+      onClick={onNavigate}
       className={cn(
         'group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
         isActive
@@ -94,7 +97,7 @@ function NavItem({ item, pathname }) {
   );
 }
 
-export function Sidebar({ user }) {
+export function Sidebar({ user, onNavigate }) {
   const pathname = usePathname();
 
   const isSuperAdmin = user?.role === 'superadmin';
@@ -127,7 +130,7 @@ export function Sidebar({ user }) {
       <ScrollArea className="flex-1 px-3 py-4">
         <nav className="space-y-0.5">
           {navItems.map((item) => (
-            <NavItem key={item.href} item={item} pathname={pathname} />
+            <NavItem key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
           ))}
         </nav>
       </ScrollArea>

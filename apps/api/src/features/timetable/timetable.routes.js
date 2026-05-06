@@ -21,10 +21,11 @@ const router = Router();
 // Plan-tier feature gate is active via PLAN_FEATURE_MAP.
 router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.TIMETABLE));
 
-// Read access: admins + teachers
+// Read access: all school staff who can see Timetable in the sidebar.
 const canRead = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
-  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD, ROLES.SECRETARY
+  ROLES.DEPUTY_HEADTEACHER, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD,
+  ROLES.SECRETARY, ROLES.ACCOUNTANT
 );
 
 router.get('/',   canRead, validateListTimetables, listTimetables);

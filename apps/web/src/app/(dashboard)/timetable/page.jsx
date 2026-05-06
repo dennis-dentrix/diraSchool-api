@@ -369,7 +369,80 @@ function TimetableGrid({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="space-y-3">
+      <div className="md:hidden space-y-3">
+        {DAYS.map((day) => (
+          <div key={day} className="overflow-hidden rounded-lg border bg-background">
+            <div className={`px-3 py-2 text-sm font-semibold ${DAY_HEADER[day]}`}>
+              {dayLabel(day)}
+            </div>
+            <div className="divide-y">
+              {periods.map(({ period, startTime, endTime, isBreak }) => {
+                const slot = lookup[day]?.[period];
+                return (
+                  <div key={`${day}-${period}`} className="flex gap-3 p-3">
+                    <div className="w-16 shrink-0 text-xs text-muted-foreground">
+                      {isBreak ? (
+                        <span className="font-semibold text-amber-700">Break</span>
+                      ) : (
+                        <>
+                          <span className="block font-semibold text-foreground">P{period}</span>
+                          <span className="block tabular-nums">{startTime}</span>
+                          <span className="block tabular-nums">{endTime}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {isBreak ? (
+                        <div className="rounded border bg-amber-50 border-amber-200 px-2 py-2 text-xs text-center text-amber-700 font-medium">
+                          Break
+                        </div>
+                      ) : slot ? (
+                        <div className="space-y-2">
+                          <SlotCard
+                            slot={slot}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            canEdit={false}
+                            showTeacher={showTeacher}
+                            showClass={showClass}
+                          />
+                          {canEdit && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => onEdit(slot)}>
+                                <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                              </Button>
+                              <Button type="button" size="sm" variant="ghost" className="h-8 text-xs text-destructive" onClick={() => onDelete(slot)}>
+                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ) : canEdit ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onAddCell?.({ day, period, startTime, endTime })}
+                          className="h-9 w-full justify-center border-dashed text-xs"
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" /> Add lesson
+                        </Button>
+                      ) : (
+                        <p className="rounded border border-dashed px-3 py-2 text-xs text-muted-foreground">
+                          No lesson
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-lg border md:block">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="bg-muted/40">
@@ -435,6 +508,7 @@ function TimetableGrid({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -852,7 +926,7 @@ function ClassTimetableTab({ canWrite }) {
         <>
           <PeriodPlanEditor periodPlan={periodPlan} onChange={handlePeriodPlanChange} />
           <p className="text-xs text-muted-foreground">
-            Click an empty cell to add a lesson. Hover over a filled cell to edit or delete it. Warning marks indicate teacher schedule conflicts.
+            Tap an empty cell to add a lesson. On desktop, hover over a filled cell to edit or delete it. Warning marks indicate teacher schedule conflicts.
           </p>
         </>
       )}
@@ -1109,17 +1183,17 @@ export default function TimetablePage() {
       />
 
       <Tabs defaultValue={defaultTab} className="w-full">
-        <TabsList className={`grid w-full max-w-sm ${isTeacher ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <TabsList className={`grid w-full max-w-md ${isTeacher ? 'grid-cols-3' : 'grid-cols-2'}`}>
           {isTeacher && (
-            <TabsTrigger value="my-schedule">
-              <CalendarDays className="h-3.5 w-3.5 mr-1.5" />My Schedule
+            <TabsTrigger value="my-schedule" className="gap-1 px-2 text-xs sm:text-sm">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" />My Schedule
             </TabsTrigger>
           )}
-          <TabsTrigger value="class">
-            <Users className="h-3.5 w-3.5 mr-1.5" />Class
+          <TabsTrigger value="class" className="gap-1 px-2 text-xs sm:text-sm">
+            <Users className="h-3.5 w-3.5 shrink-0" />Class
           </TabsTrigger>
-          <TabsTrigger value="calendar">
-            <Calendar className="h-3.5 w-3.5 mr-1.5" />Calendar
+          <TabsTrigger value="calendar" className="gap-1 px-2 text-xs sm:text-sm">
+            <Calendar className="h-3.5 w-3.5 shrink-0" />Calendar
           </TabsTrigger>
         </TabsList>
 

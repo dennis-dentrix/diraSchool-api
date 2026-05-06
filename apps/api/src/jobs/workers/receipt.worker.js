@@ -89,19 +89,24 @@ const renderReceiptPdf = async (payment, branding) => {
     let y = 110;
 
     // Receipt details
+    const className = payment.classId
+      ? `${payment.classId.name}${payment.classId.stream ? ` ${payment.classId.stream}` : ''}`
+      : '—';
     const rows = [
-      ['Receipt Serial', payment.receiptNumber || '—'],
+      ['Receipt No.',    payment.receiptNumber || '—'],
+      ['Payment Date',   receiptDate.toLocaleDateString('en-KE', { dateStyle: 'medium' })],
       ['Student Name',   `${student.firstName} ${student.lastName}`],
       ['Admission No',   student.admissionNumber],
+      ['Class',          className],
       ['Academic Year',  payment.academicYear],
       ['Term',           payment.term],
-      ['Amount Paid',    `KES ${payment.amount.toLocaleString()}`],
       ['Payment Method', payment.method.toUpperCase()],
       ['Reference',      payment.reference || '—'],
       ['Recorded By',    payment.recordedByUserId
         ? `${payment.recordedByUserId.firstName} ${payment.recordedByUserId.lastName}`
         : '—'],
-    ];
+      payment.notes ? ['Notes', payment.notes] : null,
+    ].filter(Boolean);
 
     rows.forEach(([label, value], i) => {
       const bg = i % 2 === 0 ? '#f5f7fa' : 'white';
@@ -136,6 +141,7 @@ export const processReceiptJob = async (job) => {
 
   const payment = await Payment.findOne({ _id: paymentId, schoolId })
     .populate('studentId', 'firstName lastName admissionNumber')
+    .populate('classId', 'name stream')
     .populate('recordedByUserId', 'firstName lastName');
 
   if (!payment) {

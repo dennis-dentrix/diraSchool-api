@@ -173,7 +173,7 @@ export default function DashboardLayout({ children }) {
         {/* Mobile sidebar (sheet) */}
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent side="left" className="p-0 w-64">
-            <Sidebar user={user} />
+            <Sidebar user={user} onNavigate={() => setMobileOpen(false)} />
           </SheetContent>
         </Sheet>
 

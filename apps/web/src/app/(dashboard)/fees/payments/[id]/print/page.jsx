@@ -97,6 +97,8 @@ export default function PaymentReceiptPrintPage() {
     : '—';
 
   const rows = [
+    ['Receipt No.', receipt.receiptNumber ?? '—'],
+    ['Date', receiptDate ? formatDate(receiptDate) : '—'],
     ['Student Name', student ? `${student.firstName} ${student.lastName}` : '—'],
     ['Admission No.', student?.admissionNumber ?? '—'],
     ['Class', className],
@@ -104,6 +106,7 @@ export default function PaymentReceiptPrintPage() {
     ['Term', receipt.term],
     ['Payment Method', capitalize(receipt.method ?? '')],
     receipt.reference ? ['Ref / Transaction Code', receipt.reference] : null,
+    ['Issued By', recorder],
     receipt.notes ? ['Notes', receipt.notes] : null,
   ].filter(Boolean);
 
@@ -121,6 +124,9 @@ export default function PaymentReceiptPrintPage() {
         #receipt-print-root { font-family: Arial, sans-serif; color: #111; }
         #receipt-print-root table { border-collapse: collapse; width: 100%; }
         #receipt-print-root td { padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+        .receipt-box { border: 1px solid #d7deea; border-radius: 8px; overflow: hidden; }
+        .receipt-title { background: #f8fafc; border-bottom: 1px solid #e5e7eb; padding: 12px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+        .receipt-total { border-top: 2px solid #111; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; }
       `}</style>
 
       <div className="no-print flex justify-end gap-2 p-4 bg-gray-50 border-b">
@@ -147,46 +153,28 @@ export default function PaymentReceiptPrintPage() {
           serial={receipt.receiptNumber ?? ''}
           generatedAt={receiptDate ? formatDate(receiptDate) : ''}
         />
-        <div className="bg-blue-50 text-center py-2 text-xs font-bold tracking-widest border border-t-0 border-blue-200 uppercase">
-          Fee Payment Receipt
-        </div>
-
-        <div className="border border-t-0 border-b-0 px-4 py-3 bg-gray-50 flex items-start justify-between gap-3 text-xs">
-          <div>
-            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Receipt No.</p>
-            <p className="font-bold text-sm text-blue-800 font-mono">
-              {receipt.receiptNumber ?? '—'}
-            </p>
+        <div className="receipt-box">
+          <div className="receipt-title">Fee Payment Receipt</div>
+          <div className="px-4 py-3">
+            <table>
+              <tbody>
+                {rows.map(([label, value]) => (
+                  <tr key={label}>
+                    <td className="text-muted-foreground w-[45%]">{label}</td>
+                    <td className="font-medium text-right max-w-[60%]">{value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="text-right">
-            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Date</p>
-            <p className="font-semibold">{receiptDate ? formatDate(receiptDate) : '—'}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Issued By</p>
-            <p className="font-semibold">{recorder}</p>
-          </div>
-        </div>
 
-        <div className="border border-t-0 px-4 py-3">
-          <table>
-            <tbody>
-              {rows.map(([label, value]) => (
-                <tr key={label}>
-                  <td className="text-muted-foreground w-[45%]">{label}</td>
-                  <td className="font-medium text-right max-w-[60%]">{value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="bg-amber-50 rounded p-3 mt-3 flex justify-between items-center">
+          <div className="receipt-total">
             <span className="font-bold text-sm">TOTAL PAID</span>
-            <span className="font-bold text-amber-600 text-xl">{formatCurrency(receipt.amount)}</span>
+            <span className="font-bold text-xl">{formatCurrency(receipt.amount)}</span>
           </div>
         </div>
 
-        <div className="border border-t-0 rounded-b-md p-3 text-center text-xs text-muted-foreground">
+        <div className="p-3 text-center text-xs text-muted-foreground">
           This is an official receipt. Please retain for your records.
           <br />Powered by Diraschool
         </div>

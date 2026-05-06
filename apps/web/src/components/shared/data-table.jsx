@@ -34,6 +34,11 @@ export function DataTable({ columns, data, loading, error, pageCount, onPageChan
     manualPagination: !!onPageChange,
     pageCount,
   });
+  const mobileLabelFor = (cell) => {
+    const label = cell.column.columnDef.meta?.mobileLabel ?? cell.column.columnDef.header;
+    if (typeof label === 'string') return label;
+    return String(cell.column.id ?? '').replace(/([A-Z])/g, ' $1').trim() || 'Details';
+  };
 
   if (error) {
     return (
@@ -78,7 +83,32 @@ export function DataTable({ columns, data, loading, error, pageCount, onPageChan
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border overflow-hidden">
+      <div className="md:hidden space-y-3">
+        {table.getRowModel().rows.length ? (
+          table.getRowModel().rows.map((row) => (
+            <div key={row.id} className="rounded-lg border bg-background p-3 shadow-sm">
+              <div className="space-y-3">
+                {row.getVisibleCells().map((cell) => (
+                  <div key={cell.id} className="border-b pb-2.5 last:border-0 last:pb-0">
+                    <p className="text-[11px] font-semibold uppercase text-muted-foreground">
+                      {mobileLabelFor(cell)}
+                    </p>
+                    <div className="mt-1 text-sm">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border py-10 text-center text-sm text-muted-foreground">
+            No results found.
+          </div>
+        )}
+      </div>
+
+      <div className="hidden rounded-md border overflow-hidden md:block">
         <div className="w-full overflow-x-auto">
           <Table className="min-w-[760px]">
           <TableHeader>

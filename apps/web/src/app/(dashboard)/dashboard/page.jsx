@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle, AlertTriangle, ArrowRight, BookOpen, Calendar,
-  CalendarCheck, CheckCircle2, Clock, CreditCard, DollarSign,
+  CalendarCheck, CheckCircle2, Clock, CreditCard, Wallet,
   FileText, Plus, Smartphone, TrendingUp, Users, UserPlus,
   Bell, ClipboardList, GraduationCap, X, Rocket,
 } from 'lucide-react';
@@ -169,14 +169,14 @@ function UpcomingEventsCard({ events = [], pastEvents = [] }) {
 
 function FeeByClassCard({ byClass = {} }) {
   if (!Object.keys(byClass).length) return (
-    <SectionCard title="Fee Status by Class" icon={DollarSign}>
+    <SectionCard title="Fee Status by Class" icon={Wallet}>
       <p className="text-sm text-slate-500">No fee data available.</p>
     </SectionCard>
   );
   return (
     <SectionCard
       title="Fee Status by Class"
-      icon={DollarSign}
+      icon={Wallet}
       action={<Link href="/fees/payments" className="text-xs font-medium text-rose-600 hover:underline flex items-center gap-1">View overdue <ArrowRight className="h-3 w-3" aria-hidden /></Link>}
     >
       <div className="space-y-3">
@@ -288,7 +288,7 @@ function RecentPaymentsCard({ payments = [] }) {
 
 // ── Onboarding Checklist ──────────────────────────────────────────────────────
 
-function SetupChecklist({ schoolId, totalStudents, staffCount, hasFees }) {
+function SetupChecklist({ schoolId, totalStudents, staffCount, classCount, hasFees }) {
   const key = `setup_dismissed_${schoolId}`;
   const [dismissed, setDismissed] = useState(false);
 
@@ -308,10 +308,16 @@ function SetupChecklist({ schoolId, totalStudents, staffCount, hasFees }) {
 
   const steps = [
     {
+      label: 'Add staff',
+      hint: 'Create teacher and operations staff accounts first',
+      href: '/staff',
+      done: staffCount > 1,
+    },
+    {
       label: 'Create your first class',
       hint: 'Group students by year or stream',
       href: '/classes',
-      done: totalStudents > 0, // if there are students, classes must exist
+      done: classCount > 0 || totalStudents > 0,
     },
     {
       label: 'Enroll students',
@@ -380,7 +386,18 @@ function SetupChecklist({ schoolId, totalStudents, staffCount, hasFees }) {
 
 function DashboardSkeleton() {
   return (
-    <DashboardShell title="Loading…">
+    <div className="space-y-6">
+      <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40">
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-48 rounded-full" />
+              <Skeleton className="h-4 w-64 max-w-full rounded-full" />
+            </div>
+            <Skeleton className="h-8 w-28 rounded-full" />
+          </div>
+        </CardContent>
+      </Card>
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32" />)}
       </div>
@@ -388,7 +405,7 @@ function DashboardSkeleton() {
         <Skeleton className="h-64" />
         <Skeleton className="h-64" />
       </div>
-    </DashboardShell>
+    </div>
   );
 }
 
@@ -489,6 +506,7 @@ export default function DashboardPage() {
   const staffData = summary?.staff ?? {};
   const activeStudents = studentData.byStatus?.active ?? studentData.total ?? 0;
   const totalStudents = studentData.total ?? 0;
+  const classCount = summary?.classes?.total ?? 0;
   const staffAwaitingFirstLogin = summary?.alerts?.staffAwaitingFirstLogin ?? staffData.pendingOnboarding ?? 0;
 
   // Secretary data
@@ -519,8 +537,32 @@ export default function DashboardPage() {
   if (lessonPlansThisWeek === 0) pendingTasks.push({ label: 'No lesson plan uploaded this week', href: '/lesson-plans', urgent: false });
 
   const adminTasks = [
+    (staffData.total ?? 0) <= 1 && {
+      icon: Users,
+      title: 'Add staff first',
+      detail: 'Create accounts for teachers and key operations staff before adding classes and learners.',
+      href: '/staff',
+      cta: 'Add staff',
+      priority: 'high',
+    },
+    classCount === 0 && {
+      icon: BookOpen,
+      title: 'Create your first class',
+      detail: 'Classes should be ready before students are enrolled into the system.',
+      href: '/classes',
+      cta: 'Create class',
+      priority: 'high',
+    },
+    totalStudents === 0 && {
+      icon: UserPlus,
+      title: 'Enroll students',
+      detail: 'Add learners after staff and classes are in place.',
+      href: '/students',
+      cta: 'Enroll',
+      priority: 'high',
+    },
     totalTarget <= 0 && {
-      icon: DollarSign,
+      icon: Wallet,
       title: "Set this year's fee structures",
       detail: 'No fee target is configured, so collection progress cannot be measured.',
       href: '/fees/structures',
@@ -550,14 +592,6 @@ export default function DashboardPage() {
       href: '/staff',
       cta: 'Follow up',
       priority: 'medium',
-    },
-    totalStudents === 0 && {
-      icon: UserPlus,
-      title: 'Enroll students',
-      detail: 'Add learners before setting class attendance and fee tracking live.',
-      href: '/students',
-      cta: 'Enroll',
-      priority: 'high',
     },
     !hasGeofence && {
       icon: CalendarCheck,
@@ -628,6 +662,7 @@ export default function DashboardPage() {
           schoolId={summary?.school?._id ?? user?._id}
           totalStudents={totalStudents}
           staffCount={staffData.total ?? 0}
+          classCount={classCount}
           hasFees={totalTarget > 0}
         />
       )}
@@ -710,7 +745,7 @@ export default function DashboardPage() {
                 label="Today's Collections"
                 value={formatCurrency(feeData.todayAmount ?? 0)}
                 hint={`${formatCurrency(totalCollected)} collected against ${formatCurrency(totalTarget)} target`}
-                icon={DollarSign}
+                icon={Wallet}
                 badge={`${feeCollectionPct}%`}
                 tone={feeCollectionPct >= 80 ? 'green' : feeCollectionPct >= 50 ? 'amber' : 'rose'}
                 onClick={() => router.push('/fees/payments')}
@@ -725,7 +760,7 @@ export default function DashboardPage() {
         {/* Accountant */}
         {isAccountant && (
           <>
-            <StatCard label="Today's Collections" value={formatCurrency(feeData.todayAmount ?? 0)} hint={`${feeData.todayCount ?? 0} payment${(feeData.todayCount ?? 0) !== 1 ? 's' : ''} recorded`} icon={DollarSign} tone="green" onClick={() => router.push('/fees/payments')} />
+            <StatCard label="Today's Collections" value={formatCurrency(feeData.todayAmount ?? 0)} hint={`${feeData.todayCount ?? 0} payment${(feeData.todayCount ?? 0) !== 1 ? 's' : ''} recorded`} icon={Wallet} tone="green" onClick={() => router.push('/fees/payments')} />
             <StatCard label="This Week" value={formatCurrency(feeData.weekAmount ?? 0)} hint="Completed payments this week" icon={TrendingUp} tone="blue" onClick={() => router.push('/fees/payments')} />
             <StatCard label="This Month" value={formatCurrency(feeData.monthAmount ?? 0)} hint={`${feeData.monthCount ?? 0} transactions`} icon={CreditCard} tone="cyan" onClick={() => router.push('/fees/payments')} />
             <StatCard label="Defaulters" value={studentsOverdue} hint="Students with outstanding fees" icon={AlertCircle} tone={studentsOverdue > 20 ? 'rose' : studentsOverdue > 5 ? 'amber' : 'slate'} onClick={() => router.push('/fees')} />
@@ -927,7 +962,7 @@ export default function DashboardPage() {
       {isAccountant && Object.keys(feeData.byClass ?? {}).length > 0 && (
         <SectionCard
           title="Fee Arrears by Class"
-          icon={DollarSign}
+          icon={Wallet}
           action={<Link href="/fees/payments" className="text-xs font-medium text-rose-600 hover:underline flex items-center gap-1">View overdue <ArrowRight className="h-3 w-3" aria-hidden /></Link>}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -51,7 +51,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [school, staffByRole, studentStats, pendingUsers, feeStructures, paymentStats, studentsByClass, studentsWithPayments] = await Promise.all([
+  const [school, staffByRole, studentStats, classCount, pendingUsers, feeStructures, paymentStats, studentsByClass, studentsWithPayments] = await Promise.all([
     School.findById(schoolId)
       .select('name email phone county subscriptionStatus planTier trialExpiry isActive createdAt')
       .lean(),
@@ -66,6 +66,8 @@ export const getDashboard = asyncHandler(async (req, res) => {
       { $match: { schoolId } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
+
+    Class.countDocuments({ schoolId }),
 
     User.countDocuments({
       schoolId,
@@ -229,6 +231,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
     },
     fees,
     staff:    staffSummary,
+    classes:  { total: classCount },
     students: studentSummary,
     alerts: {
       staffAwaitingFirstLogin: pendingUsers,

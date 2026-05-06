@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Upload, Trash2, Share2, X, Image as ImageIcon, FileText, Eye, UserCheck,
-  Download, ChevronLeft, ChevronRight,
+  Download, ChevronLeft, ChevronRight, Camera,
 } from 'lucide-react';
 import { lessonPlansApi, usersApi, classesApi, subjectsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -42,6 +42,7 @@ function UploadDialog({ open, onClose }) {
   const [files, setFiles]       = useState([]);   // File objects
   const [previews, setPreviews] = useState([]);   // object URLs
   const fileRef = useRef();
+  const cameraRef = useRef();
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -85,11 +86,11 @@ function UploadDialog({ open, onClose }) {
   });
 
   function handleFiles(e) {
-    const selected = Array.from(e.target.files ?? []);
+    const selected = Array.from(e.target.files ?? []).slice(0, Math.max(0, 20 - files.length));
     if (!selected.length) return;
     setFiles((prev) => [...prev, ...selected]);
     setPreviews((prev) => [...prev, ...selected.map((f) => URL.createObjectURL(f))]);
-    fileRef.current.value = '';
+    e.target.value = '';
   }
 
   function removeImage(idx) {
@@ -110,7 +111,7 @@ function UploadDialog({ open, onClose }) {
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Type</Label>
               <Select value={form.type} onValueChange={set('type')}>
@@ -132,7 +133,7 @@ function UploadDialog({ open, onClose }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Academic Year</Label>
               <Select value={form.academicYear} onValueChange={set('academicYear')}>
@@ -152,7 +153,7 @@ function UploadDialog({ open, onClose }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Class (optional)</Label>
               <Select value={form.classId || 'none'} onValueChange={(v) => set('classId')(v === 'none' ? '' : v)}>
@@ -209,7 +210,7 @@ function UploadDialog({ open, onClose }) {
 
             {/* Preview grid */}
             {previews.length > 0 && (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {previews.map((src, idx) => (
                   <div key={idx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-[3/4]">
                     <img src={src} alt={`page ${idx + 1}`} className="w-full h-full object-cover" />
@@ -226,19 +227,30 @@ function UploadDialog({ open, onClose }) {
               </div>
             )}
 
-            {/* Add more button */}
+            {/* Add more buttons */}
             {files.length < 20 && (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 py-4 text-slate-500 hover:border-cyan-400 hover:text-cyan-600 transition-colors"
-              >
-                <ImageIcon className="h-5 w-5" />
-                <span className="text-sm">
-                  {files.length === 0 ? 'Add photos (JPG, PNG)' : 'Add more pages'}
-                </span>
-              </button>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => cameraRef.current?.click()}
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-cyan-200 bg-cyan-50/50 px-3 py-3 text-cyan-700 transition-colors hover:border-cyan-400 hover:bg-cyan-50"
+                >
+                  <Camera className="h-5 w-5" />
+                  <span className="text-sm font-medium">Take photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 px-3 py-3 text-slate-500 transition-colors hover:border-cyan-400 hover:text-cyan-600"
+                >
+                  <ImageIcon className="h-5 w-5" />
+                  <span className="text-sm">
+                    {files.length === 0 ? 'Choose images' : 'Add more pages'}
+                  </span>
+                </button>
+              </div>
             )}
+            <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFiles} />
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
 
             {files.length > 0 && (

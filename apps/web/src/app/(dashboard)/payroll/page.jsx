@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, CheckCircle2, DollarSign, Users,
+  Plus, Pencil, Trash2, CheckCircle2, Wallet, Users,
   ChevronDown, ChevronRight, Loader2, AlertTriangle, Receipt,
 } from 'lucide-react';
 import { payrollApi, getErrorMessage } from '@/lib/api';
@@ -102,7 +102,7 @@ function GradesTab() {
       ) : grades.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            <DollarSign className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <Wallet className="h-8 w-8 mx-auto mb-2 opacity-30" />
             <p className="text-sm">No salary grades yet. Create one to get started.</p>
           </CardContent>
         </Card>
@@ -396,7 +396,7 @@ export default function PayrollPage() {
             <Receipt className="h-3.5 w-3.5" aria-hidden /> Payroll Runs
           </TabsTrigger>
           <TabsTrigger value="grades" className="gap-1.5">
-            <DollarSign className="h-3.5 w-3.5" aria-hidden /> Salary Grades
+            <Wallet className="h-3.5 w-3.5" aria-hidden /> Salary Grades
           </TabsTrigger>
         </TabsList>
         <TabsContent value="runs" className="mt-4">

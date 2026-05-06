@@ -56,21 +56,29 @@ function ReceiptPreview({ data }) {
       *{margin:0;padding:0;box-sizing:border-box;}
       body{font-family:Arial,sans-serif;padding:24px;color:#111;}
       ${getDocumentHeaderCss()}
-      .title-bar{background:#eef2f7;text-align:center;padding:10px;border:1px solid #ccd6e0;border-top:none;font-size:13px;font-weight:700;letter-spacing:1.5px;}
-      .body{border:1px solid #ccd6e0;border-top:none;padding:20px;}
-      .row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;}
+      .receipt{border:1px solid #d7deea;border-radius:8px;overflow:hidden;}
+      .receipt-head{display:flex;justify-content:space-between;gap:16px;padding:12px 14px;border-bottom:1px solid #e5e7eb;background:#f8fafc;}
+      .receipt-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;}
+      .receipt-no{font-size:12px;text-align:right;}
+      .body{padding:12px 14px;}
+      .row{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:13px;}
       .row:last-child{border-bottom:none;}
       .lbl{color:#555;}
-      .val{font-weight:500;}
-      .total{background:#fff7ed;padding:12px;border-radius:4px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;}
+      .val{font-weight:600;text-align:right;}
+      .total{border-top:2px solid #111;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;}
       .total .t-label{font-size:14px;font-weight:700;}
-      .total .t-amount{font-size:18px;font-weight:800;color:#d97706;}
-      .footer{border:1px solid #ccd6e0;border-top:1px solid #eee;border-radius:0 0 6px 6px;padding:12px;text-align:center;font-size:11px;color:#888;}
+      .total .t-amount{font-size:18px;font-weight:800;}
+      .footer{padding:12px;text-align:center;font-size:11px;color:#666;}
     </style></head><body>
       ${buildDocumentHeaderHtml(header)}
-      <div class="title-bar">Fee Payment Receipt</div>
-      <div class="body">
+      <div class="receipt">
+        <div class="receipt-head">
+          <div class="receipt-title">Fee Payment Receipt</div>
+          <div class="receipt-no">Receipt No.<br><strong>${escapeHtml(data.receiptNumber ?? 'Pending')}</strong></div>
+        </div>
+        <div class="body">
         ${[
+          ['Date', data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())],
           ['Student', data.studentName],
           ['Admission No.', data.admissionNumber],
           ['Class', data.className],
@@ -78,12 +86,13 @@ function ReceiptPreview({ data }) {
           ['Term', data.term],
           ['Payment Method', capitalize(data.method)],
           data.reference ? ['Reference / Code', data.reference] : null,
-          data.notes ? ['Notes', data.notes] : null,
           ['Issued By', data.recordedBy],
+          data.notes ? ['Notes', data.notes] : null,
         ]
           .filter(Boolean)
           .map(([label, value]) => `<div class="row"><span class="lbl">${escapeHtml(label)}</span><span class="val">${escapeHtml(value)}</span></div>`)
           .join('')}
+        </div>
         <div class="total">
           <span class="t-label">TOTAL PAID</span>
           <span class="t-amount">${escapeHtml(formatCurrency(data.amount))}</span>
@@ -107,26 +116,17 @@ function ReceiptPreview({ data }) {
           serial={data.receiptNumber ?? ''}
           generatedAt={data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())}
         />
-        <div className="bg-blue-50 text-center py-2 text-xs font-bold tracking-widest border border-t-0 border-blue-200 uppercase">
-          Fee Payment Receipt
-        </div>
-        {/* Receipt tracking info strip */}
-        <div className="border border-t-0 border-b-0 px-4 py-2.5 bg-gray-50 flex items-start justify-between gap-3 text-xs">
-          <div>
-            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Receipt No.</p>
-            <p className="font-bold text-sm text-blue-800 font-mono">{data.receiptNumber ?? 'Generating…'}</p>
+        <div className="overflow-hidden rounded-lg border">
+          <div className="flex items-start justify-between gap-3 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-700">Fee Payment Receipt</p>
+            <div className="text-right">
+              <p className="text-[10px] uppercase text-muted-foreground">Receipt No.</p>
+              <p className="font-mono text-sm font-semibold">{data.receiptNumber ?? 'Pending'}</p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Date</p>
-            <p className="font-semibold">{data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-gray-400 uppercase tracking-wide text-[10px]">Issued By</p>
-            <p className="font-semibold">{data.recordedBy}</p>
-          </div>
-        </div>
-        <div className="border border-t-0 px-4 py-3">
+          <div className="px-4 py-3">
           {[
+            ['Date', data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())],
             ['Student', data.studentName],
             ['Admission No.', data.admissionNumber],
             ['Class', data.className],
@@ -134,6 +134,7 @@ function ReceiptPreview({ data }) {
             ['Term', data.term],
             ['Payment Method', capitalize(data.method)],
             data.reference ? ['Reference / Code', data.reference] : null,
+            ['Issued By', data.recordedBy],
             data.notes ? ['Notes', data.notes] : null,
           ].filter(Boolean).map(([label, value]) => (
             <div key={label} className="flex justify-between py-2 border-b last:border-0 text-sm">
@@ -141,12 +142,13 @@ function ReceiptPreview({ data }) {
               <span className="font-medium text-right max-w-[60%]">{value}</span>
             </div>
           ))}
-          <div className="bg-amber-50 rounded p-3 mt-3 flex justify-between items-center">
+          </div>
+          <div className="border-t-2 border-slate-900 px-4 py-3 flex justify-between items-center">
             <span className="font-bold text-sm">TOTAL PAID</span>
-            <span className="font-bold text-amber-600 text-xl">{formatCurrency(data.amount)}</span>
+            <span className="font-bold text-xl">{formatCurrency(data.amount)}</span>
           </div>
         </div>
-        <div className="border border-t-0 rounded-b-md p-3 text-center text-xs text-muted-foreground">
+        <div className="p-3 text-center text-xs text-muted-foreground">
           This is an official receipt. Please retain for your records. Powered by Diraschool
         </div>
       </div>
@@ -384,6 +386,7 @@ export default function PaymentsPage() {
   const buildReceiptData = (values, fromTable = null) => {
     if (fromTable) {
       return {
+        receiptNumber: fromTable.receiptNumber ?? '',
         studentName: `${fromTable.studentId?.firstName ?? ''} ${fromTable.studentId?.lastName ?? ''}`.trim() || '—',
         admissionNumber: fromTable.studentId?.admissionNumber ?? '—',
         className: fromTable.classId
