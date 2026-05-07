@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import School from '../schools/School.model.js';
+import Student from '../students/Student.model.js';
 import SubscriptionPayment from './SubscriptionPayment.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
@@ -16,14 +17,15 @@ import {
 import { logAction } from '../../utils/auditLogger.js';
 import { initializeTransaction, verifyTransaction } from './paystack.service.js';
 import { sendSubscriptionConfirmationEmail } from '../../services/email.service.js';
+import logger from '../../config/logger.js';
 
-const BASE_FEE = 10000;
-const PER_STUDENT_RATE = 40;
+const BASE_FEE = 12000;
+const PER_STUDENT_RATE = 50;
 const VAT_RATE = 0.16;
 const MULTIPLIERS = {
   'per-term': 1,
-  annual: 2.55, // 3 terms × 0.85 = 15% off
-  'multi-year': 2.4, // 3 terms × 0.80 = 20% off (per year)
+  annual: 2.70, // 3 terms × 0.90 = 10% off
+  'multi-year': 2.55, // 3 terms × 0.85 = 15% off per year
 };
 
 const normalizeAddOns = (addOns = {}) => ({
@@ -66,11 +68,27 @@ const bustSchoolSubCache = async (schoolId) => {
 const activateSchool = async (payment) => {
   const school = await School.findById(payment.schoolId);
   if (!school) return;
+
+  const planTier = payment.selectedPlanTier || PLAN_TIERS.STANDARD;
   school.subscriptionStatus = SUBSCRIPTION_STATUSES.ACTIVE;
-  school.planTier = payment.selectedPlanTier || PLAN_TIERS.STANDARD;
+  school.planTier = planTier;
   school.trialExpiry = undefined;
   await school.save();
   await bustSchoolSubCache(school._id);
+
+  // If this school is part of a billing group, activate all sibling schools too
+  if (school.groupId) {
+    const siblings = await School.find({ groupId: school.groupId, _id: { $ne: school._id } });
+    await Promise.all(
+      siblings.map(async (s) => {
+        s.subscriptionStatus = SUBSCRIPTION_STATUSES.ACTIVE;
+        s.planTier = planTier;
+        s.trialExpiry = undefined;
+        await s.save();
+        await bustSchoolSubCache(s._id);
+      })
+    );
+  }
 
   sendSubscriptionConfirmationEmail({
     to: school.email,
@@ -96,7 +114,16 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId);
   if (!school) return sendError(res, 'School not found.', 404);
 
-  const { studentCount, billingCycle, planTier, description, addOns } = req.body;
+  const { billingCycle, planTier, description, addOns } = req.body;
+  let { studentCount } = req.body;
+
+  // If the school is part of a billing group, aggregate active students across all branches
+  if (school.groupId) {
+    const groupSchools = await School.find({ groupId: school.groupId }).select('_id');
+    const groupSchoolIds = groupSchools.map((s) => s._id);
+    studentCount = await Student.countDocuments({ schoolId: { $in: groupSchoolIds }, status: 'active' });
+  }
+
   const amounts = calcAmount({ studentCount, billingCycle, addOns });
   const reference = merchantRef(school._id);
 
@@ -279,6 +306,13 @@ export const paystackWebhook = asyncHandler(async (req, res) => {
   const reference = data?.reference;
   if (!reference) return;
 
+  // SMS credit top-up — handled separately from subscription payments
+  const meta = data?.metadata ?? {};
+  if (meta.type === 'sms_credits') {
+    await handleSmsCreditTopUp({ reference, meta });
+    return;
+  }
+
   const payment = await SubscriptionPayment.findOne({ merchantReference: reference });
   if (!payment || payment.status === 'completed') return;
 
@@ -289,3 +323,19 @@ export const paystackWebhook = asyncHandler(async (req, res) => {
 
   await activateSchool(payment);
 });
+
+async function handleSmsCreditTopUp({ reference, meta }) {
+  const { schoolId, credits, packId } = meta;
+  if (!schoolId || !credits) return;
+  try {
+    await School.findByIdAndUpdate(schoolId, {
+      $inc: {
+        'smsCredits.purchasedRemaining': Number(credits),
+        'smsCredits.totalPurchased':     Number(credits),
+      },
+    });
+    logger.info('[SMS-CREDITS] Top-up applied', { schoolId, packId, credits, reference });
+  } catch (err) {
+    logger.error('[SMS-CREDITS] Failed to apply top-up', { schoolId, reference, err: err.message });
+  }
+}

@@ -97,6 +97,12 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
 
+    // ── Phone / OTP verification (parents) ───────────────────────────────────
+    phoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+
     // ── Password reset ────────────────────────────────────────────────────────
     // Raw token is sent to the user via email. Only the SHA-256 hash is stored
     // so a DB leak cannot be used to reset passwords.

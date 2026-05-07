@@ -390,14 +390,6 @@ export const processConfirmationPayload = async (payload) => {
     payment,
   });
 
-  await queuePaymentSms({
-    school,
-    student,
-    payment,
-    to: payload.MSISDN,
-    balance: balance.balance,
-  });
-
   await emitPaymentUpdates({ school, student, payment, balance });
 
   logger.info('[M-PESA] C2B payment recorded', {

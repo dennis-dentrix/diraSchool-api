@@ -57,6 +57,12 @@ const schoolSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Optional billing group — when set, this school shares a subscription with others in the group
+    groupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SchoolGroup',
+      default: null,
+    },
     // M-Pesa till/paybill number that receives parent payments.
     // Africa's Talking monitors SMS to this number and forwards to the inbound webhook.
     mpesaTillNumber: {
@@ -112,6 +118,12 @@ const schoolSchema = new mongoose.Schema(
         type: String,
         trim: true,
       },
+    },
+    // SMS credit balance — included credits are derived from the cap rule (5/parent/term).
+    // Purchased credits let schools send beyond that cap; deducted atomically per send.
+    smsCredits: {
+      purchasedRemaining: { type: Number, default: 0, min: 0 },
+      totalPurchased:     { type: Number, default: 0, min: 0 },
     },
     // SMS Settings — per-school sender ID management
     smsSettings: {

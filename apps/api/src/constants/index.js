@@ -104,7 +104,32 @@ export const SMS_TRIGGER_TYPES = {
   ACCOUNT_CREATED: 'account_created',
   REPORT_PUBLISHED: 'report_published',
   PAYMENT_RECEIPT: 'payment_receipt',
+  OTP: 'otp',
 };
+
+export const SMS_DELIVERY_STATUS = {
+  QUEUED:    'queued',
+  SENT:      'sent',
+  DELIVERED: 'delivered',
+  FAILED:    'failed',
+  REJECTED:  'rejected',
+  CAPPED:    'capped',   // blocked by per-parent term cap
+};
+
+export const SMS_CREDIT_TYPE = {
+  INCLUDED:  'included',
+  PURCHASED: 'purchased',
+};
+
+// Self-serve SMS top-up packs (priced at ~2× AT cost of KES 0.80)
+export const SMS_CREDIT_PACKS = [
+  { id: 'sms_200',  credits: 200,  amountKes: 300,  label: '200 SMS'   },
+  { id: 'sms_500',  credits: 500,  amountKes: 700,  label: '500 SMS'   },
+  { id: 'sms_1000', credits: 1000, amountKes: 1200, label: '1,000 SMS' },
+  { id: 'sms_2500', credits: 2500, amountKes: 2750, label: '2,500 SMS' },
+];
+
+export const SMS_CAP_PER_PARENT_PER_TERM = 5;
 
 export const PAYMENT_SOURCE = {
   MANUAL: 'manual',

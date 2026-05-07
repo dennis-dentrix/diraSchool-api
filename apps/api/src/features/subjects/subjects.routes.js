@@ -17,6 +17,12 @@ import {
   mySubjects,
   selfAssignSubject,
 } from './subjects.controller.js';
+import {
+  listDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment,
+} from './departments.controller.js';
 
 const router = express.Router();
 
@@ -27,6 +33,12 @@ const canRead = authorize(
   ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER,
   ROLES.DEPUTY_HEADTEACHER, ROLES.SECRETARY, ROLES.TEACHER, ROLES.DEPARTMENT_HEAD
 );
+
+// ── Departments — must be before /:id to avoid param shadowing ───────────────
+router.get('/departments',       canRead,   listDepartments);
+router.post('/departments',      adminOnly, createDepartment);
+router.patch('/departments/:id', adminOnly, updateDepartment);
+router.delete('/departments/:id', adminOnly, deleteDepartment);
 
 // My subjects — teacher-facing shortcut
 router.get('/my-subjects', authorize(ROLES.TEACHER, ROLES.DEPARTMENT_HEAD), mySubjects);

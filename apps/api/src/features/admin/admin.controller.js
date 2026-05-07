@@ -11,17 +11,20 @@
  *   GET  /api/v1/admin/users                 — platform-wide user list
  *   PATCH /api/v1/admin/users/:id/toggle     — toggle user isActive
  */
-import School   from '../schools/School.model.js';
-import User     from '../users/User.model.js';
-import Student  from '../students/Student.model.js';
-import AuditLog from '../audit/AuditLog.model.js';
+import School      from '../schools/School.model.js';
+import SchoolGroup from './SchoolGroup.model.js';
+import User        from '../users/User.model.js';
+import Student     from '../students/Student.model.js';
+import AuditLog    from '../audit/AuditLog.model.js';
+import SmsDelivery from '../sms/SmsDelivery.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
-import { SUBSCRIPTION_STATUSES, PLAN_TIERS, ROLES } from '../../constants/index.js';
+import { SUBSCRIPTION_STATUSES, PLAN_TIERS, ROLES, SMS_DELIVERY_STATUS } from '../../constants/index.js';
 import { env } from '../../config/env.js';
 import { captureError, sentryEnabled } from '../../config/sentry.js';
 import { sendSenderIdReviewedEmail } from '../../services/email.service.js';
+import { getCurrentTermAndYear } from '../../utils/term.js';
 
 // ── GET /api/v1/admin/stats ──────────────────────────────────────────────────
 
@@ -468,4 +471,213 @@ export const approveSmsenderId = asyncHandler(async (req, res) => {
   }).catch(() => {});
 
   return sendSuccess(res, school, `Sender ID ${action}ed successfully`);
+});
+
+// ── GET /api/v1/admin/sms-analytics ─────────────────────────────────────────
+/**
+ * Platform-wide SMS consumption per school for the current (or specified) term.
+ * Query: ?term=Term+1&academicYear=2026
+ */
+export const getSmsAnalytics = asyncHandler(async (req, res) => {
+  const { term: qTerm, academicYear: qYear } = req.query;
+  const { term, academicYear } = qTerm
+    ? { term: qTerm, academicYear: qYear ?? String(new Date().getFullYear()) }
+    : getCurrentTermAndYear();
+
+  const stats = await SmsDelivery.aggregate([
+    { $match: { term, academicYear } },
+    {
+      $group: {
+        _id:       '$schoolId',
+        total:     { $sum: 1 },
+        delivered: { $sum: { $cond: [{ $eq: ['$deliveryStatus', SMS_DELIVERY_STATUS.DELIVERED] }, 1, 0] } },
+        sent:      { $sum: { $cond: [{ $in: ['$deliveryStatus', [SMS_DELIVERY_STATUS.SENT, SMS_DELIVERY_STATUS.DELIVERED]] }, 1, 0] } },
+        failed:    { $sum: { $cond: [{ $eq: ['$deliveryStatus', SMS_DELIVERY_STATUS.FAILED]    }, 1, 0] } },
+        rejected:  { $sum: { $cond: [{ $eq: ['$deliveryStatus', SMS_DELIVERY_STATUS.REJECTED]  }, 1, 0] } },
+        capped:    { $sum: { $cond: [{ $eq: ['$deliveryStatus', SMS_DELIVERY_STATUS.CAPPED]    }, 1, 0] } },
+        purchased: { $sum: { $cond: [{ $eq: ['$creditType',     'purchased']                   }, 1, 0] } },
+      },
+    },
+    {
+      $lookup: {
+        from: 'schools', localField: '_id', foreignField: '_id', as: 'school',
+      },
+    },
+    { $unwind: '$school' },
+    {
+      $project: {
+        schoolId:   '$_id',
+        schoolName: '$school.name',
+        total: 1, delivered: 1, sent: 1, failed: 1, rejected: 1, capped: 1, purchased: 1,
+        purchasedRemaining: '$school.smsCredits.purchasedRemaining',
+        deliveryRate: {
+          $cond: [
+            { $gt: ['$sent', 0] },
+            { $round: [{ $multiply: [{ $divide: ['$delivered', '$sent'] }, 100] }, 1] },
+            0,
+          ],
+        },
+        successRate: {
+          $cond: [
+            { $gt: ['$total', 0] },
+            { $round: [{ $multiply: [{ $divide: ['$sent', '$total'] }, 100] }, 1] },
+            0,
+          ],
+        },
+      },
+    },
+    { $sort: { total: -1 } },
+  ]);
+
+  return sendSuccess(res, { term, academicYear, schools: stats });
+});
+
+// ── School Groups ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/v1/admin/groups
+ * Create a new billing group.
+ */
+export const createGroup = asyncHandler(async (req, res) => {
+  const { name, notes, contactPerson, contactEmail } = req.body;
+  if (!name?.trim()) return sendError(res, 'Group name is required.', 400);
+
+  const group = await SchoolGroup.create({
+    name: name.trim(),
+    notes,
+    contactPerson,
+    contactEmail,
+    createdBy: req.user._id,
+  });
+
+  return sendSuccess(res, { group }, 'Group created.', 201);
+});
+
+/**
+ * GET /api/v1/admin/groups
+ * List all billing groups, each with their member schools.
+ */
+export const listGroups = asyncHandler(async (req, res) => {
+  const groups = await SchoolGroup.find().sort({ createdAt: -1 }).lean();
+
+  const groupIds = groups.map((g) => g._id);
+  const schools = await School.find({ groupId: { $in: groupIds } })
+    .select('_id name email county subscriptionStatus planTier groupId')
+    .lean();
+
+  const schoolsByGroup = schools.reduce((acc, s) => {
+    const key = s.groupId.toString();
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(s);
+    return acc;
+  }, {});
+
+  const enriched = groups.map((g) => ({
+    ...g,
+    schools: schoolsByGroup[g._id.toString()] ?? [],
+  }));
+
+  return sendSuccess(res, { groups: enriched });
+});
+
+/**
+ * GET /api/v1/admin/groups/:id
+ * Single group with member schools and student count totals.
+ */
+export const getGroup = asyncHandler(async (req, res) => {
+  const group = await SchoolGroup.findById(req.params.id).lean();
+  if (!group) return sendError(res, 'Group not found.', 404);
+
+  const schools = await School.find({ groupId: group._id })
+    .select('_id name email county subscriptionStatus planTier')
+    .lean();
+
+  const schoolIds = schools.map((s) => s._id);
+  const studentCounts = await Student.aggregate([
+    { $match: { schoolId: { $in: schoolIds }, status: 'active' } },
+    { $group: { _id: '$schoolId', count: { $sum: 1 } } },
+  ]);
+  const studentMap = studentCounts.reduce((acc, { _id, count }) => {
+    acc[_id.toString()] = count;
+    return acc;
+  }, {});
+
+  const schoolsWithCounts = schools.map((s) => ({
+    ...s,
+    activeStudents: studentMap[s._id.toString()] ?? 0,
+  }));
+
+  return sendSuccess(res, {
+    group: {
+      ...group,
+      schools: schoolsWithCounts,
+      totalActiveStudents: schoolsWithCounts.reduce((sum, s) => sum + s.activeStudents, 0),
+    },
+  });
+});
+
+/**
+ * PATCH /api/v1/admin/groups/:id
+ * Update group metadata.
+ */
+export const updateGroup = asyncHandler(async (req, res) => {
+  const { name, notes, contactPerson, contactEmail } = req.body;
+  const group = await SchoolGroup.findById(req.params.id);
+  if (!group) return sendError(res, 'Group not found.', 404);
+
+  if (name !== undefined) group.name = name.trim();
+  if (notes !== undefined) group.notes = notes;
+  if (contactPerson !== undefined) group.contactPerson = contactPerson;
+  if (contactEmail !== undefined) group.contactEmail = contactEmail;
+
+  await group.save();
+  return sendSuccess(res, { group });
+});
+
+/**
+ * DELETE /api/v1/admin/groups/:id
+ * Delete a group. Member schools are detached (groupId set to null), not deleted.
+ */
+export const deleteGroup = asyncHandler(async (req, res) => {
+  const group = await SchoolGroup.findById(req.params.id);
+  if (!group) return sendError(res, 'Group not found.', 404);
+
+  await School.updateMany({ groupId: group._id }, { $set: { groupId: null } });
+  await group.deleteOne();
+
+  return sendSuccess(res, { message: 'Group deleted. Member schools have been detached.' });
+});
+
+/**
+ * POST /api/v1/admin/groups/:id/schools
+ * Add a school to a group. Body: { schoolId }
+ */
+export const addSchoolToGroup = asyncHandler(async (req, res) => {
+  const group = await SchoolGroup.findById(req.params.id);
+  if (!group) return sendError(res, 'Group not found.', 404);
+
+  const { schoolId } = req.body;
+  if (!schoolId) return sendError(res, 'schoolId is required.', 400);
+
+  const school = await School.findById(schoolId);
+  if (!school) return sendError(res, 'School not found.', 404);
+
+  school.groupId = group._id;
+  await school.save();
+
+  return sendSuccess(res, { school: { _id: school._id, name: school.name, groupId: school.groupId } });
+});
+
+/**
+ * DELETE /api/v1/admin/groups/:id/schools/:schoolId
+ * Remove a school from a group.
+ */
+export const removeSchoolFromGroup = asyncHandler(async (req, res) => {
+  const school = await School.findOne({ _id: req.params.schoolId, groupId: req.params.id });
+  if (!school) return sendError(res, 'School not found in this group.', 404);
+
+  school.groupId = null;
+  await school.save();
+
+  return sendSuccess(res, { message: 'School removed from group.' });
 });

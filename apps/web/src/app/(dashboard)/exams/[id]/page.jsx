@@ -417,6 +417,7 @@ export default function ExamDetailPage() {
           setScores={setScores}
           onSave={() => saveResults()}
           saving={saving}
+          hasExistingResults={!!(existingResults?.length)}
         />
       )}
       {tab === 'setup' && <SetupTab exam={exam} />}

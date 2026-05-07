@@ -382,9 +382,11 @@ export default function ClassesPage() {
                   <p className="font-medium text-sm">
                     {cls.name}{cls.stream ? ` · ${cls.stream}` : ''}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {cls.levelCategory} · <EnrollmentBar count={cls.studentCount} max={40} />
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
+                    <span>{cls.levelCategory}</span>
+                    <span>·</span>
+                    <EnrollmentBar count={cls.studentCount} max={40} />
+                  </div>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
               </div>

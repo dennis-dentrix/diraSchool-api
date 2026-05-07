@@ -6,7 +6,7 @@ export const metadata = {
   alternates: { canonical: 'https://diraschool.com/terms' },
 };
 
-const EFFECTIVE_DATE = '1 May 2025';
+const EFFECTIVE_DATE = '7 May 2026';
 const CONTACT_EMAIL = 'contact@diraschool.com';
 
 function Section({ title, children }) {
@@ -50,7 +50,8 @@ export default function TermsPage() {
           <p>
             The service provides school administration features including student management, digital
             attendance, fee tracking and payment recording, CBC report card generation, staff management,
-            timetable management, transport tracking, and a parent portal.
+            timetable management, transport tracking, visitor management, staff check-ins, leave management,
+            payroll, lesson plans, library management, SMS messaging, and a parent portal.
           </p>
           <p>
             We reserve the right to modify, suspend, or discontinue any part of the service with
@@ -94,8 +95,10 @@ export default function TermsPage() {
             DiraSchool is billed per term (three terms per academic year). Pricing is calculated as:
           </p>
           <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm mt-2">
-            <p className="font-semibold text-slate-800">KES 8,500 base fee per term + KES 40 per enrolled student</p>
-            <p className="mt-1 text-slate-500">Annual billing (3 terms paid upfront) receives a 15% discount.</p>
+            <p className="font-semibold text-slate-800">KES 12,000 base fee per term + KES 55 per enrolled student</p>
+            <p className="mt-1 text-slate-500">
+              Annual billing (2 terms paid upfront) receives a 10% discount. Multi-year billing (3 terms paid upfront) receives a 15% discount.
+            </p>
           </div>
           <p className="mt-3">
             Invoices are issued at the start of each term. Payment is due within 14 days of invoice.
@@ -109,7 +112,37 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="5. Your Responsibilities">
+        <Section title="5. SMS Messaging and Credits">
+          <p>
+            Each school subscription includes a cap of <strong>5 SMS messages per parent per term</strong>.
+            This allowance is intended for fee balance reminders and important announcements. SMS messages
+            sent via DiraSchool are delivered through Africa's Talking.
+          </p>
+          <p>
+            Schools that require additional SMS messages beyond the included cap may purchase SMS credit
+            packs at any time from within the platform. Credit packs are non-refundable once purchased
+            and are consumed in the order purchased. Unused credits carry over to subsequent terms but
+            expire 12 months after purchase.
+          </p>
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm mt-2">
+            <p className="font-semibold text-slate-800 mb-2">Available credit packs</p>
+            <table className="w-full text-slate-600">
+              <tbody>
+                <tr><td className="py-0.5">200 SMS</td><td className="py-0.5 text-right">KES 300</td></tr>
+                <tr><td className="py-0.5">500 SMS</td><td className="py-0.5 text-right">KES 700</td></tr>
+                <tr><td className="py-0.5">1,000 SMS</td><td className="py-0.5 text-right">KES 1,200</td></tr>
+                <tr><td className="py-0.5">2,500 SMS</td><td className="py-0.5 text-right">KES 2,750</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3">
+            DiraSchool is not liable for SMS delivery failures caused by the telecommunications network,
+            handset unavailability, or incorrect phone numbers. Schools are responsible for maintaining
+            accurate parent contact information.
+          </p>
+        </Section>
+
+        <Section title="6. Your Responsibilities">
           <p>As a school administrator or authorised user, you agree to:</p>
           <ul className="list-disc pl-5 space-y-1.5 mt-2">
             <li>Use DiraSchool only for lawful school management purposes.</li>
@@ -122,7 +155,7 @@ export default function TermsPage() {
           </ul>
         </Section>
 
-        <Section title="6. Prohibited Uses">
+        <Section title="7. Prohibited Uses">
           <p>You may not use DiraSchool to:</p>
           <ul className="list-disc pl-5 space-y-1.5 mt-2">
             <li>Harass, threaten, or harm any student, parent, or staff member.</li>
@@ -137,7 +170,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="7. Data Ownership and Portability">
+        <Section title="8. Data Ownership and Portability">
           <p>
             <strong>You own your school's data.</strong> DiraSchool processes data on your behalf as a
             data processor. We do not claim ownership over student records, academic data, or financial
@@ -151,7 +184,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="8. Intellectual Property">
+        <Section title="9. Intellectual Property">
           <p>
             DiraSchool and all its underlying software, design, trademarks, and content are the
             intellectual property of Dentrix Technologies. These Terms do not grant you any rights
@@ -163,7 +196,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="9. Availability and Service Levels">
+        <Section title="10. Availability and Service Levels">
           <p>
             We aim to maintain 99.5% monthly uptime. Planned maintenance will be communicated at least
             24 hours in advance. We are not liable for downtime caused by factors outside our reasonable
@@ -176,7 +209,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="10. Disclaimer of Warranties">
+        <Section title="11. Disclaimer of Warranties">
           <p>
             DiraSchool is provided "as is" and "as available". To the fullest extent permitted by Kenyan
             law, we disclaim all warranties, express or implied, including fitness for a particular
@@ -189,7 +222,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="11. Limitation of Liability">
+        <Section title="12. Limitation of Liability">
           <p>
             To the maximum extent permitted by law, DiraSchool's total liability to you for any claim
             arising from these Terms or use of the service shall not exceed the amount you paid us in
@@ -202,7 +235,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="12. Termination">
+        <Section title="13. Termination">
           <p>
             You may cancel your subscription at any time from the Billing section of your dashboard or
             by emailing{' '}
@@ -216,7 +249,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="13. Changes to These Terms">
+        <Section title="15. Changes to These Terms">
           <p>
             We may update these Terms from time to time to reflect changes in our service or applicable
             law. We will notify all school administrators by email at least 14 days before material
@@ -229,7 +262,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="14. Governing Law and Disputes">
+        <Section title="16. Governing Law and Disputes">
           <p>
             These Terms are governed by the laws of the <strong>Republic of Kenya</strong>. Any dispute
             arising from or related to these Terms or your use of DiraSchool shall be resolved through
@@ -238,7 +271,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="15. Contact">
+        <Section title="17. Contact">
           <p>For questions about these Terms:</p>
           <div className="mt-3 p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm space-y-1">
             <p><strong>DiraSchool</strong></p>

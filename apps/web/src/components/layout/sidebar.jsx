@@ -6,6 +6,7 @@ import { ChevronDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { schoolNavGroups, superadminNavItems } from './nav-items';
+import { BrandLogo } from '@/components/shared/brand-logo';
 
 const NAV_TOUR_ATTRS = {
   '/dashboard':   'dashboard-nav-item',
@@ -20,18 +21,6 @@ const NAV_TOUR_ATTRS = {
   '/settings':    'settings-nav-item',
   '/users':       'users-nav-item',
 };
-
-function CompassMark({ className }) {
-  return (
-    <svg viewBox="0 0 64 64" className={className} aria-label="Diraschool">
-      <rect x="2" y="2" width="60" height="60" rx="14" fill="#1f5b5e"/>
-      <circle cx="32" cy="32" r="18" stroke="#f7f5f0" strokeOpacity="0.18" strokeWidth="1"/>
-      <path d="M32 12 L38 32 L32 28 Z" fill="#f7f5f0"/>
-      <path d="M32 52 L26 32 L32 36 Z" fill="#f7f5f0" fillOpacity="0.55"/>
-      <circle cx="32" cy="32" r="2" fill="#1f5b5e" stroke="#f7f5f0" strokeWidth="1.2"/>
-    </svg>
-  );
-}
 
 function NavItem({ item, pathname, onNavigate, badge }) {
   const isActive =
@@ -139,7 +128,7 @@ export function Sidebar({ user, onNavigate, badges = {} }) {
     <div className="flex flex-col h-full bg-sidebar w-64 shrink-0">
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border">
-        <CompassMark className="w-9 h-9 shrink-0" />
+        <BrandLogo className="w-9 h-9 shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-white font-semibold text-sm leading-tight tracking-tight">Diraschool</p>
           <p className="text-white/55 text-xs mt-0.5 truncate max-w-[140px]">

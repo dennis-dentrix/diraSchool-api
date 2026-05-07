@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { BrandLogo } from '@/components/shared/brand-logo';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import {
   Check, ChevronDown, Users, BookOpenCheck, BarChart3, Wallet,
@@ -13,21 +14,18 @@ import { cn } from '@/lib/utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BASE_FEE = 12000;
-const PER_STUDENT = 40;
-const VAT = 0.16;
+const PER_STUDENT = 50;
 const SCHOOL_FEE_PER_STUDENT = 10000;
 
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 
 function calcPrice(students, option) {
   const subtotal = BASE_FEE + students * PER_STUDENT;
-  const multiplier = option === 'annual' ? 2.55 : option === 'multi-year' ? 2.40 : 1;
-  const base = subtotal * multiplier;
-  const vat = Math.round(base * VAT);
-  const total = base + vat;
+  const multiplier = option === 'annual' ? 2.70 : option === 'multi-year' ? 2.55 : 1;
+  const total = Math.round(subtotal * multiplier);
   const costPerStudent = subtotal / students;
   const pctOfFee = ((subtotal / (students * SCHOOL_FEE_PER_STUDENT)) * 100);
-  return { subtotal, base, vat, total, costPerStudent, pctOfFee, multiplier };
+  return { subtotal, total, costPerStudent, pctOfFee, multiplier };
 }
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -98,7 +96,7 @@ const FAQS = [
   },
   {
     q: 'What if we exceed our plan\'s student range?',
-    a: 'There are no student limits or tier penalties. You pay KES 40 per actual enrolled student every term. If you grow to 700 students, you simply pay for 700. No surprise charges or forced plan upgrades.',
+    a: 'There are no student limits or tier penalties. You pay KES 50 per actual enrolled student every term. If you grow to 700 students, you simply pay for 700. No surprise charges or forced plan upgrades.',
   },
   {
     q: 'Does the annual discount lock us in?',
@@ -116,12 +114,7 @@ function PricingNav() {
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-900/50">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          </div>
+          <BrandLogo className="w-8 h-8 shrink-0" />
           <span className="font-bold text-white text-sm tracking-tight">Diraschool</span>
         </Link>
         <div className="flex items-center gap-3">
@@ -238,7 +231,7 @@ function PricingTable() {
                         {fmt(p.total)}
                       </span>
                       <p className={cn('text-xs mt-0.5', plan.highlight ? 'text-blue-200' : 'text-slate-500')}>
-                        per term · inc. VAT · e.g. {plan.example} students
+                        per term · e.g. {plan.example} students
                       </p>
                     </div>
                   )}
@@ -255,10 +248,10 @@ function PricingTable() {
                       <span>Base fee</span><span>KES 12,000</span>
                     </div>
                     <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
-                      <span>{plan.example} × KES 40</span><span>{fmt(plan.example * 40)}</span>
+                      <span>{plan.example} × KES 50</span><span>{fmt(plan.example * PER_STUDENT)}</span>
                     </div>
                     <div className={cn('flex justify-between font-semibold pt-1 border-t', plan.highlight ? 'text-white border-white/20' : 'text-slate-700 border-slate-200')}>
-                      <span>Total (inc. VAT)</span><span>{fmt(p.total)}</span>
+                      <span>Total </span><span>{fmt(p.total)}</span>
                     </div>
                   </div>
                 )}
@@ -287,7 +280,7 @@ function PricingTable() {
         <div className="mt-10 rounded-2xl bg-slate-50 border border-slate-200 p-6 text-center">
           <p className="text-sm text-slate-600 font-medium">The formula behind every plan</p>
           <p className="mt-2 text-slate-800 font-mono text-sm">
-            ( KES 12,000 base + students × KES 40 ) × 1.16 VAT = your term cost
+            KES 12,000 base + students × KES 50 = your term cost
           </p>
           <p className="mt-2 text-xs text-slate-400">Linear scaling — no step increases, no surprises</p>
         </div>
@@ -308,8 +301,8 @@ function PriceCalculator() {
 
   const TABS = [
     { id: 'per-term', label: 'Per Term', sub: '3× per year' },
-    { id: 'annual', label: 'Annual', sub: '15% off' },
-    { id: 'multi-year', label: '3-Year', sub: '20% off · Enterprise' },
+    { id: 'annual', label: 'Annual', sub: '10% off' },
+    { id: 'multi-year', label: '3-Year', sub: '15% off · Enterprise' },
   ];
 
   return (
@@ -392,29 +385,21 @@ function PriceCalculator() {
                     <span className="font-mono">KES 12,000</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>{students.toLocaleString()} × KES 40</span>
+                    <span>{students.toLocaleString()} × KES 50</span>
                     <span className="font-mono">{fmt(students * PER_STUDENT)}</span>
                   </div>
                   {option !== 'per-term' && (
                     <div className="flex justify-between text-slate-400">
-                      <span>× {p.multiplier} ({option === 'annual' ? '15% off' : '20% off'})</span>
+                      <span>× {p.multiplier} ({option === 'annual' ? '10% off' : '15% off'})</span>
                       <span className="font-mono text-emerald-400">discount applied</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-slate-500 text-xs pt-1">
-                    <span>Subtotal (ex-VAT)</span>
-                    <span className="font-mono">{fmt(p.base / 1.16 * (option !== 'per-term' ? p.multiplier : 1))}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-500 text-xs">
-                    <span>VAT (16%)</span>
-                    <span className="font-mono">{fmt(p.vat)}</span>
-                  </div>
                 </div>
 
                 <div className="mt-5 pt-5 border-t border-white/10">
                   <div className="flex justify-between items-baseline">
                     <span className="text-white font-semibold">
-                      {option === 'per-term' ? 'Per term (inc. VAT)' : option === 'annual' ? 'Annual total (inc. VAT)' : '3-year annual (inc. VAT)'}
+                      {option === 'per-term' ? 'Per term' : option === 'annual' ? 'Annual total' : '3-year annual'}
                     </span>
                     <span className="text-2xl font-bold text-white font-mono">{fmt(p.total)}</span>
                   </div>
@@ -452,7 +437,7 @@ function PriceCalculator() {
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-4">
-          Prices shown include 16% VAT. If your school is VAT-registered with KRA, you can reclaim the VAT portion.
+          Prices shown exclude VAT. VAT documentation provided upon request.
         </p>
       </div>
     </section>

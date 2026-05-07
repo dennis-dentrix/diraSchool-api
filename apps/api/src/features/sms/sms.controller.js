@@ -9,15 +9,21 @@
  */
 import Student from '../students/Student.model.js';
 import User from '../users/User.model.js';
+import School from '../schools/School.model.js';
 import SmsLog from './SmsLog.model.js';
+import SmsDelivery from './SmsDelivery.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { smsQueue } from '../../jobs/queues.js';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
-import { SMS_TRIGGER_TYPES, JOB_NAMES, STUDENT_STATUSES } from '../../constants/index.js';
+import {
+  SMS_TRIGGER_TYPES, JOB_NAMES, STUDENT_STATUSES,
+  SMS_DELIVERY_STATUS, SMS_CREDIT_PACKS,
+} from '../../constants/index.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone, isValidKenyanPhone } from './sms-inbound.controller.js';
+import { getCurrentTermAndYear } from '../../utils/term.js';
 
 const AT_CHUNK_SIZE = 200; // Africa's Talking recommended batch size
 
@@ -204,7 +210,8 @@ export const testSendDirect = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/sms/history
- * Returns paginated SMS log for the school.
+ * Paginated SMS log for the school, with per-broadcast delivery summary.
+ * Optional query: ?deliveryStatus=delivered|failed|capped
  */
 export const smsHistory = asyncHandler(async (req, res) => {
   const schoolId = req.user.schoolId;
@@ -216,7 +223,158 @@ export const smsHistory = asyncHandler(async (req, res) => {
     .skip(skip)
     .limit(limit)
     .populate('sentByUserId', 'firstName lastName')
-    .populate('classId', 'name');
+    .populate('classId', 'name')
+    .lean();
 
   return sendSuccess(res, { logs, meta });
+});
+
+/**
+ * GET /api/v1/sms/deliveries
+ * Per-phone delivery records for a specific broadcast.
+ * Query: smsLogId (required), deliveryStatus (optional filter)
+ */
+export const smsDeliveries = asyncHandler(async (req, res) => {
+  const schoolId = req.user.schoolId;
+  const { smsLogId, deliveryStatus } = req.query;
+  if (!smsLogId) return sendError(res, 'smsLogId is required.', 400);
+
+  const filter = { schoolId, smsLogId };
+  if (deliveryStatus && Object.values(SMS_DELIVERY_STATUS).includes(deliveryStatus)) {
+    filter.deliveryStatus = deliveryStatus;
+  }
+
+  const total = await SmsDelivery.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+  const deliveries = await SmsDelivery.find(filter)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  return sendSuccess(res, { deliveries, meta });
+});
+
+/**
+ * GET /api/v1/sms/stats
+ * SMS usage summary for the current term — sent, delivered, failed, capped, credits.
+ */
+export const smsStats = asyncHandler(async (req, res) => {
+  const schoolId = req.user.schoolId;
+  const { term, academicYear } = getCurrentTermAndYear();
+
+  const [aggregate] = await SmsDelivery.aggregate([
+    { $match: { schoolId, term, academicYear } },
+    {
+      $group: {
+        _id: null,
+        total:     { $sum: 1 },
+        sent:      { $sum: { $cond: [{ $in: ['$deliveryStatus', [SMS_DELIVERY_STATUS.SENT, SMS_DELIVERY_STATUS.DELIVERED]] }, 1, 0] } },
+        delivered: { $sum: { $cond: [{ $eq:  ['$deliveryStatus', SMS_DELIVERY_STATUS.DELIVERED] }, 1, 0] } },
+        failed:    { $sum: { $cond: [{ $eq:  ['$deliveryStatus', SMS_DELIVERY_STATUS.FAILED]    }, 1, 0] } },
+        rejected:  { $sum: { $cond: [{ $eq:  ['$deliveryStatus', SMS_DELIVERY_STATUS.REJECTED]  }, 1, 0] } },
+        capped:    { $sum: { $cond: [{ $eq:  ['$deliveryStatus', SMS_DELIVERY_STATUS.CAPPED]    }, 1, 0] } },
+        purchased: { $sum: { $cond: [{ $eq:  ['$creditType',     'purchased']                   }, 1, 0] } },
+      },
+    },
+  ]);
+
+  const school = await School.findById(schoolId).select('smsCredits').lean();
+
+  return sendSuccess(res, {
+    term,
+    academicYear,
+    usage: aggregate ?? { total: 0, sent: 0, delivered: 0, failed: 0, rejected: 0, capped: 0, purchased: 0 },
+    credits: {
+      purchasedRemaining: school?.smsCredits?.purchasedRemaining ?? 0,
+      totalPurchased:     school?.smsCredits?.totalPurchased     ?? 0,
+    },
+  });
+});
+
+/**
+ * GET /api/v1/sms/credit-packs
+ * List available SMS top-up packs.
+ */
+export const listCreditPacks = asyncHandler(async (req, res) => {
+  return sendSuccess(res, { packs: SMS_CREDIT_PACKS });
+});
+
+/**
+ * POST /api/v1/sms/credit-packs/checkout
+ * Initiate Paystack checkout for an SMS credit pack.
+ * Body: { packId: string }
+ */
+export const buyCreditPack = asyncHandler(async (req, res) => {
+  if (!env.PAYSTACK_ENABLED) {
+    return sendError(res, 'Paystack is not enabled in this environment.', 400);
+  }
+
+  const { packId } = req.body;
+  const pack = SMS_CREDIT_PACKS.find((p) => p.id === packId);
+  if (!pack) return sendError(res, 'Invalid SMS credit pack.', 400);
+
+  const school = await School.findById(req.user.schoolId).lean();
+  if (!school) return sendError(res, 'School not found.', 404);
+
+  // Lazy import to avoid circular deps — Paystack service lives in subscriptions
+  const { initializeTransaction } = await import('../subscriptions/paystack.service.js');
+  const crypto = (await import('node:crypto')).default;
+
+  const reference = `SMS-${String(school._id).slice(-6).toUpperCase()}-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+  const callbackUrl = `${env.CLIENT_URL.replace(/\/+$/, '')}/billing/sms-credits?reference=${reference}`;
+
+  const result = await initializeTransaction({
+    email: school.email,
+    amount: pack.amountKes * 100, // Paystack uses kobo/cents — but KES is already base unit; Paystack KES uses 1 unit = 1 KES
+    reference,
+    callbackUrl,
+    metadata: {
+      type:     'sms_credits',
+      packId:   pack.id,
+      credits:  pack.credits,
+      schoolId: String(school._id),
+    },
+  });
+
+  logger.info('[SMS-CREDITS] Checkout initiated', { schoolId: school._id, packId, credits: pack.credits, amountKes: pack.amountKes });
+
+  return sendSuccess(res, {
+    pack,
+    checkout: {
+      provider:          'paystack',
+      merchantReference: reference,
+      amountKes:         pack.amountKes,
+      checkoutUrl:       result.authorization_url,
+    },
+  });
+});
+
+/**
+ * POST /api/v1/sms/dlr
+ * Africa's Talking delivery report webhook (public — no JWT).
+ * AT sends: { id, status, phoneNumber, networkCode, failureReason, retryCount }
+ */
+export const handleDlr = asyncHandler(async (req, res) => {
+  // Acknowledge immediately
+  res.status(200).end();
+
+  const { id: messageId, status, phoneNumber, failureReason } = req.body;
+  if (!messageId) return;
+
+  const deliveryStatus = status === 'Success'
+    ? SMS_DELIVERY_STATUS.DELIVERED
+    : status === 'Rejected'
+      ? SMS_DELIVERY_STATUS.REJECTED
+      : SMS_DELIVERY_STATUS.FAILED;
+
+  try {
+    await SmsDelivery.findOneAndUpdate(
+      { messageId },
+      { deliveryStatus, ...(failureReason ? { failureReason } : {}) }
+    );
+    logger.info('[SMS-DLR] Delivery status updated', { messageId, phoneNumber, status, deliveryStatus });
+  } catch (err) {
+    logger.error('[SMS-DLR] Failed to update delivery status', { messageId, err: err.message });
+  }
 });

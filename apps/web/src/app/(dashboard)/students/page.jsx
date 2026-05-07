@@ -13,7 +13,7 @@ import { formatDate, capitalize } from '@/lib/utils';
 import { STUDENT_STATUSES } from '@/lib/constants';
 import { PageHeader } from '@/components/shared/page-header';
 import { RefreshButton } from '@/components/shared/refresh-button';
-import { DataTable } from '@/components/shared/data-table';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -128,117 +128,6 @@ function FeeBalance({ stats }) {
   );
 }
 
-// ── Table columns ─────────────────────────────────────────────────────────────
-
-const columns = (onView, onWithdraw, canWithdraw, feeStats) => [
-  {
-    id: 'admNo',
-    header: 'Adm. Nº',
-    meta: { mobileLabel: 'Admission No.' },
-    enableSorting: true,
-    cell: ({ row }) => (
-      <span className="font-mono text-xs tabular-nums text-muted-foreground whitespace-nowrap">
-        {row.original.admissionNumber ?? '—'}
-      </span>
-    ),
-  },
-  {
-    id: 'name',
-    header: 'Name',
-    enableSorting: true,
-    cell: ({ row }) => {
-      const s = row.original;
-      return (
-        <button
-          onClick={() => onView(s._id)}
-          className="flex items-center gap-2.5 text-left hover:opacity-75 transition-opacity"
-        >
-          {s.photo ? (
-            <img src={s.photo} alt="" className="w-8 h-8 rounded-full object-cover border border-border shrink-0" />
-          ) : (
-            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0 border border-primary/15 uppercase">
-              {s.firstName?.[0]}{s.lastName?.[0]}
-            </div>
-          )}
-          <span className="font-medium text-sm text-foreground leading-tight">{s.firstName} {s.lastName}</span>
-        </button>
-      );
-    },
-  },
-  {
-    id: 'class',
-    header: 'Class',
-    enableSorting: false,
-    cell: ({ row }) => {
-      const cls = row.original.classId;
-      return (
-        <span className="text-sm text-foreground whitespace-nowrap">
-          {typeof cls === 'object' ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—'}
-        </span>
-      );
-    },
-  },
-  {
-    id: 'guardian',
-    header: 'Parent / Guardian',
-    enableSorting: false,
-    cell: ({ row }) => {
-      const s = row.original;
-      const g = s.parentIds?.[0] ?? s.guardians?.[0];
-      if (!g) return <span className="text-xs text-muted-foreground">—</span>;
-      const name = [g.firstName, g.lastName].filter(Boolean).join(' ');
-      return (
-        <div>
-          {name && <p className="text-sm text-foreground">{name}</p>}
-          {g.phone && <p className="text-[11px] text-muted-foreground font-mono tabular-nums">{g.phone}</p>}
-        </div>
-      );
-    },
-  },
-  {
-    id: 'fees',
-    header: 'Fee Balance',
-    meta: { mobileLabel: 'Fee Balance' },
-    enableSorting: false,
-    cell: ({ row }) => <FeeBalance stats={feeStats?.[row.original._id] ?? null} />,
-  },
-  {
-    id: 'status',
-    header: 'Status',
-    enableSorting: true,
-    cell: ({ row }) => {
-      const s = row.original.status;
-      return (
-        <span className={cn(
-          'inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border capitalize whitespace-nowrap',
-          STATUS_STYLE[s] ?? 'text-muted-foreground border-border',
-        )}>
-          {s}
-        </span>
-      );
-    },
-  },
-  {
-    id: 'actions',
-    cell: ({ row }) => (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-7 w-7">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => onView(row.original._id)}>View details</DropdownMenuItem>
-          {canWithdraw && row.original.status === 'active' && (
-            <DropdownMenuItem onClick={() => onWithdraw(row.original)} className="text-destructive">
-              Withdraw
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
-  },
-];
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -258,7 +147,6 @@ export default function StudentsPage() {
   const [selectedStatus, setSelectedStatus] = useState('active');
   const [classFilter, setClassFilter]       = useState('');
   const [genderFilter, setGenderFilter]     = useState('');
-  const [sorting, setSorting]               = useState([]);
   const [showGuardian, setShowGuardian]   = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
   const debouncedSearch = useDebounce(search, 400);
@@ -283,23 +171,14 @@ export default function StudentsPage() {
   });
   const teacherClassId = myClassData?.data?._id ?? myClassData?._id;
 
-  // Map TanStack column id → API sortBy key
-  const SORT_MAP = { name: 'name', admNo: 'admNo', status: 'status', enrolled: 'enrolled' };
-  const activeSortCol = sorting[0];
-  const apiSortBy  = activeSortCol ? (SORT_MAP[activeSortCol.id] ?? null) : null;
-  const apiOrder   = activeSortCol?.desc ? 'desc' : 'asc';
-
-  // Main list query
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['students', page, debouncedSearch, selectedStatus, classFilter, genderFilter, teacherClassId, apiSortBy, apiOrder],
+    queryKey: ['students', page, debouncedSearch, selectedStatus, classFilter, genderFilter, teacherClassId],
     queryFn: async () => {
       const res = await studentsApi.list({
         page, limit: 20,
         search: debouncedSearch || undefined,
         status: selectedStatus || undefined,
         gender: genderFilter || undefined,
-        sortBy: apiSortBy || undefined,
-        order:  apiSortBy ? apiOrder : undefined,
         ...(isTeacher && teacherClassId ? { classId: teacherClassId } : { classId: classFilter || undefined }),
       });
       return res.data;
@@ -575,30 +454,114 @@ export default function StudentsPage() {
       </div>
 
       {/* Table */}
-      <DataTable
-        columns={columns(
-          (id) => router.push(`/students/${id}`),
-          (student) => openConfirm(
-            `Withdraw ${student.firstName} ${student.lastName}?`,
-            'The student will be marked as withdrawn. This can be reversed later.',
-            () => withdrawStudent({ id: student._id }),
-          ),
-          !isTeacher,
-          feeStatsData ?? {},
-        )}
-        sorting={sorting}
-        onSortingChange={(updater) => {
-          const next = typeof updater === 'function' ? updater(sorting) : updater;
-          setSorting(next);
-          setPage(1);
-        }}
-        data={students}
-        loading={isLoading}
-        error={isError ? error : null}
-        pageCount={pagination?.totalPages ?? pagination?.pages}
-        currentPage={page}
-        onPageChange={setPage}
-      />
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+        </div>
+      ) : students.length === 0 ? (
+        <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+          <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">{debouncedSearch || selectedStatus || classFilter ? 'No students match your filters.' : 'No students enrolled yet.'}</p>
+        </div>
+      ) : (
+        <>
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/30">
+                  <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground w-28 hidden sm:table-cell">Adm. Nº</th>
+                  <th className="text-left py-2.5 px-4 sm:px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Class</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Parent / Guardian</th>
+                  {!isTeacher && <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Fee Balance</th>}
+                  <th className="text-center py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
+                  <th className="py-2.5 px-3 w-10" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {students.map((s) => {
+                  const cls = typeof s.classId === 'object' ? `${s.classId.name}${s.classId.stream ? ` ${s.classId.stream}` : ''}` : '—';
+                  const g = s.parentIds?.[0] ?? s.guardians?.[0];
+                  const guardianName = g ? [g.firstName, g.lastName].filter(Boolean).join(' ') : null;
+                  return (
+                    <tr key={s._id} className="hover:bg-muted/20 cursor-pointer transition-colors"
+                      onClick={() => router.push(`/students/${s._id}`)}>
+                      <td className="py-3 px-4 hidden sm:table-cell">
+                        <span className="font-mono text-xs tabular-nums text-muted-foreground">{s.admissionNumber ?? '—'}</span>
+                      </td>
+                      <td className="py-3 px-4 sm:px-3">
+                        <div className="flex items-center gap-2.5">
+                          {s.photo ? (
+                            <img src={s.photo} alt="" className="w-7 h-7 rounded-full object-cover border shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0 border border-primary/15 uppercase">
+                              {s.firstName?.[0]}{s.lastName?.[0]}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{s.firstName} {s.lastName}</p>
+                            <p className="text-[11px] text-muted-foreground font-mono sm:hidden">{s.admissionNumber}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">{cls}</td>
+                      <td className="py-3 px-3 hidden lg:table-cell">
+                        {guardianName ? (
+                          <div>
+                            <p className="text-sm">{guardianName}</p>
+                            {g?.phone && <p className="text-[11px] text-muted-foreground font-mono tabular-nums">{g.phone}</p>}
+                          </div>
+                        ) : <span className="text-xs text-muted-foreground">—</span>}
+                      </td>
+                      {!isTeacher && (
+                        <td className="py-3 px-3 hidden md:table-cell">
+                          <FeeBalance stats={feeStatsData?.[s._id] ?? null} />
+                        </td>
+                      )}
+                      <td className="py-3 px-3 text-center">
+                        <span className={cn('inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border capitalize',
+                          STATUS_STYLE[s.status] ?? 'text-muted-foreground border-border')}>
+                          {s.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                        {!isTeacher && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => router.push(`/students/${s._id}`)}>View details</DropdownMenuItem>
+                              {s.status === 'active' && (
+                                <DropdownMenuItem className="text-destructive" onClick={() => openConfirm(
+                                  `Withdraw ${s.firstName} ${s.lastName}?`,
+                                  'The student will be marked as withdrawn. This can be reversed later.',
+                                  () => withdrawStudent({ id: s._id }),
+                                )}>Withdraw</DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {(pagination?.totalPages ?? 1) > 1 && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Page {page} of {pagination.totalPages} · {totalCount} students</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── Import CSV dialog ─────────────────────────────────────────────── */}
       {!isTeacher && (

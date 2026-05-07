@@ -138,6 +138,14 @@ export const adminApi = {
   listUsers: (params) => api.get('/admin/users', { params }),
   toggleUser: (id) => api.patch(`/admin/users/${id}/toggle`),
   approveSenderId: (id, data) => api.patch(`/admin/schools/${id}/sms-sender-id`, data),
+  // Billing groups
+  listGroups: (params) => api.get('/admin/groups', { params }),
+  getGroup: (id) => api.get(`/admin/groups/${id}`),
+  createGroup: (data) => api.post('/admin/groups', data),
+  updateGroup: (id, data) => api.patch(`/admin/groups/${id}`, data),
+  deleteGroup: (id) => api.delete(`/admin/groups/${id}`),
+  addSchoolToGroup: (groupId, schoolId) => api.post(`/admin/groups/${groupId}/schools`, { schoolId }),
+  removeSchoolFromGroup: (groupId, schoolId) => api.delete(`/admin/groups/${groupId}/schools/${schoolId}`),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────
@@ -193,6 +201,14 @@ export const subjectsApi = {
   mySubjects: () => api.get('/subjects/my-subjects'),
   /** Teacher self-assigns or removes themselves */
   selfAssign: (id, action) => api.patch(`/subjects/${id}/self-assign`, { action }),
+};
+
+// ─── Departments ──────────────────────────────────────────────────────────────
+export const departmentsApi = {
+  list: () => api.get('/subjects/departments'),
+  create: (data) => api.post('/subjects/departments', data),
+  update: (id, data) => api.patch(`/subjects/departments/${id}`, data),
+  delete: (id) => api.delete(`/subjects/departments/${id}`),
 };
 
 // ─── Exams ────────────────────────────────────────────────────────────────────

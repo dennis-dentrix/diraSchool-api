@@ -18,6 +18,7 @@ import {
   MessageSquare,
   UserCheck,
   Umbrella,
+  Layers,
 } from 'lucide-react';
 
 // Role groups
@@ -82,10 +83,11 @@ export const schoolNavGroups = [
 export const schoolNavItems = schoolNavGroups.flatMap((g) => g.items);
 
 export const superadminNavItems = [
-  { label: 'Overview',   href: '/superadmin',            icon: LayoutDashboard },
-  { label: 'Schools',    href: '/superadmin/schools',     icon: Building2 },
-  { label: 'Users',      href: '/superadmin/users',       icon: UserCog },
-  { label: 'Audit Logs', href: '/superadmin/audit-logs',  icon: ShieldAlert },
+  { label: 'Overview',       href: '/superadmin',              icon: LayoutDashboard },
+  { label: 'Schools',        href: '/superadmin/schools',       icon: Building2 },
+  { label: 'Billing Groups', href: '/superadmin/groups',        icon: Layers },
+  { label: 'Users',          href: '/superadmin/users',         icon: UserCog },
+  { label: 'Audit Logs',     href: '/superadmin/audit-logs',    icon: ShieldAlert },
 ];
 
 export const parentNavItems = [

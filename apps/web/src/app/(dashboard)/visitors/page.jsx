@@ -18,7 +18,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { DataTable } from '@/components/shared/data-table';
 
 const today = new Date().toISOString().split('T')[0];
 
@@ -121,54 +120,6 @@ export default function VisitorsPage() {
   const visitors = data?.visitors ?? [];
   const meta = data?.meta ?? {};
 
-  const columns = [
-    {
-      id: 'date',
-      header: 'Date',
-      cell: ({ row }) => (
-        <span className="tabular-nums text-sm">{formatDate(row.original.visitDate)}</span>
-      ),
-    },
-    {
-      id: 'name',
-      header: 'Visitor Name',
-      cell: ({ row }) => <span className="font-medium text-sm">{row.original.name}</span>,
-    },
-    {
-      id: 'reason',
-      header: 'Reason',
-      cell: ({ row }) => <span className="text-sm">{row.original.reason}</span>,
-    },
-    {
-      id: 'comment',
-      header: 'Comment',
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">{row.original.comment || '—'}</span>
-      ),
-    },
-    {
-      id: 'recordedBy',
-      header: 'Recorded By',
-      cell: ({ row }) => {
-        const u = row.original.recordedBy;
-        return <span className="text-xs text-muted-foreground">{u ? `${u.firstName} ${u.lastName}` : '—'}</span>;
-      },
-    },
-    {
-      id: 'actions',
-      header: '',
-      cell: ({ row }) => (
-        <div className="flex gap-1 justify-end">
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditTarget(row.original); setDialogOpen(true); }}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(row.original)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ),
-    },
-  ];
 
   return (
     <div className="space-y-5">
@@ -221,13 +172,59 @@ export default function VisitorsPage() {
           </Button>
         </div>
       ) : (
-        <DataTable
-          columns={columns}
-          data={visitors}
-          page={page}
-          totalPages={meta.pages ?? 1}
-          onPageChange={setPage}
-        />
+        <>
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/30">
+                  <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground w-28">Date</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Visitor</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Reason</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Comment</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Recorded By</th>
+                  <th className="py-2.5 px-3 w-20" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {visitors.map((v) => {
+                  const recorder = v.recordedBy;
+                  return (
+                    <tr key={v._id} className="hover:bg-muted/20 transition-colors">
+                      <td className="py-3 px-4">
+                        <span className="font-mono text-xs tabular-nums text-muted-foreground">{formatDate(v.visitDate)}</span>
+                      </td>
+                      <td className="py-3 px-3 font-medium">{v.name}</td>
+                      <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">{v.reason}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground hidden md:table-cell">{v.comment || '—'}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground hidden lg:table-cell">
+                        {recorder ? `${recorder.firstName} ${recorder.lastName}` : '—'}
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-1 justify-end">
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditTarget(v); setDialogOpen(true); }}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(v)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {(meta.pages ?? 1) > 1 && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Page {page} of {meta.pages}</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={page >= meta.pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       <VisitorDialog

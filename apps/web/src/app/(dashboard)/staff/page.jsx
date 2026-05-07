@@ -18,7 +18,7 @@ import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
 import { RefreshButton } from '@/components/shared/refresh-button';
-import { DataTable } from '@/components/shared/data-table';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -98,139 +98,6 @@ function StatusBadge({ status }) {
   );
 }
 
-// ── Staff table columns ───────────────────────────────────────────────────────
-
-const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseRequest, onEdit, onDeleteRequest, viewerRole }) => [
-  {
-    id: 'name',
-    header: 'Staff Member',
-    cell: ({ row }) => {
-      const u = row.original;
-      return (
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0 border border-primary/15 uppercase">
-            {u.firstName?.[0]}{u.lastName?.[0]}
-          </div>
-          <div>
-            <p className="font-medium text-sm text-foreground leading-tight">{u.firstName} {u.lastName}</p>
-            <p className="text-[11px] text-muted-foreground">{u.email}</p>
-          </div>
-        </div>
-      );
-    },
-  },
-  {
-    accessorKey: 'role',
-    header: 'Role',
-    cell: ({ row }) => (
-      <span className={cn(
-        'inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border capitalize',
-        ROLE_TONE[row.original.role] ?? 'text-muted-foreground border-border bg-muted/40',
-      )}>
-        {ROLE_LABELS[row.original.role] ?? row.original.role}
-      </span>
-    ),
-  },
-  {
-    accessorKey: 'phone',
-    header: 'Phone',
-    cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground font-mono tabular-nums">
-        {row.original.phone ?? '—'}
-      </span>
-    ),
-  },
-  {
-    id: 'tsc',
-    header: 'TSC No.',
-    cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground font-mono tabular-nums">
-        {row.original.tscNumber ?? '—'}
-      </span>
-    ),
-  },
-  {
-    id: 'status',
-    header: 'Status',
-    cell: ({ row }) => {
-      const u = row.original;
-      if (!u.isActive)
-        return <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-bad border-bad/30 bg-bad/8">Paused</span>;
-      if (u.invitePending)
-        return <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-warn border-warn/30 bg-warn/8">Invite Pending</span>;
-      return <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-ok border-ok/30 bg-ok/8">Active</span>;
-    },
-  },
-  {
-    accessorKey: 'createdAt',
-    header: 'Joined',
-    cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground font-mono tabular-nums">
-        {formatDate(row.original.createdAt)}
-      </span>
-    ),
-  },
-  {
-    id: 'actions',
-    cell: ({ row }) => {
-      const u = row.original;
-      const canManageThisUser = u.role !== 'school_admin';
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {u.invitePending && u.isActive && canManageThisUser && (
-              <DropdownMenuItem onClick={() => onResendInvite(u._id)}>
-                <Mail className="h-4 w-4 mr-2" /> Resend Invite
-              </DropdownMenuItem>
-            )}
-            {canManageThisUser && (
-              <DropdownMenuItem onClick={() => onEdit(u)}>
-                <Pencil className="h-4 w-4 mr-2" /> Edit Details
-              </DropdownMenuItem>
-            )}
-            {!u.invitePending && canManageThisUser && (
-              <DropdownMenuItem onClick={() => onResetPassword(u._id)}>
-                <KeyRound className="h-4 w-4 mr-2" /> Send Password Reset
-              </DropdownMenuItem>
-            )}
-            {canManageThisUser && (
-              <>
-                <DropdownMenuSeparator />
-                {u.isActive ? (
-                  <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => onPauseRequest(u)}>
-                    <PauseCircle className="h-4 w-4 mr-2" /> Pause Account
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem className="text-green-700 focus:text-green-700" onClick={() => onToggleActive(u._id, true)}>
-                    <PlayCircle className="h-4 w-4 mr-2" /> Reactivate Account
-                  </DropdownMenuItem>
-                )}
-                {viewerRole !== 'deputy_headteacher' && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => onDeleteRequest(u)}>
-                      <Trash2 className="h-4 w-4 mr-2" /> Delete User
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </>
-            )}
-            {!canManageThisUser && (
-              <DropdownMenuItem disabled>
-                <span className="text-muted-foreground">School admin record is protected</span>
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    },
-  },
-];
 
 // ── Leave: Approve / Reject Dialog ───────────────────────────────────────────
 
@@ -861,14 +728,131 @@ export default function StaffPage() {
             </div>
           </div>
 
-          <DataTable
-            columns={columns({ ...actionHandlers, viewerRole: user?.role })}
-            data={staffRows}
-            loading={isLoading}
-            pageCount={pagination?.totalPages}
-            currentPage={page}
-            onPageChange={setPage}
-          />
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+            </div>
+          ) : staffRows.length === 0 ? (
+            <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground">
+              <UserCheck className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">{search || roleFilter || statusFilter ? 'No staff match your filters.' : 'No staff invited yet.'}</p>
+            </div>
+          ) : (
+            <>
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/30">
+                      <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Staff Member</th>
+                      <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Role</th>
+                      <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Phone</th>
+                      <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">TSC No.</th>
+                      <th className="text-center py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
+                      <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Joined</th>
+                      <th className="py-2.5 px-3 w-10" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {staffRows.map((u) => {
+                      const canManageThisUser = u.role !== 'school_admin';
+                      const statusEl = !u.isActive
+                        ? <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-bad border-bad/30 bg-bad/8">Paused</span>
+                        : u.invitePending
+                          ? <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-warn border-warn/30 bg-warn/8">Invite Pending</span>
+                          : <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-ok border-ok/30 bg-ok/8">Active</span>;
+                      return (
+                        <tr key={u._id} className="hover:bg-muted/20 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0 border border-primary/15 uppercase">
+                                {u.firstName?.[0]}{u.lastName?.[0]}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">{u.firstName} {u.lastName}</p>
+                                <p className="text-[11px] text-muted-foreground truncate">{u.email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 hidden sm:table-cell">
+                            <span className={cn('inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border capitalize',
+                              ROLE_TONE[u.role] ?? 'text-muted-foreground border-border bg-muted/40')}>
+                              {ROLE_LABELS[u.role] ?? u.role}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-xs text-muted-foreground font-mono tabular-nums hidden md:table-cell">{u.phone ?? '—'}</td>
+                          <td className="py-3 px-3 text-xs text-muted-foreground font-mono tabular-nums hidden lg:table-cell">{u.tscNumber ?? '—'}</td>
+                          <td className="py-3 px-3 text-center">{statusEl}</td>
+                          <td className="py-3 px-3 text-xs text-muted-foreground font-mono tabular-nums hidden md:table-cell">{formatDate(u.createdAt)}</td>
+                          <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {u.invitePending && u.isActive && canManageThisUser && (
+                                  <DropdownMenuItem onClick={() => actionHandlers.onResendInvite(u._id)}>
+                                    <Mail className="h-4 w-4 mr-2" /> Resend Invite
+                                  </DropdownMenuItem>
+                                )}
+                                {canManageThisUser && (
+                                  <DropdownMenuItem onClick={() => actionHandlers.onEdit(u)}>
+                                    <Pencil className="h-4 w-4 mr-2" /> Edit Details
+                                  </DropdownMenuItem>
+                                )}
+                                {!u.invitePending && canManageThisUser && (
+                                  <DropdownMenuItem onClick={() => actionHandlers.onResetPassword(u._id)}>
+                                    <KeyRound className="h-4 w-4 mr-2" /> Send Password Reset
+                                  </DropdownMenuItem>
+                                )}
+                                {canManageThisUser && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    {u.isActive ? (
+                                      <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => actionHandlers.onPauseRequest(u)}>
+                                        <PauseCircle className="h-4 w-4 mr-2" /> Pause Account
+                                      </DropdownMenuItem>
+                                    ) : (
+                                      <DropdownMenuItem className="text-green-700 focus:text-green-700" onClick={() => actionHandlers.onToggleActive(u._id, true)}>
+                                        <PlayCircle className="h-4 w-4 mr-2" /> Reactivate Account
+                                      </DropdownMenuItem>
+                                    )}
+                                    {user?.role !== 'deputy_headteacher' && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => actionHandlers.onDeleteRequest(u)}>
+                                          <Trash2 className="h-4 w-4 mr-2" /> Delete User
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                                {!canManageThisUser && (
+                                  <DropdownMenuItem disabled>
+                                    <span className="text-muted-foreground text-xs">School admin record is protected</span>
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {(pagination?.totalPages ?? 1) > 1 && (
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Page {page} of {pagination.totalPages}</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                    <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </TabsContent>
 
         {/* ── Leave tab ────────────────────────────────────────────────────── */}

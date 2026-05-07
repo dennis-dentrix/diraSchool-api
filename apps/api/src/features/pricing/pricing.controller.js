@@ -2,21 +2,21 @@ import { z } from 'zod';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { FEATURE_ADDONS, FEATURE_ADDON_PRICING } from '../../constants/index.js';
 
-const BASE_FEE = 10000;
-const PER_STUDENT_RATE = 40;
+const BASE_FEE = 12000;
+const PER_STUDENT_RATE = 50;
 const VAT_RATE = 0.16;
 const SCHOOL_FEE_ASSUMPTION = 10000; // KES per student per term (for % calc)
 
 const MULTIPLIERS = {
   'per-term': 1,
-  annual: 2.7, // 3 terms − 10% discount
+  annual: 2.70, // 3 terms − 10% discount
   'multi-year': 2.55, // 3 terms − 15% discount per year
 };
 
 const schema = z.object({
   students: z.coerce.number().int().min(1).max(10000),
   option: z.enum(['per-term', 'annual', 'multi-year']).default('per-term'),
-  includeVAT: z.coerce.boolean().default(true),
+  includeVAT: z.coerce.boolean().default(false),
   addOns: z.string().optional(), // csv: transport,sms
 });
 

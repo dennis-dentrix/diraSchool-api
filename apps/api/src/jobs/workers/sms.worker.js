@@ -1,30 +1,41 @@
 /**
  * SMS Worker — processes jobs from the "sms" queue.
  *
- * Each job payload:
+ * Job payload:
  * {
- *   to:       string | string[]   — E.164 Kenyan phone number(s)
- *   message:  string              — SMS body (max 160 chars per segment)
- *   schoolId: string              — for school sender-ID lookup
- *   trigger:  SMS_TRIGGER_TYPES   — fee_reminder | absence_alert | etc.
- *   smsLogId: string              — SmsLog._id to update on completion
+ *   to:           string | string[]   — E.164 Kenyan phone number(s)
+ *   message:      string
+ *   schoolId:     string
+ *   trigger:      SMS_TRIGGER_TYPES
+ *   smsLogId:     string              — SmsLog._id to update on completion
+ *   term?:        string              — override current term (optional)
+ *   academicYear?: string
  * }
  *
- * Test mode: when AT_TEST_NUMBERS is set in env, ALL recipients are replaced
- * with those numbers so real users are never messaged during development / QA.
+ * Cap rule: 5 SMS per parent phone per term (included). Sends beyond the cap
+ * deduct from the school's purchasedRemaining credit balance atomically.
+ * Phones that are capped with no purchased credits are skipped (status: capped).
+ *
+ * Test mode: CELCOM_TEST_NUMBERS redirects all sends to those numbers.
  */
 import AfricasTalking from 'africastalking';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
 import School from '../../features/schools/School.model.js';
 import SmsLog from '../../features/sms/SmsLog.model.js';
+import SmsDelivery from '../../features/sms/SmsDelivery.model.js';
+import {
+  SMS_CAP_PER_PARENT_PER_TERM,
+  SMS_DELIVERY_STATUS,
+  SMS_CREDIT_TYPE,
+} from '../../constants/index.js';
+import { getCurrentTermAndYear } from '../../utils/term.js';
 
-// Lazy singleton — initialized on first job so env is fully loaded.
 let _smsClient = null;
 function getClient() {
   if (_smsClient) return _smsClient;
   if (!env.AT_USERNAME || !env.AT_API_KEY) {
-    throw new Error('Africa\'s Talking not configured (AT_USERNAME / AT_API_KEY missing).');
+    throw new Error("Africa's Talking not configured (AT_USERNAME / AT_API_KEY missing).");
   }
   const AT = AfricasTalking({ username: env.AT_USERNAME, apiKey: env.AT_API_KEY });
   _smsClient = AT.SMS;
@@ -40,105 +51,204 @@ async function updateLog(smsLogId, update) {
   }
 }
 
+/**
+ * For each phone, count non-capped SmsDelivery records in the current term.
+ * Returns a Map<phone, count>.
+ */
+async function getTermCounts(schoolId, phones, term, academicYear) {
+  const rows = await SmsDelivery.aggregate([
+    {
+      $match: {
+        schoolId: schoolId,
+        phone: { $in: phones },
+        term,
+        academicYear,
+        deliveryStatus: { $ne: SMS_DELIVERY_STATUS.CAPPED },
+      },
+    },
+    { $group: { _id: '$phone', count: { $sum: 1 } } },
+  ]);
+  const map = new Map();
+  for (const r of rows) map.set(r._id, r.count);
+  return map;
+}
+
+/**
+ * Atomically deduct `n` purchased credits from the school.
+ * Returns true if deduction succeeded, false if insufficient credits.
+ */
+async function deductCredits(schoolId, n) {
+  const updated = await School.findOneAndUpdate(
+    { _id: schoolId, 'smsCredits.purchasedRemaining': { $gte: n } },
+    { $inc: { 'smsCredits.purchasedRemaining': -n } },
+    { new: true }
+  );
+  return !!updated;
+}
+
 export const processSmsJob = async (job) => {
-  const { to, message, schoolId, trigger, smsLogId } = job.data;
+  const { to, message, schoolId, trigger, smsLogId, term: jobTerm, academicYear: jobYear } = job.data;
 
-  let rawRecipients = Array.isArray(to) ? to : [to];
-
-  // ── Test-number guard ────────────────────────────────────────────────────────
-  // When AT_TEST_NUMBERS is set, redirect ALL messages to the test numbers only.
-  // This prevents accidental real sends during development / QA.
-  if (env.AT_TEST_NUMBERS && env.AT_TEST_NUMBERS.length > 0) {
-    logger.warn('[SMS] TEST MODE — redirecting recipients to test numbers', {
-      originalCount: rawRecipients.length,
-      testNumbers: env.AT_TEST_NUMBERS,
-    });
-    rawRecipients = env.AT_TEST_NUMBERS;
+  if (!env.AT_USERNAME || !env.AT_API_KEY) {
+    await updateLog(smsLogId, { status: 'failed' });
+    throw new Error("Africa's Talking not configured.");
   }
 
-  if (rawRecipients.length === 0) {
-    logger.warn('[SMS] No recipients after filtering — skipping job', { jobId: job.id });
+  const { term, academicYear } = jobTerm
+    ? { term: jobTerm, academicYear: jobYear }
+    : getCurrentTermAndYear();
+
+  let allRecipients = Array.isArray(to) ? to : [to];
+
+  // ── Test-number redirect ────────────────────────────────────────────────────
+  if (env.AT_TEST_NUMBERS?.length) {
+    logger.warn('[SMS] TEST MODE — redirecting to test numbers', {
+      originalCount: allRecipients.length, testNumbers: env.AT_TEST_NUMBERS,
+    });
+    allRecipients = env.AT_TEST_NUMBERS;
+  }
+
+  if (allRecipients.length === 0) {
     await updateLog(smsLogId, { status: 'failed', sentCount: 0, failedCount: 0 });
-    return { sent: 0, failed: 0 };
+    return { sent: 0, failed: 0, capped: 0 };
   }
 
   // ── Sender ID ────────────────────────────────────────────────────────────────
-  // Only use a custom sender ID if the school has one explicitly approved by AT.
-  // Sending with an unapproved ID causes AT to reject the message outright.
-  // Omitting `from` makes AT use the default shortcode assigned to the account.
-  let senderId = null;
+  let senderId = env.AT_SENDER_ID || null;
   try {
-    const school = await School.findById(schoolId).select('name smsSettings').lean();
-    const approvedId = school?.smsSettings?.senderIdApproved;
-    senderId = approvedId || env.AT_SENDER_ID || null;
-
-    if (!approvedId) {
-      logger.info('[SMS] No school-level approved sender ID — using account default', {
-        schoolId,
-        fallback: senderId ?? '(AT account default)',
-      });
-    }
-
-    logger.info('[SMS] Sending', {
-      jobId: job.id,
-      trigger,
-      schoolId,
-      schoolName: school?.name,
-      senderId: senderId ?? '(AT default)',
-      recipients: rawRecipients.length,
-      testMode: !!(env.AT_TEST_NUMBERS?.length),
-    });
+    const school = await School.findById(schoolId).select('name smsSettings smsCredits').lean();
+    if (school?.smsSettings?.senderIdApproved) senderId = school.smsSettings.senderIdApproved;
   } catch (err) {
-    logger.warn('[SMS] Could not fetch school for sender ID — using env fallback', {
-      err: err.message, schoolId,
-    });
-    senderId = env.AT_SENDER_ID || null;
+    logger.warn('[SMS] Could not fetch school sender ID', { err: err.message, schoolId });
   }
 
-  // ── Send via Africa's Talking ─────────────────────────────────────────────────
-  let sentCount = 0;
-  let failedCount = rawRecipients.length;
+  // ── Per-parent term cap ───────────────────────────────────────────────────
+  const schoolObjId = (await import('mongoose')).default.Types.ObjectId.createFromHexString
+    ? (await import('mongoose')).default.Types.ObjectId.createFromHexString(schoolId)
+    : new (await import('mongoose')).default.Types.ObjectId(schoolId);
 
+  const counts = await getTermCounts(schoolObjId, allRecipients, term, academicYear);
+
+  const withinCap = [];
+  const overCap   = [];
+  for (const phone of allRecipients) {
+    const used = counts.get(phone) ?? 0;
+    if (used < SMS_CAP_PER_PARENT_PER_TERM) withinCap.push(phone);
+    else overCap.push(phone);
+  }
+
+  // For phones over the cap, deduct one purchased credit each
+  let purchasedAllowed = [];
+  let capped = [];
+  if (overCap.length > 0) {
+    const ok = await deductCredits(schoolId, overCap.length);
+    if (ok) {
+      purchasedAllowed = overCap;
+    } else {
+      // Insufficient credits — try deducting however many are available
+      const school = await School.findById(schoolId).select('smsCredits').lean();
+      const available = school?.smsCredits?.purchasedRemaining ?? 0;
+      if (available > 0) {
+        await deductCredits(schoolId, available);
+        purchasedAllowed = overCap.slice(0, available);
+        capped = overCap.slice(available);
+      } else {
+        capped = overCap;
+      }
+    }
+  }
+
+  const toSend = [...withinCap, ...purchasedAllowed];
+
+  // Record capped phones immediately
+  if (capped.length > 0) {
+    await SmsDelivery.insertMany(
+      capped.map((phone) => ({
+        schoolId: schoolObjId,
+        smsLogId,
+        phone,
+        trigger,
+        term,
+        academicYear,
+        creditType: SMS_CREDIT_TYPE.PURCHASED,
+        deliveryStatus: SMS_DELIVERY_STATUS.CAPPED,
+      })),
+      { ordered: false }
+    );
+  }
+
+  if (toSend.length === 0) {
+    await updateLog(smsLogId, {
+      status: 'failed',
+      sentCount: 0,
+      failedCount: 0,
+      cappedCount: capped.length,
+      term,
+      academicYear,
+    });
+    logger.warn('[SMS] All recipients capped, nothing sent', { jobId: job.id, schoolId });
+    return { sent: 0, failed: 0, capped: capped.length };
+  }
+
+  // ── Send to Africa's Talking ─────────────────────────────────────────────
+  let atResults = [];
   try {
     const sms = getClient();
-
-    const sendParams = {
-      to: rawRecipients,
-      message,
-    };
-    // Only attach `from` when we have an approved/configured sender ID.
-    // Passing `from: null` or `from: undefined` causes AT SDK to throw.
-    if (senderId) sendParams.from = senderId;
-
-    const result = await sms.send(sendParams);
-
-    const recipientResults = result?.SMSMessageData?.Recipients ?? [];
-
-    const failed = recipientResults.filter((r) => r.statusCode !== 101);
-    sentCount   = recipientResults.length - failed.length;
-    failedCount = failed.length;
-
-    if (failed.length > 0) {
-      logger.warn('[SMS] Some recipients failed', {
-        jobId: job.id,
-        failed: failed.map((r) => ({ number: r.number, status: r.status, statusCode: r.statusCode })),
-      });
-    }
-
-    logger.info('[SMS] Job completed', { jobId: job.id, sent: sentCount, failed: failedCount });
+    const params = { to: toSend, message };
+    if (senderId) params.from = senderId;
+    const result = await sms.send(params);
+    atResults = result?.SMSMessageData?.Recipients ?? [];
   } catch (err) {
-    logger.error('[SMS] Africa\'s Talking send failed', {
-      jobId: job.id,
-      err: err.message,
-      schoolId,
+    logger.error("[SMS] Africa's Talking send failed", { jobId: job.id, err: err.message, schoolId });
+    await updateLog(smsLogId, {
+      status: 'failed', sentCount: 0, failedCount: toSend.length,
+      cappedCount: capped.length, term, academicYear,
     });
-    // Re-throw so BullMQ can retry the job (3 attempts with exponential backoff)
-    await updateLog(smsLogId, { status: 'failed', sentCount: 0, failedCount: rawRecipients.length });
     throw err;
   }
 
-  const status = failedCount === 0 ? 'sent' : sentCount === 0 ? 'failed' : 'partial';
-  await updateLog(smsLogId, { status, sentCount, failedCount });
+  // ── Persist SmsDelivery per recipient ────────────────────────────────────
+  const deliveryDocs = atResults.map((r) => {
+    const success = r.statusCode === 101;
+    const phone = toSend.find((p) => p === r.number) ?? r.number;
+    return {
+      schoolId: schoolObjId,
+      smsLogId,
+      phone,
+      messageId: r.messageId ?? null,
+      trigger,
+      term,
+      academicYear,
+      creditType: purchasedAllowed.includes(phone)
+        ? SMS_CREDIT_TYPE.PURCHASED
+        : SMS_CREDIT_TYPE.INCLUDED,
+      deliveryStatus: success ? SMS_DELIVERY_STATUS.SENT : SMS_DELIVERY_STATUS.FAILED,
+      failureReason: success ? undefined : r.status,
+    };
+  });
 
-  return { sent: sentCount, failed: failedCount };
+  if (deliveryDocs.length > 0) {
+    await SmsDelivery.insertMany(deliveryDocs, { ordered: false });
+  }
+
+  const sentCount   = atResults.filter((r) => r.statusCode === 101).length;
+  const failedCount = atResults.length - sentCount;
+
+  if (failedCount > 0) {
+    logger.warn('[SMS] Some recipients failed at AT', {
+      jobId: job.id,
+      failed: atResults
+        .filter((r) => r.statusCode !== 101)
+        .map((r) => ({ number: r.number, status: r.status })),
+    });
+  }
+
+  const status = failedCount === 0 ? 'sent' : sentCount === 0 ? 'failed' : 'partial';
+  await updateLog(smsLogId, { status, sentCount, failedCount, cappedCount: capped.length, term, academicYear });
+
+  logger.info('[SMS] Job completed', {
+    jobId: job.id, sent: sentCount, failed: failedCount, capped: capped.length,
+  });
+
+  return { sent: sentCount, failed: failedCount, capped: capped.length };
 };

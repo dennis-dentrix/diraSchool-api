@@ -6,7 +6,7 @@ export const metadata = {
   alternates: { canonical: 'https://diraschool.com/privacy' },
 };
 
-const EFFECTIVE_DATE = '1 May 2025';
+const EFFECTIVE_DATE = '7 May 2026';
 const CONTACT_EMAIL = 'contact@diraschool.com';
 
 function Section({ title, children }) {
@@ -135,17 +135,29 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-2 mt-2">
             <li>
               <strong>Africa's Talking (SMS)</strong> — Phone numbers are transmitted to send parent
-              notifications and OTP messages. Africa's Talking operates under their own Privacy Policy and
-              is compliant with applicable Kenyan telecoms regulations.
+              notifications and OTP verification messages. Africa's Talking operates under their own
+              Privacy Policy and is compliant with applicable Kenyan telecoms regulations.
             </li>
             <li>
-              <strong>DigitalOcean (Hosting &amp; Database)</strong> — All data is stored on DigitalOcean
-              managed infrastructure in the AMS3 (Amsterdam) region with encrypted at-rest storage. We are
-              actively working to move to an East Africa region as one becomes available.
+              <strong>DigitalOcean (Hosting &amp; Storage)</strong> — All application data is stored on
+              DigitalOcean managed infrastructure in the AMS3 (Amsterdam) region with encrypted at-rest
+              storage. File uploads (photos, lesson plans) are stored on DigitalOcean Spaces object storage.
+              We are actively working to move to an East Africa region as one becomes available.
             </li>
             <li>
-              <strong>Resend (Transactional Email)</strong> — Email addresses are shared solely for
-              delivering transactional messages such as password resets and subscription notices.
+              <strong>ZeptoMail by Zoho (Transactional Email)</strong> — Email addresses are shared solely
+              for delivering transactional messages such as account verification, password resets, and
+              subscription notices.
+            </li>
+            <li>
+              <strong>Paystack (Payment Processing)</strong> — Subscription renewal and SMS credit
+              purchases are processed via Paystack. Card and payment details are handled directly by
+              Paystack and are never stored by DiraSchool.
+            </li>
+            <li>
+              <strong>Safaricom (M-Pesa)</strong> — For schools using M-Pesa fee collection, payment
+              transaction data (amount, reference, phone number) is shared with Safaricom via the Daraja
+              API to process and confirm payments. Money flows directly to the school's M-Pesa paybill.
             </li>
           </ul>
         </Section>

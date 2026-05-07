@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BrandLogo } from '@/components/shared/brand-logo';
 import {
   ArrowRight, Check, Users, GraduationCap, CreditCard,
   ClipboardCheck, FileText, BookOpen, Bus,
@@ -66,12 +67,7 @@ function MarketingNav() {
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-900/50">
-            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          </div>
+          <BrandLogo className="w-8 h-8 shrink-0" />
           <span className="font-bold text-white text-sm tracking-tight">Diraschool</span>
         </Link>
         <div className="hidden sm:flex items-center gap-6 text-sm text-slate-400">
@@ -369,6 +365,142 @@ function Testimonials() {
   );
 }
 
+// ── Product Preview ────────────────────────────────────────────────────────────
+function ProductPreview() {
+  return (
+    <section className="bg-slate-950 py-24 px-4 sm:px-6 border-t border-white/8">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-14">
+          <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">The platform</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
+            Clean, fast, and built for busy staff
+          </h2>
+          <p className="mt-3 text-slate-400 max-w-xl mx-auto text-sm leading-relaxed">
+            No training required. Teachers take attendance on any phone. Admins generate CBC report cards in clicks.
+            Everything is real-time, everything is connected.
+          </p>
+        </div>
+
+        {/* App mockup */}
+        <div className="relative rounded-2xl border border-white/10 overflow-hidden bg-[#0f1117] shadow-2xl shadow-black/60">
+          {/* Browser bar */}
+          <div className="flex items-center gap-1.5 px-4 py-3 bg-white/[0.03] border-b border-white/8">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
+            <div className="ml-3 h-5 max-w-xs bg-white/5 rounded text-[11px] text-slate-500 flex items-center px-3">
+              app.diraschool.com/report-cards
+            </div>
+          </div>
+
+          <div className="flex" style={{ height: '390px' }}>
+            {/* Sidebar */}
+            <div className="hidden sm:flex w-52 shrink-0 border-r border-white/8 bg-white/[0.015] flex-col p-3 gap-0.5">
+              <div className="flex items-center gap-2 px-2 py-3 mb-1">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 shrink-0" />
+                <span className="text-white text-sm font-bold">Diraschool</span>
+              </div>
+              {[
+                ['Dashboard', false],
+                ['Students', false],
+                ['Attendance', false],
+                ['Report Cards', true],
+                ['Fees', false],
+                ['Staff', false],
+                ['Exams', false],
+              ].map(([label, active]) => (
+                <div key={label}
+                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs ${active ? 'bg-blue-600/20 text-blue-300 font-medium' : 'text-slate-500'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-blue-400' : 'bg-slate-700'}`} />
+                  {label}
+                </div>
+              ))}
+            </div>
+
+            {/* Main content */}
+            <div className="flex-1 min-w-0 overflow-hidden p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[9px] text-slate-500 uppercase tracking-widest mb-0.5">Academics</p>
+                  <h3 className="text-white font-semibold text-lg">Report Cards</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-7 px-3 rounded-lg bg-white/5 text-slate-400 text-xs flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded bg-slate-600 shrink-0" />Filter
+                  </div>
+                  <div className="h-7 px-3 rounded-lg bg-blue-600 text-white text-xs flex items-center gap-1 font-medium">
+                    + Generate
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: 'Total', val: '143' },
+                  { label: 'Published', val: '89', color: 'text-emerald-400' },
+                  { label: 'Draft', val: '54', color: 'text-amber-400' },
+                  { label: 'Avg Grade', val: 'ME', color: 'text-blue-400' },
+                ].map(({ label, val, color }) => (
+                  <div key={label} className="rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                    <p className="text-[9px] text-slate-500 uppercase tracking-widest">{label}</p>
+                    <p className={`text-xl font-bold font-mono tabular-nums mt-0.5 ${color ?? 'text-white'}`}>{val}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="rounded-lg border border-white/8 overflow-hidden">
+                <div className="bg-white/[0.04] px-3 py-2 grid grid-cols-5 gap-4 border-b border-white/8">
+                  {['Student', 'Class', 'Term', 'Grade', 'Status'].map((h) => (
+                    <span key={h} className="text-[9px] font-semibold uppercase tracking-widest text-slate-500">{h}</span>
+                  ))}
+                </div>
+                {[
+                  ['Amani Kariuki',   'Grade 5A', 'Term 1', 'ME', 'published', 'text-emerald-400'],
+                  ['Brian Odhiambo', 'Grade 5B', 'Term 1', 'EE', 'published', 'text-emerald-400'],
+                  ['Cynthia Wanja',  'Grade 6A', 'Term 1', 'AE', 'draft',     'text-amber-400'],
+                  ['David Mutua',    'Grade 4A', 'Term 1', 'BE', 'draft',     'text-amber-400'],
+                  ['Esther Njoki',   'Grade 5A', 'Term 1', 'EE', 'published', 'text-emerald-400'],
+                ].map(([name, cls, term, grade, status, statusColor]) => (
+                  <div key={name} className="border-t border-white/5 px-3 py-2.5 grid grid-cols-5 gap-4 hover:bg-white/[0.02] transition-colors cursor-default">
+                    <span className="text-slate-200 text-xs font-medium truncate">{name}</span>
+                    <span className="text-slate-400 text-xs">{cls}</span>
+                    <span className="text-slate-500 text-xs font-mono">{term}</span>
+                    <span className={`text-xs font-bold ${grade === 'EE' ? 'text-emerald-400' : grade === 'ME' ? 'text-blue-400' : grade === 'AE' ? 'text-amber-400' : 'text-red-400'}`}>{grade}</span>
+                    <span className={`text-xs ${statusColor}`}>{status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-10 grid sm:grid-cols-3 gap-5">
+          {[
+            {
+              label: 'Works on any device',
+              desc: 'Teachers mark attendance on phones. Office staff manage records on laptops. Same data, everywhere, in real time.',
+            },
+            {
+              label: 'CBC report cards in 2 minutes',
+              desc: 'Select a class, click Generate. All 40 CBC report cards are ready to print — formatted and signed-off.',
+            },
+            {
+              label: 'Everything in sync',
+              desc: 'Fees, marks, and attendance update live. No end-of-week consolidation. No missing registers.',
+            },
+          ].map(({ label, desc }) => (
+            <div key={label} className="rounded-xl border border-white/8 bg-white/[0.03] px-5 py-5">
+              <div className="w-6 h-6 rounded-lg bg-blue-500/20 border border-blue-500/20 mb-3" />
+              <h3 className="text-white text-sm font-semibold mb-1.5">{label}</h3>
+              <p className="text-slate-400 text-xs leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── How it works ───────────────────────────────────────────────────────────────
 function HowItWorks() {
   const steps = [
@@ -424,14 +556,14 @@ function PricingTeaser() {
           <div className="flex-1">
             <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">Simple pricing</p>
             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              KES 8,500 base +<br className="hidden sm:block" /> KES 40 per student per term
+              KES 12,000 base +<br className="hidden sm:block" /> KES 50 per student per term
             </h2>
             <p className="mt-3 text-slate-400 text-sm leading-relaxed max-w-md">
               Under 1% of what parents pay in school fees — to run your entire school digitally. Billed 3 times a year, when you collect fees.
-              Annual billing saves 15%. No hidden costs, ever.
+              Annual billing saves 10%. No hidden costs, ever.
             </p>
             <div className="mt-5 flex flex-wrap gap-3 text-xs">
-              {['Annual billing: 15% off', 'VAT invoices provided', 'All features included', 'No student limits'].map((t) => (
+              {['Annual billing: 10% off', 'VAT invoices provided', 'All features included', 'No student limits'].map((t) => (
                 <span key={t} className="flex items-center gap-1.5 text-slate-400">
                   <Check className="h-3 w-3 text-emerald-400 shrink-0" />{t}
                 </span>
@@ -629,6 +761,7 @@ export default function LandingPage() {
         <Features />
         <Testimonials />
         <HowItWorks />
+        <ProductPreview />
         <PricingTeaser />
         <FAQSection />
         <AboutSection />

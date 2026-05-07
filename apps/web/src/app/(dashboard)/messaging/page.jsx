@@ -534,7 +534,7 @@ export default function MessagingPage() {
         overline="SMS"
       />
 
-      {TEST_NUMBERS && (
+      {/* {TEST_NUMBERS && (
         <div className="flex items-start gap-3 rounded-xl border border-warn/30 bg-warn/5 p-4">
           <FlaskConical className="h-4 w-4 text-warn mt-0.5 shrink-0" aria-hidden />
           <div>
@@ -544,7 +544,7 @@ export default function MessagingPage() {
             </p>
           </div>
         </div>
-      )}
+      )} */}
 
       <Tabs defaultValue="single">
         <TabsList className="grid grid-cols-3 w-full max-w-sm">

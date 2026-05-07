@@ -1,6 +1,6 @@
 # DiraSchool — Product Roadmap & Technical Recommendations
 
-**Last updated:** 2026-04-24  
+**Last updated:** 2026-04-24
 **Overall readiness: 7.2 / 10**
 
 The architecture is production-quality. The gaps are almost entirely surface-level — features that are fully built on the API side but not yet surfaced in the UI, plus a few data-integrity fixes.
@@ -56,7 +56,7 @@ The architecture is production-quality. The gaps are almost entirely surface-lev
 - **Status:** ✅ Complete — endpoint added to auth controller/routes; "Edit Profile" modal added to the header user menu.
 
 ### Billing Page — Dynamic Pricing
-- **Status:** `BASE_FEE = 7500` and `PER_STUDENT = 40` are hardcoded in `apps/web/src/app/(dashboard)/billing/page.jsx`. The `/pricing/calculate` endpoint exists.
+- **Status:** `BASE_FEE = 7500` and `PER_STUDENT = 50` are hardcoded in `apps/web/src/app/(dashboard)/billing/page.jsx`. The `/pricing/calculate` endpoint exists.
 - **Fix:** Replace the hardcoded constants with a `useQuery` call to `/pricing/calculate`. Prevents wrong numbers if pricing changes.
 
 ---

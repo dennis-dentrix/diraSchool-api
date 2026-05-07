@@ -25,7 +25,7 @@ const BILLING_ROLES = ['school_admin', 'director', 'headteacher'];
 
 // ── Pricing constants ────────────────────────────────────────────────────────
 const BASE_FEE = 12000;
-const PER_STUDENT = 40;
+const PER_STUDENT = 45;
 const VAT = 0.16;
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 

@@ -398,12 +398,5 @@ export const handleInboundSms = asyncHandler(async (req, res) => {
     provider: parsed.provider,
   });
 
-  await queueReceiptSms({
-    school,
-    student: match.student,
-    payment,
-    to: parsed.senderPhone,
-  });
-
   return sendSuccess(res, {});
 });

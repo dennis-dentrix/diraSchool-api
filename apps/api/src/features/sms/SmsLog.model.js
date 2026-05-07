@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { SMS_TRIGGER_TYPES } from '../../constants/index.js';
+import { SMS_TRIGGER_TYPES, TERMS } from '../../constants/index.js';
 
 const SmsLogSchema = new mongoose.Schema(
   {
@@ -25,8 +25,11 @@ const SmsLogSchema = new mongoose.Schema(
       enum: ['queued', 'sent', 'partial', 'failed'],
       default: 'queued',
     },
-    sentCount: { type: Number, default: 0 },
+    sentCount:   { type: Number, default: 0 },
     failedCount: { type: Number, default: 0 },
+    cappedCount: { type: Number, default: 0 }, // phones blocked by per-parent term cap
+    term:         { type: String, enum: TERMS },
+    academicYear: { type: String },
   },
   { timestamps: true }
 );

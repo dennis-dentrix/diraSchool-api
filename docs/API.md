@@ -1,2282 +1,1414 @@
-# Diraschool API Documentation
+# DiraSchool API Reference
 
-**Version:** 1.0  
-**Base URL (Production):** `https://diraschool-api-production.up.railway.app`  
-**Base URL (Local):** `http://localhost:3000`  
-**API Prefix:** `/api/v1`
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Authentication](#authentication)
-3. [Response Format](#response-format)
-4. [Error Codes](#error-codes)
-5. [Pagination](#pagination)
-6. [Rate Limiting](#rate-limiting)
-7. [Roles & Permissions](#roles--permissions)
-8. [Enumerations](#enumerations)
-9. [Endpoints](#endpoints)
-   - [Health Check](#health-check)
-   - [Auth](#auth)
-   - [Users (Staff)](#users-staff)
-   - [Schools](#schools)
-   - [Classes](#classes)
-   - [Students](#students)
-   - [Subjects](#subjects)
-   - [Attendance](#attendance)
-   - [Exams](#exams)
-   - [Results](#results)
-   - [Fees](#fees)
-   - [Report Cards](#report-cards)
-   - [Timetable](#timetable)
-   - [Library](#library)
-   - [Transport](#transport)
-   - [Settings](#settings)
-   - [Audit Logs](#audit-logs)
-   - [Parent Portal](#parent-portal)
+**Base URL:** `https://api.diraschool.com/api/v1`  
+**Version:** v1  
+**Updated:** May 2026
 
 ---
 
 ## Overview
 
-Diraschool is a multi-tenant CBC school management SaaS. Every resource (students, classes, users, fees, etc.) is scoped to a `schoolId`. A user's `schoolId` is embedded in their JWT cookie — there is no need to pass it explicitly in request bodies.
+DiraSchool is a multi-tenant SaaS platform for Kenyan CBC schools. Every API request operates within a single school's data scope — no request can read or modify another school's data.
 
-**Multi-tenancy rule:** All data operations are automatically filtered to the authenticated user's school. Cross-school access returns `404` (not `403`) to prevent information leakage.
+### Authentication
 
----
+All protected endpoints require a valid session cookie set by `POST /auth/login`. The cookie is HTTP-only and cannot be read by JavaScript. Pass it automatically via the browser or include it explicitly in server-to-server requests.
 
-## Authentication
-
-Authentication uses **httpOnly cookies**. The server sets a `token` cookie on login/register — no manual token management is required. Postman and browsers handle this automatically.
-
-### Cookie Details
-
-| Property | Value |
-|---|---|
-| Name | `token` |
-| Type | HttpOnly, SameSite=Strict |
-| Lifetime | Matches `JWT_EXPIRES_IN` (default: `1d`) |
-| Transport | Sent automatically on every request |
-
-### How it works
-
-1. Call `POST /api/v1/auth/login` (or `/register`)
-2. The server sets the `token` cookie — do **not** store the token manually
-3. All subsequent requests automatically include the cookie
-4. Call `POST /api/v1/auth/logout` to clear the cookie
-
----
-
-## Response Format
-
-All responses follow a consistent shape.
-
-### Success Response
-```json
-{
-  "status": "success",
-  "<resource>": { ... }
-}
 ```
-Data fields are spread at the top level alongside `status` — there is **no** wrapping `data` key.
-
-### Error Response
-```json
-{
-  "message": "Human-readable error description"
-}
+Cookie: token=<jwt>
 ```
 
-### Paginated Success Response
+Rate limits apply globally (200 req/IP/min) and more strictly on auth endpoints (20 req/IP/15 min).
+
+### Response Format
+
+All responses follow a consistent envelope:
+
 ```json
-{
-  "status": "success",
-  "<resources>": [ ... ],
-  "meta": {
-    "total": 47,
-    "page": 1,
-    "limit": 20,
-    "totalPages": 3
-  }
-}
+{ "success": true, "data": { ... } }
+{ "success": false, "message": "Human-readable error" }
 ```
 
----
-
-## Error Codes
-
-| Code | Meaning |
-|---|---|
-| `400` | Bad request — validation failure, invalid body |
-| `401` | Not authenticated — missing or expired cookie |
-| `403` | Forbidden — authenticated but insufficient role/plan |
-| `404` | Resource not found (or cross-school access attempt) |
-| `409` | Conflict — duplicate unique field (e.g. email, admission number) |
-| `429` | Rate limit exceeded |
-| `500` | Internal server error |
-
----
-
-## Pagination
-
-All list endpoints support optional query parameters:
-
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `page` | integer | `1` | Page number (1-indexed) |
-| `limit` | integer | `20` | Items per page (max `100`) |
-
-The response includes a `meta` object with `total`, `page`, `limit`, and `totalPages`.
-
----
-
-## Rate Limiting
-
-Authentication endpoints (`/auth/*`) are rate-limited to **20 requests per 15 minutes** per IP.
-
-When exceeded:
-```json
-{ "message": "Too many attempts. Please try again in 15 minutes." }
-```
-
----
-
-## Roles & Permissions
-
-### Role Hierarchy
-
-| Role | Scope | Description |
-|---|---|---|
-| `superadmin` | Global | Platform admin — manages schools and subscriptions |
-| `school_admin` | School | Full access to all school data |
-| `director` | School | Full admin access |
-| `headteacher` | School | Full admin access |
-| `deputy_headteacher` | School | Full admin access |
-| `secretary` | School | Admin access |
-| `accountant` | School | Admin access (fees focus) |
-| `teacher` | School | Limited — own class data only |
-| `parent` | School | Read-only — own children only |
-
-**Admin roles** (have full school management access):  
-`school_admin`, `director`, `headteacher`, `deputy_headteacher`
-
-### Middleware Layers
-
-| Middleware | Description |
-|---|---|
-| `protect` | Validates JWT cookie — required on all protected routes |
-| `blockIfMustChangePassword` | Blocks access until password is changed (except `/auth/change-password`) |
-| `adminOnly` | Requires one of the admin roles |
-| `superadminOnly` | Requires `superadmin` role |
-| `authorize(...roles)` | Requires one of the listed roles |
-| `requireFeature(feature)` | Checks school subscription plan includes the feature |
-
----
-
-## Enumerations
+HTTP status codes are conventional: `200` success, `201` created, `400` bad request, `401` unauthenticated, `403` forbidden, `404` not found, `429` rate limited, `500` server error.
 
 ### Roles
-`superadmin` · `school_admin` · `director` · `headteacher` · `deputy_headteacher` · `secretary` · `accountant` · `teacher` · `parent`
 
-### Assignable Roles (via POST /users)
-`director` · `headteacher` · `deputy_headteacher` · `secretary` · `accountant` · `teacher` · `parent`
-
-### Terms
-`Term 1` · `Term 2` · `Term 3`
-
-### CBC Level Categories
-| Value | Grades | Grading |
-|---|---|---|
-| `Pre-Primary` | PP1–PP2 | Observation only |
-| `Lower Primary` | Grade 1–3 | 4-level rubric (EE/ME/AE/BE) |
-| `Upper Primary` | Grade 4–6 | 4-level rubric (EE/ME/AE/BE) |
-| `Junior Secondary` | Grade 7–9 | 8-point scale (EE1–BE2) |
-| `Senior School` | Grade 10–12 | 8-point scale (EE1–BE2) |
-
-### Exam Types
-`opener` · `midterm` · `endterm` · `sba`
-
-### Attendance Statuses
-`present` · `absent` · `late` · `excused`
-
-### Payment Methods
-`cash` · `mpesa` · `bank`
-
-### Student Statuses
-`active` · `transferred` · `graduated` · `withdrawn`
-
-### Subscription Statuses
-`trial` · `active` · `suspended` · `expired`
-
-### Plan Tiers
-`trial` · `basic` · `standard` · `premium`
-
-### Plan Features (Gated)
-`report_cards` · `parent_portal` · `timetable` · `library` · `transport` · `bulk_import` · `audit_log` · `sms`
-
-### Days of Week
-`monday` · `tuesday` · `wednesday` · `thursday` · `friday` · `saturday` · `sunday`
-
-### Borrower Types
-`student` · `staff`
-
-### Loan Statuses
-`active` · `returned` · `overdue`
+| Role | Identifier |
+|---|---|
+| Superadmin | `SUPERADMIN` |
+| School Admin | `SCHOOL_ADMIN` |
+| Director | `DIRECTOR` |
+| Head Teacher | `HEAD_TEACHER` |
+| Deputy Head Teacher | `DEPUTY_HEAD_TEACHER` |
+| Teacher | `TEACHER` |
+| Department Head | `DEPARTMENT_HEAD` |
+| Secretary | `SECRETARY` |
+| Accountant | `ACCOUNTANT` |
+| Parent | `PARENT` |
 
 ---
 
-## Endpoints
-
----
-
-## Health Check
+## Health
 
 ### `GET /health`
 
-No authentication required. Returns the live status of all backing services.
+No authentication required. Returns platform status.
 
-**Response `200`**
+**Response**
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-04-12T10:00:00.000Z",
+  "timestamp": "2026-05-07T10:00:00.000Z",
+  "uptime": 86400,
   "services": {
     "api": "up",
     "mongodb": "up",
-    "redis": "up"
-  }
-}
-```
-
-> Redis `status` values: `up` · `connecting` · `reconnecting` · `degraded`  
-> The API always returns HTTP 200 — Redis degraded state does not cause a restart.
-
----
-
-## Auth
-
-**Base path:** `/api/v1/auth`  
-Rate limit: 20 req / 15 min on public endpoints
-
----
-
-### `POST /api/v1/auth/register`
-
-Register a new school and create the school admin account. Sets auth cookie on success.
-
-**Auth required:** No
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `schoolName` | string | ✅ | min 2 chars |
-| `schoolEmail` | string | ✅ | valid email |
-| `schoolPhone` | string | ✅ | Kenyan format (`+254`/`07`/`01`) |
-| `county` | string | ✅ | min 2 chars |
-| `firstName` | string | ✅ | admin first name |
-| `lastName` | string | ✅ | admin last name |
-| `email` | string | ✅ | admin email, valid format |
-| `password` | string | ✅ | min 8 chars |
-| `phone` | string | ✅ | Kenyan phone format |
-
-```json
-{
-  "schoolName":  "Sunrise Academy",
-  "schoolEmail": "info@sunrise.ac.ke",
-  "schoolPhone": "+254700000001",
-  "county":      "Nairobi",
-  "firstName":   "John",
-  "lastName":    "Kamau",
-  "email":       "john@sunrise.ac.ke",
-  "password":    "Admin@1234!",
-  "phone":       "+254700000002"
-}
-```
-
-**Response `201`**
-```json
-{
-  "status":  "success",
-  "school":  { "_id": "...", "name": "Sunrise Academy", "email": "info@sunrise.ac.ke", "planTier": "trial", ... },
-  "user":    { "_id": "...", "firstName": "John", "lastName": "Kamau", "email": "john@sunrise.ac.ke", "role": "school_admin", ... }
-}
-```
-
-> Sets `token` httpOnly cookie. Trial period: 30 days.
-
----
-
-### `POST /api/v1/auth/login`
-
-**Auth required:** No
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `email` | string | ✅ | valid email |
-| `password` | string | ✅ | min 1 char |
-
-```json
-{
-  "email":    "john@sunrise.ac.ke",
-  "password": "Admin@1234!"
-}
-```
-
-**Response `200`**
-```json
-{
-  "status": "success",
-  "user": {
-    "_id":              "abc123",
-    "firstName":        "John",
-    "lastName":         "Kamau",
-    "email":            "john@sunrise.ac.ke",
-    "role":             "school_admin",
-    "schoolId":         "xyz789",
-    "mustChangePassword": false,
-    "invitePending":    false,
-    "isActive":         true,
-    "lastLoginAt":      "2026-04-12T09:00:00.000Z"
-  }
-}
-```
-
-**Errors**
-
-| Code | Condition |
-|---|---|
-| `401` | Wrong email or password |
-| `403` | Account inactive |
-| `403` | `invitePending: true` — user must accept email invite first |
-
----
-
-### `POST /api/v1/auth/logout`
-
-**Auth required:** Yes  
-Clears the `token` cookie.
-
-**Response `200`**
-```json
-{ "status": "success", "message": "Logged out successfully." }
-```
-
----
-
-### `GET /api/v1/auth/me`
-
-**Auth required:** Yes (not blocked by `mustChangePassword`)
-
-Returns the authenticated user's profile.
-
-**Response `200`**
-```json
-{
-  "status": "success",
-  "user": { "_id": "...", "firstName": "John", "role": "school_admin", ... }
-}
-```
-
----
-
-### `POST /api/v1/auth/change-password`
-
-**Auth required:** Yes — accessible even when `mustChangePassword = true`
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `currentPassword` | string | ✅ | existing password |
-| `newPassword` | string | ✅ | min 8 chars |
-
-```json
-{
-  "currentPassword": "OldPass123!",
-  "newPassword":     "NewPass456!"
-}
-```
-
-**Response `200`**
-```json
-{ "status": "success", "message": "Password changed successfully." }
-```
-
-> Clears `mustChangePassword`. Sets a new cookie (refreshes session).
-
-**Errors**
-
-| Code | Condition |
-|---|---|
-| `400` | Current password is wrong |
-| `400` | New password too short |
-
----
-
-### `POST /api/v1/auth/forgot-password`
-
-**Auth required:** No  
-Sends a password reset link to the user's email via Resend.
-
-**Request Body**
-
-| Field | Type | Required |
-|---|---|---|
-| `email` | string | ✅ |
-
-```json
-{ "email": "john@sunrise.ac.ke" }
-```
-
-**Response `200`** (always 200 — no user enumeration)
-```json
-{
-  "status":  "success",
-  "message": "If an account with that email exists, a password reset link has been sent."
-}
-```
-
-> The reset link is: `{CLIENT_URL}/reset-password?token={rawToken}`  
-> Token expires in **1 hour**.
-
----
-
-### `POST /api/v1/auth/reset-password/:token`
-
-**Auth required:** No
-
-**URL Parameter:** `token` — the raw token from the email link
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `password` | string | ✅ | min 8 chars |
-
-```json
-{ "password": "NewSecurePass123!" }
-```
-
-**Response `200`**
-```json
-{
-  "status":  "success",
-  "message": "Password reset successfully. You are now logged in.",
-  "user":    { ... }
-}
-```
-
-> Sets auth cookie (auto-logs user in). Token is single-use.
-
-**Errors**
-
-| Code | Condition |
-|---|---|
-| `400` | Token invalid or expired |
-| `400` | Password too short |
-
----
-
-### `POST /api/v1/auth/accept-invite/:token`
-
-**Auth required:** No  
-Called when a newly created staff member clicks their email invite link to set their password.
-
-**URL Parameter:** `token` — raw invite token from the email link
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `password` | string | ✅ | min 8 chars |
-
-```json
-{ "password": "MyNewPassword1!" }
-```
-
-**Response `200`**
-```json
-{
-  "status":  "success",
-  "message": "Your account is set up. Welcome!",
-  "user":    { "_id": "...", "firstName": "Grace", "role": "teacher", ... }
-}
-```
-
-> Sets auth cookie (auto-logs user in). Clears `invitePending` flag. Invite token is invalidated.
-
-**Errors**
-
-| Code | Condition |
-|---|---|
-| `400` | Token invalid, expired (7-day window), or already used |
-| `400` | Password too short |
-
----
-
-## Users (Staff)
-
-**Base path:** `/api/v1/users`  
-**Auth:** Required — admin roles only (`school_admin`, `director`, `headteacher`, `deputy_headteacher`)
-
-All users are scoped to the authenticated admin's school.
-
----
-
-### `POST /api/v1/users`
-
-Create a new staff account. An invite email is sent to the new user. The account is locked (`invitePending: true`) until they accept the invite and set their own password.
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `firstName` | string | ✅ | min 1 char |
-| `lastName` | string | ✅ | min 1 char |
-| `email` | string | ✅ | valid email |
-| `role` | string | ✅ | see assignable roles |
-| `phone` | string | — | Kenyan phone format |
-| `staffId` | string | — | internal staff ID |
-| `tscNumber` | string | — | TSC registration number (teachers) |
-
-```json
-{
-  "firstName": "Grace",
-  "lastName":  "Wanjiku",
-  "email":     "grace@sunrise.ac.ke",
-  "role":      "teacher",
-  "phone":     "0712345678",
-  "staffId":   "TSR/2024/001",
-  "tscNumber": "TSC123456"
-}
-```
-
-**Response `201`**
-```json
-{
-  "status": "success",
-  "user": {
-    "_id":          "...",
-    "firstName":    "Grace",
-    "lastName":     "Wanjiku",
-    "email":        "grace@sunrise.ac.ke",
-    "role":         "teacher",
-    "phone":        "+254712345678",
-    "staffId":      "TSR/2024/001",
-    "tscNumber":    "TSC123456",
-    "schoolId":     "...",
-    "invitePending": true,
-    "mustChangePassword": false,
-    "isActive":     true,
-    "createdAt":    "2026-04-12T10:00:00.000Z"
+    "redis": "up",
+    "storage": "configured"
   },
-  "message": "Invitation email sent to grace@sunrise.ac.ke. They must accept it before they can log in."
+  "performance": { "avgResponseMs": 42, "samples": 1200 },
+  "memory": { "heapUsedMb": 128, "heapTotalMb": 256, "rssMb": 180 }
 }
 ```
 
-**Errors**
-
-| Code | Condition |
-|---|---|
-| `400` | Missing required fields, invalid role, invalid phone |
-| `409` | Email already exists in this school |
-
 ---
 
-### `GET /api/v1/users`
+## Authentication `/api/v1/auth`
 
-List all staff users in the school.
+Rate-limited to **20 requests / IP / 15 minutes**.
 
-**Query Parameters**
+### `POST /auth/register`
 
-| Param | Type | Description |
-|---|---|---|
-| `role` | string | Filter by role (e.g. `teacher`) |
-| `page` | integer | Page number (default: 1) |
-| `limit` | integer | Items per page (default: 20) |
+Register a new school and create the first admin account. Starts a 30-day free trial.
 
-**Response `200`**
+**Body**
 ```json
 {
-  "status": "success",
-  "users": [ { "_id": "...", "firstName": "Grace", "role": "teacher", ... } ],
-  "meta": { "total": 12, "page": 1, "limit": 20, "totalPages": 1 }
+  "schoolName": "Sunrise Academy",
+  "county": "Nairobi",
+  "address": "Westlands",
+  "phone": "0712345678",
+  "principalName": "Jane Mwangi",
+  "firstName": "Jane",
+  "lastName": "Mwangi",
+  "email": "jane@sunriseacademy.ke",
+  "password": "SecurePass123!"
 }
 ```
 
+**Response** `201` — school and user created, verification email sent.
+
 ---
 
-### `GET /api/v1/users/:id`
+### `POST /auth/login`
 
-Get a single staff user by ID.
+Authenticate and receive a session cookie.
 
-**Response `200`**
+**Body**
+```json
+{ "email": "jane@sunriseacademy.ke", "password": "SecurePass123!" }
+```
+
+**Response** `200` — sets HTTP-only `token` cookie. Returns user profile and school context.
+
+---
+
+### `POST /auth/forgot-password`
+
+Send a password-reset link to the user's email.
+
+**Body** `{ "email": "jane@sunriseacademy.ke" }`
+
+---
+
+### `POST /auth/reset-password/:token`
+
+Set a new password using the token from the reset email.
+
+**Body** `{ "password": "NewSecurePass456!" }`
+
+---
+
+### `POST /auth/accept-invite/:token`
+
+Staff first-time login — set own password using the invite token from email.
+
+**Body** `{ "password": "MyFirstPassword!" }`
+
+---
+
+### `POST /auth/verify-email`
+
+Trigger email verification (sends OTP code and one-click link).
+
+### `GET /auth/verify-email/:token`
+
+One-click email verification via link token.
+
+### `POST /auth/resend-verification`
+
+Resend the verification email.
+
+---
+
+### `POST /auth/logout` 🔒
+
+Clear session cookie.
+
+### `GET /auth/me` 🔒
+
+Get current user profile with school context.
+
+**Response**
 ```json
 {
-  "status": "success",
-  "user": { "_id": "...", "firstName": "Grace", "lastName": "Wanjiku", "role": "teacher", ... }
+  "user": {
+    "_id": "...",
+    "firstName": "Jane",
+    "lastName": "Mwangi",
+    "email": "jane@sunriseacademy.ke",
+    "role": "SCHOOL_ADMIN",
+    "schoolId": "...",
+    "emailVerified": true,
+    "phoneVerified": false
+  },
+  "school": { "name": "Sunrise Academy", "county": "Nairobi" }
 }
 ```
 
+### `PATCH /auth/me` 🔒
+
+Update own profile. Accepted fields: `firstName`, `lastName`, `email`, `phone`.
+
+### `POST /auth/change-password` 🔒
+
+Change own password. Accessible even when `mustChangePassword` is `true`.
+
+**Body** `{ "currentPassword": "...", "newPassword": "..." }`
+
 ---
 
-### `PATCH /api/v1/users/:id`
+## Users `/api/v1/users`
 
-Update a staff user. Cannot update yourself via this endpoint (use `/auth/change-password`).
+School admin manages staff accounts. All routes require admin-level role.
 
-**Request Body** (all fields optional)
+### `GET /users` 🔒
 
-| Field | Type | Rules |
-|---|---|---|
-| `firstName` | string | min 1 char |
-| `lastName` | string | min 1 char |
-| `phone` | string | Kenyan phone format |
-| `role` | string | assignable roles only |
-| `isActive` | boolean | activate / deactivate account |
-| `staffId` | string | — |
-| `tscNumber` | string | — |
+List all users in the school.
 
+**Query params:** `page`, `limit`, `role`, `isActive`, `search`
+
+### `POST /users` 🔒
+
+Create a new staff account. Sends an invite email; the user sets their own password via the invite link.
+
+**Body**
 ```json
 {
-  "firstName": "Grace",
-  "isActive": false
+  "firstName": "Peter",
+  "lastName": "Odhiambo",
+  "email": "peter@sunriseacademy.ke",
+  "role": "TEACHER",
+  "phone": "0722000000"
 }
 ```
 
-**Response `200`**
-```json
-{ "status": "success", "user": { ... } }
-```
+### `GET /users/:id` 🔒
+
+Get staff member details.
+
+### `PATCH /users/:id` 🔒
+
+Update staff details: name, role, phone, `isActive`.
+
+### `DELETE /users/:id` 🔒
+
+Delete staff account.
+
+### `POST /users/:id/resend-invite` 🔒
+
+Re-send invitation email.
+
+### `POST /users/:id/reset-password` 🔒
+
+Admin-forced password reset — sets `mustChangePassword = true`, user must set a new password on next login.
 
 ---
 
-### `POST /api/v1/users/:id/resend-invite`
+## Classes `/api/v1/classes`
 
-Re-send the invitation email to a staff member. Generates a new 7-day token. Works for both pending invites and active users who need a new password reset link.
+### `GET /classes/my-class` 🔒 `TEACHER`
 
-**Response `200`**
+Get the class where the authenticated teacher is assigned as class teacher.
+
+### `GET /classes` 🔒
+
+List all classes. Teachers see only their own class.
+
+**Query params:** `page`, `limit`, `level`
+
+CBC levels: `Lower Primary` | `Upper Primary` | `JSS`
+
+### `GET /classes/:id` 🔒
+
+Class details including assigned teacher and student count.
+
+### `POST /classes` 🔒 `ADMIN`
+
+**Body**
 ```json
 {
-  "status":  "success",
-  "message": "Invitation email re-sent to grace@sunrise.ac.ke."
+  "name": "Grade 4",
+  "stream": "A",
+  "level": "Upper Primary",
+  "classTeacherId": "..."
 }
 ```
 
----
+### `PATCH /classes/:id` 🔒 `ADMIN`
 
-## Schools
+Update class name, stream, level, or teacher assignment.
 
-**Base path:** `/api/v1/schools`  
-**Auth:** Required
+### `DELETE /classes/:id` 🔒 `ADMIN`
 
----
+Soft delete — historical records are preserved.
 
-### `GET /api/v1/schools/me`
+### `POST /classes/:id/promote` 🔒 `ADMIN`
 
-**Roles:** Admin roles  
-Get the current school's profile.
+Bulk promote all students in the class to the next CBC level for a new academic year.
 
-**Response `200`**
-```json
-{
-  "status": "success",
-  "school": {
-    "_id":                "...",
-    "name":               "Sunrise Academy",
-    "email":              "info@sunrise.ac.ke",
-    "phone":              "+254700000001",
-    "county":             "Nairobi",
-    "registrationNumber": "MOE/123/2024",
-    "address":            "123 Main St",
-    "subscriptionStatus": "trial",
-    "planTier":           "trial",
-    "trialExpiry":        "2026-05-12T00:00:00.000Z",
-    "isActive":           true
-  }
-}
-```
+**Body** `{ "targetClassId": "..." }`
 
 ---
 
-### `PATCH /api/v1/schools/me`
+## Students `/api/v1/students`
 
-**Roles:** Admin roles  
-Update the current school's profile.
+### `GET /students` 🔒
 
-**Request Body** (all optional)
+List all students. Filterable by class, status, search term.
 
-| Field | Type |
-|---|---|
-| `name` | string |
-| `phone` | string |
-| `county` | string |
-| `registrationNumber` | string |
-| `address` | string |
+**Query params:** `classId`, `status` (`active` | `withdrawn` | `transferred`), `search`, `page`, `limit`
 
----
+### `GET /students/:id` 🔒
 
-### `GET /api/v1/schools` *(superadmin only)*
+Full student profile: demographics, guardian details, class, photo URL, status.
 
-List all schools on the platform.
-
-**Query Parameters:** `page`, `limit`, `status` (subscription status filter)
-
----
-
-### `POST /api/v1/schools` *(superadmin only)*
-
-Create a school programmatically (without self-registration).
-
-**Request Body** — same shape as the `/register` school fields.
-
----
-
-### `GET /api/v1/schools/:id` *(superadmin only)*
-
-Get any school by ID.
-
----
-
-### `PATCH /api/v1/schools/:id` *(superadmin only)*
-
-Update any school (name, email, phone, county, registrationNumber, address, isActive).
-
----
-
-### `PATCH /api/v1/schools/:id/subscription` *(superadmin only)*
-
-Update a school's subscription status and plan tier.
-
-**Request Body**
-
-| Field | Type | Rules |
-|---|---|---|
-| `subscriptionStatus` | string | `trial` · `active` · `suspended` · `expired` |
-| `planTier` | string | `trial` · `basic` · `standard` · `premium` |
-| `trialExpiry` | string (ISO date) | optional |
-
----
-
-## Classes
-
-**Base path:** `/api/v1/classes`  
-**Auth:** Required — admin roles
-
----
-
-### `POST /api/v1/classes`
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `name` | string | ✅ | e.g. "Grade 4" |
-| `levelCategory` | string | ✅ | CBC level category enum |
-| `academicYear` | string | ✅ | 4-digit year, e.g. `"2026"` |
-| `term` | string | ✅ | `Term 1` · `Term 2` · `Term 3` |
-| `stream` | string | — | e.g. "North", "A" |
-| `classTeacherId` | string (ObjectId) | — | teacher user ID |
-
-```json
-{
-  "name":          "Grade 4",
-  "levelCategory": "Upper Primary",
-  "academicYear":  "2026",
-  "term":          "Term 1",
-  "stream":        "North",
-  "classTeacherId": "abc123"
-}
-```
-
-**Response `201`**
-```json
-{
-  "status": "success",
-  "class": {
-    "_id":           "...",
-    "name":          "Grade 4",
-    "stream":        "North",
-    "levelCategory": "Upper Primary",
-    "academicYear":  "2026",
-    "term":          "Term 1",
-    "classTeacherId": "abc123",
-    "studentCount":  0,
-    "isActive":      true
-  }
-}
-```
-
----
-
-### `GET /api/v1/classes`
-
-List all classes in the school.
-
-**Query Parameters:** `page`, `limit`, `academicYear`, `term`, `levelCategory`, `isActive`
-
----
-
-### `GET /api/v1/classes/:id`
-
-Get a single class.
-
----
-
-### `PATCH /api/v1/classes/:id`
-
-Update class fields (name, stream, classTeacherId, isActive). Academic year and term are immutable after creation.
-
----
-
-### `DELETE /api/v1/classes/:id`
-
-Delete a class. Fails if any students are assigned to it.
-
----
-
-### `POST /api/v1/classes/:id/promote`
-
-End-of-year bulk student promotion — moves all active students from this class to a target class.
-
-**Request Body**
-
-| Field | Type | Required |
-|---|---|---|
-| `targetClassId` | string (ObjectId) | ✅ |
-
-```json
-{ "targetClassId": "xyz789" }
-```
-
-**Response `200`**
-```json
-{
-  "status":  "success",
-  "message": "18 students promoted to Grade 5 North.",
-  "count":   18
-}
-```
-
----
-
-## Students
-
-**Base path:** `/api/v1/students`  
-**Auth:** Required — admin roles
-
----
-
-### `POST /api/v1/students`
+### `POST /students` 🔒 `ADMIN | SECRETARY | ACCOUNTANT`
 
 Enroll a new student.
 
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `firstName` | string | ✅ | — |
-| `lastName` | string | ✅ | — |
-| `admissionNumber` | string | ✅ | unique per school |
-| `gender` | string | ✅ | `male` · `female` |
-| `classId` | string (ObjectId) | ✅ | must belong to school |
-| `dateOfBirth` | string (ISO date) | — | e.g. `"2015-03-12"` |
-| `parentIds` | string[] | — | parent user IDs |
-
+**Body**
 ```json
 {
-  "firstName":       "Emma",
-  "lastName":        "Njeri",
-  "admissionNumber": "ADM2026001",
-  "gender":          "female",
-  "classId":         "abc123",
-  "dateOfBirth":     "2015-03-12"
+  "firstName": "Amara",
+  "lastName": "Kipchoge",
+  "admissionNumber": "SUN/2026/001",
+  "dateOfBirth": "2015-03-12",
+  "gender": "Female",
+  "classId": "...",
+  "guardianName": "David Kipchoge",
+  "guardianPhone": "0733000000",
+  "guardianRelation": "Father"
 }
 ```
 
-**Response `201`**
+### `POST /students/import` 🔒 `ADMIN`
+
+Bulk enroll students from a CSV file (feature-gated by subscription plan). Returns an async `jobId`.
+
+**Form:** `multipart/form-data` — field `file` (CSV).
+
+### `GET /students/import/:jobId/status` 🔒
+
+Poll CSV import job status.
+
+**Response** `{ "status": "processing" | "complete" | "failed", "imported": 42, "errors": [] }`
+
+### `PATCH /students/:id` 🔒 `ADMIN`
+
+Update student details, class assignment, or guardian info.
+
+### `POST /students/:id/photo` 🔒 `ADMIN`
+
+Upload student profile photo. `multipart/form-data`, field `photo`.
+
+### `POST /students/:id/transfer` 🔒 `ADMIN`
+
+Transfer student to a different class. Transfer history is preserved.
+
+**Body** `{ "targetClassId": "..." }`
+
+### `POST /students/:id/withdraw` 🔒 `ADMIN`
+
+Mark student as withdrawn. Historical records are retained.
+
+---
+
+## Attendance `/api/v1/attendance`
+
+### `GET /attendance/registers` 🔒
+
+List attendance registers. Filterable by class, date range, status.
+
+**Query params:** `classId`, `from`, `to`, `status` (`draft` | `submitted`), `page`, `limit`
+
+### `POST /attendance/registers` 🔒 `TEACHER`
+
+Create a daily register for a class. Auto-populates with all active students.
+
+**Body** `{ "classId": "...", "date": "2026-05-07" }`
+
+### `GET /attendance/registers/:id` 🔒
+
+Register detail with per-student attendance status.
+
+### `PATCH /attendance/registers/:id` 🔒 `TEACHER`
+
+Update attendance status per student.
+
+**Body**
 ```json
 {
-  "status":  "success",
-  "student": {
-    "_id":             "...",
-    "firstName":       "Emma",
-    "lastName":        "Njeri",
-    "admissionNumber": "ADM2026001",
-    "gender":          "female",
-    "classId":         "abc123",
-    "status":          "active",
-    "parentIds":       []
-  }
-}
-```
-
----
-
-### `GET /api/v1/students`
-
-List students.
-
-**Query Parameters**
-
-| Param | Type | Description |
-|---|---|---|
-| `classId` | ObjectId | Filter by class |
-| `status` | string | `active` · `transferred` · `graduated` · `withdrawn` |
-| `page` | integer | — |
-| `limit` | integer | — |
-
----
-
-### `GET /api/v1/students/:id`
-
-Get student details.
-
----
-
-### `PATCH /api/v1/students/:id`
-
-Update student info (name, dateOfBirth, parentIds, photo). `admissionNumber`, `gender`, `classId` cannot be changed via PATCH.
-
----
-
-### `POST /api/v1/students/:id/transfer`
-
-Transfer a student to a different class (same school).
-
-**Request Body**
-
-| Field | Type | Required |
-|---|---|---|
-| `targetClassId` | string (ObjectId) | ✅ |
-| `transferNote` | string | — |
-
----
-
-### `POST /api/v1/students/:id/withdraw`
-
-Mark a student as withdrawn.
-
-**Request Body** (optional)
-```json
-{ "note": "Family relocated" }
-```
-
----
-
-### `POST /api/v1/students/import` *(feature-gated: `bulk_import`)*
-
-Bulk import students via CSV file upload.
-
-**Content-Type:** `multipart/form-data`  
-**Field:** `file` — `.csv` file
-
-CSV columns: `firstName`, `lastName`, `admissionNumber`, `gender`, `classId`, `dateOfBirth` (optional)
-
-**Response `202`**
-```json
-{ "status": "success", "jobId": "import-job-abc123" }
-```
-
----
-
-### `GET /api/v1/students/import/:jobId/status`
-
-Poll the status of a bulk import job.
-
-**Response `200`**
-```json
-{
-  "status":   "success",
-  "jobStatus": "completed",
-  "progress":  { "total": 50, "processed": 50, "errors": 2 },
-  "errors":    [ { "row": 5, "message": "Duplicate admission number" } ]
-}
-```
-
----
-
-## Subjects
-
-**Base path:** `/api/v1/subjects`  
-**Auth:** Required — admin roles
-
----
-
-### `POST /api/v1/subjects`
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `name` | string | ✅ | e.g. "Mathematics" |
-| `classId` | string (ObjectId) | ✅ | must belong to school |
-| `code` | string | — | e.g. "MATH" (uppercased) |
-| `teacherId` | string (ObjectId) | — | assigned teacher |
-
-```json
-{
-  "name":      "Mathematics",
-  "classId":   "abc123",
-  "code":      "MATH",
-  "teacherId": "xyz789"
-}
-```
-
-**Response `201`**
-```json
-{
-  "status":  "success",
-  "subject": { "_id": "...", "name": "Mathematics", "code": "MATH", "classId": "...", "isActive": true }
-}
-```
-
----
-
-### `GET /api/v1/subjects`
-
-**Query Parameters:** `classId` (filter), `page`, `limit`, `isActive`
-
----
-
-### `GET /api/v1/subjects/:id`
-
----
-
-### `PATCH /api/v1/subjects/:id`
-
-Update name, code, or isActive.
-
----
-
-### `DELETE /api/v1/subjects/:id`
-
----
-
-### `PATCH /api/v1/subjects/:id/teacher`
-
-Assign or unassign the teacher for a subject.
-
-**Request Body**
-
-| Field | Type | Description |
-|---|---|---|
-| `teacherId` | string (ObjectId) \| null | Pass `null` to unassign |
-
-```json
-{ "teacherId": "teacher-id-here" }
-```
-
----
-
-## Attendance
-
-**Base path:** `/api/v1/attendance`  
-**Auth:** Required — admin roles
-
----
-
-### `POST /api/v1/attendance/registers`
-
-Create a new daily attendance register.
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `classId` | string (ObjectId) | ✅ | — |
-| `date` | string | ✅ | `YYYY-MM-DD` format |
-| `entries` | array | — | attendance entry objects |
-| `substituteTeacherId` | string (ObjectId) | — | — |
-| `substituteNote` | string | — | max 300 chars |
-
-**Entry Object:**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `studentId` | string (ObjectId) | ✅ | — |
-| `status` | string | ✅ | `present` · `absent` · `late` · `excused` |
-| `note` | string | — | max 300 chars |
-
-```json
-{
-  "classId": "abc123",
-  "date":    "2026-04-12",
-  "entries": [
-    { "studentId": "s1", "status": "present" },
-    { "studentId": "s2", "status": "absent", "note": "Sick" }
+  "records": [
+    { "studentId": "...", "status": "Present" },
+    { "studentId": "...", "status": "Absent" }
   ]
 }
 ```
 
-**Response `201`**
+Status values: `Present` | `Absent` | `Late` | `Excused`
+
+### `POST /attendance/registers/:id/submit` 🔒 `TEACHER`
+
+Submit and lock the register. Locked registers cannot be edited.
+
+---
+
+## Subjects `/api/v1/subjects`
+
+### `GET /subjects/my-subjects` 🔒 `TEACHER`
+
+Get subjects assigned to the authenticated teacher.
+
+### `GET /subjects` 🔒
+
+List all subjects. Teachers see only their assigned subjects.
+
+### `GET /subjects/:id` 🔒
+
+Subject detail with assigned teachers and HOD.
+
+### `POST /subjects` 🔒 `ADMIN`
+
+**Body** `{ "name": "Mathematics", "code": "MTH", "description": "..." }`
+
+### `PATCH /subjects/:id` 🔒 `ADMIN`
+
+Update subject details.
+
+### `DELETE /subjects/:id` 🔒 `ADMIN`
+
+Delete subject.
+
+### `PATCH /subjects/:id/teachers` 🔒 `ADMIN`
+
+Assign teachers and HOD to a subject.
+
+**Body** `{ "teacherIds": ["..."], "hodId": "..." }`
+
+### `PATCH /subjects/:id/self-assign` 🔒 `TEACHER`
+
+Toggle own assignment to a subject.
+
+---
+
+## Exams `/api/v1/exams`
+
+### `GET /exams` 🔒
+
+List exams. Filter by class, subject, term, year.
+
+**Query params:** `classId`, `subjectId`, `term`, `academicYear`, `page`, `limit`
+
+### `POST /exams` 🔒
+
+Create an exam.
+
+**Body**
 ```json
 {
-  "status":   "success",
-  "register": {
-    "_id":         "...",
-    "classId":     "abc123",
-    "date":        "2026-04-12T00:00:00.000Z",
-    "academicYear":"2026",
-    "term":        "Term 1",
-    "status":      "draft",
-    "entries":     [ ... ],
-    "takenByUserId": "...",
-    "isSubstitute": false
-  }
+  "name": "Term 2 Midterm",
+  "type": "Midterm",
+  "subjectId": "...",
+  "classId": "...",
+  "totalMarks": 100,
+  "date": "2026-06-15",
+  "term": "Term 2",
+  "academicYear": "2026"
 }
 ```
 
-> **Note:** `academicYear` and `term` are derived automatically from the school's settings.
+Exam types: `Opener` | `Midterm` | `Endterm` | `SBA`
+
+### `GET /exams/:id` 🔒
+
+Exam detail.
+
+### `PATCH /exams/:id` 🔒 `ADMIN`
+
+Update exam.
+
+### `DELETE /exams/:id` 🔒 `ADMIN`
+
+Delete exam.
 
 ---
 
-### `GET /api/v1/attendance/registers`
+## Results `/api/v1/results`
 
-**Query Parameters**
+CBC grades are calculated automatically from marks.
 
-| Param | Type | Description |
-|---|---|---|
-| `classId` | ObjectId | Filter by class |
-| `date` | string (YYYY-MM-DD) | Filter by exact date |
-| `startDate` | string (YYYY-MM-DD) | Date range start |
-| `endDate` | string (YYYY-MM-DD) | Date range end |
-| `status` | string | `draft` · `submitted` |
-| `page` | integer | — |
-| `limit` | integer | — |
+**Primary scale:** EE (≥75%) → ME (50–74%) → AE (25–49%) → BE (<25%)  
+**JSS 8-point scale:** EE1 → EE2 → ME1 → ME2 → AE1 → AE2 → BE1 → BE2
 
----
+### `POST /results/bulk` 🔒 `ADMIN`
 
-### `GET /api/v1/attendance/registers/:id`
+Bulk upsert marks for all students in one exam.
 
----
-
-### `PATCH /api/v1/attendance/registers/:id`
-
-Update entries or substitute info. Only works on `draft` registers.
-
-**Request Body** (all optional)
-
-| Field | Type |
-|---|---|
-| `entries` | array of entry objects |
-| `substituteTeacherId` | string (ObjectId) \| null |
-| `substituteNote` | string \| null |
-
----
-
-### `POST /api/v1/attendance/registers/:id/submit`
-
-Submit (lock) a draft register. Submitted registers cannot be edited.
-
-**Response `200`**
+**Body**
 ```json
 {
-  "status":   "success",
-  "register": { "...", "status": "submitted", "submittedAt": "2026-04-12T10:30:00.000Z" }
-}
-```
-
----
-
-## Exams
-
-**Base path:** `/api/v1/exams`  
-**Auth:** Required — admin roles
-
----
-
-### `POST /api/v1/exams`
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `name` | string | ✅ | e.g. "Midterm Mathematics" |
-| `classId` | string (ObjectId) | ✅ | — |
-| `subjectId` | string (ObjectId) | ✅ | — |
-| `type` | string | ✅ | `opener` · `midterm` · `endterm` · `sba` |
-| `term` | string | ✅ | `Term 1` · `Term 2` · `Term 3` |
-| `academicYear` | string | ✅ | 4-digit year |
-| `levelCategory` | string | ✅ | CBC level category |
-| `totalMarks` | number | ✅ | min 1 |
-
-```json
-{
-  "name":          "Midterm Mathematics",
-  "classId":       "class-id",
-  "subjectId":     "subject-id",
-  "type":          "midterm",
-  "term":          "Term 1",
-  "academicYear":  "2026",
-  "levelCategory": "Upper Primary",
-  "totalMarks":    100
-}
-```
-
-**Response `201`**
-```json
-{
-  "status": "success",
-  "exam": { "_id": "...", "name": "Midterm Mathematics", "type": "midterm", "totalMarks": 100, "isPublished": false, ... }
-}
-```
-
----
-
-### `GET /api/v1/exams`
-
-**Query Parameters:** `classId`, `subjectId`, `term`, `academicYear`, `type`, `isPublished`, `page`, `limit`
-
----
-
-### `GET /api/v1/exams/:id`
-
----
-
-### `PATCH /api/v1/exams/:id`
-
-Update name, totalMarks, or isPublished.
-
----
-
-### `DELETE /api/v1/exams/:id`
-
-Deletes the exam and all associated results.
-
----
-
-## Results
-
-**Base path:** `/api/v1/results`  
-**Auth:** Required — admin roles
-
----
-
-### `POST /api/v1/results/bulk`
-
-Bulk create or update marks for an entire class. Uses upsert — safe to re-submit if marks change.
-
-**Request Body**
-
-| Field | Type | Required |
-|---|---|---|
-| `examId` | string (ObjectId) | ✅ |
-| `results` | array of result objects | ✅ |
-
-**Result Object:**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `studentId` | string (ObjectId) | ✅ | — |
-| `marks` | number | ✅ | 0 – totalMarks |
-
-```json
-{
-  "examId": "exam-id",
+  "examId": "...",
   "results": [
-    { "studentId": "s1", "marks": 78 },
-    { "studentId": "s2", "marks": 55 }
+    { "studentId": "...", "marksObtained": 78 },
+    { "studentId": "...", "marksObtained": 45 }
   ]
 }
 ```
 
-**Response `200`**
+**Response** includes the calculated CBC grade for each student.
+
+### `GET /results` 🔒
+
+List results. Filter by exam, student, class.
+
+### `GET /results/:id` 🔒
+
+Single result record.
+
+### `PATCH /results/:id` 🔒 `ADMIN`
+
+Update a single result entry.
+
+---
+
+## Fees `/api/v1/fees`
+
+### Fee Structures
+
+#### `GET /fees/structures` 🔒
+
+List fee structures. Filter by term and year.
+
+**Query params:** `term`, `academicYear`, `classId`
+
+#### `POST /fees/structures` 🔒 `ADMIN`
+
+Create a fee structure with line items.
+
+**Body**
 ```json
 {
-  "status":  "success",
-  "message": "30 result(s) saved.",
-  "count":   30
+  "name": "Term 2 2026",
+  "term": "Term 2",
+  "academicYear": "2026",
+  "classIds": ["..."],
+  "lineItems": [
+    { "name": "Tuition", "amount": 15000 },
+    { "name": "Activity", "amount": 2000 },
+    { "name": "Lunch", "amount": 5000 }
+  ]
 }
 ```
 
-> `percentage`, `grade`, and `points` are computed automatically based on the exam's `levelCategory`.
+#### `POST /fees/structures/adapt` 🔒 `ADMIN`
+
+Copy an existing structure to a new term/year.
+
+**Body** `{ "sourceStructureId": "...", "term": "Term 3", "academicYear": "2026" }`
+
+#### `GET /fees/structures/:id` 🔒
+
+Structure detail with all line items.
+
+#### `PATCH /fees/structures/:id` 🔒 `ADMIN`
+
+Update structure.
+
+#### `DELETE /fees/structures/:id` 🔒 `ADMIN`
+
+Delete structure.
 
 ---
 
-### `GET /api/v1/results`
+### Payments
 
-**Query Parameters:** `examId`, `classId`, `studentId`, `term`, `academicYear`, `subjectId`, `page`, `limit`
+#### `GET /fees/payments` 🔒
 
----
+List payments. Filter by student, method, date range, status.
 
-### `GET /api/v1/results/:id`
+**Query params:** `studentId`, `method`, `from`, `to`, `status`, `page`, `limit`
 
----
+#### `POST /fees/payments` 🔒 `ACCOUNTANT | SECRETARY`
 
-### `PATCH /api/v1/results/:id`
+Record a fee payment.
 
-Update a single result's marks.
-
-**Request Body**
-```json
-{ "marks": 82 }
-```
-
----
-
-## Fees
-
-**Base path:** `/api/v1/fees`  
-**Auth:** Required — admin roles
-
----
-
-### `POST /api/v1/fees/structures`
-
-Create a fee structure for a class/term/year.
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `classId` | string (ObjectId) | ✅ | — |
-| `academicYear` | string | ✅ | 4-digit year |
-| `term` | string | ✅ | Term enum |
-| `items` | array | ✅ | min 1 item |
-
-**Item Object:**
-
-| Field | Type | Required |
-|---|---|---|
-| `name` | string | ✅ |
-| `amount` | number | ✅ (min 0) |
-
+**Body**
 ```json
 {
-  "classId":      "class-id",
-  "academicYear": "2026",
-  "term":         "Term 1",
-  "items": [
-    { "name": "Tuition",   "amount": 15000 },
-    { "name": "Activity",  "amount": 2000 },
+  "studentId": "...",
+  "feeStructureId": "...",
+  "amount": 15000,
+  "method": "M-Pesa",
+  "reference": "QAB12345",
+  "paymentDate": "2026-05-07"
+}
+```
+
+Payment methods: `cash` | `M-Pesa` | `bank transfer` | `cheque`
+
+#### `GET /fees/payments/:id` 🔒
+
+Payment receipt details.
+
+#### `POST /fees/payments/:id/reverse` 🔒 `ACCOUNTANT`
+
+Reverse a payment. Restores fee balance.
+
+**Body** `{ "reason": "Duplicate entry" }`
+
+#### `POST /fees/payments/:id/issue-receipt` 🔒
+
+Generate and send receipt to parent.
+
+---
+
+### Other Fee Endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /fees/balance?studentId=...` | Student fee balance (owed vs. paid) |
+| `GET /fees/bulk-stats` | Aggregate stats (total collected, outstanding) |
+| `GET /fees/dashboard-summary` | Financial dashboard KPIs |
+
+---
+
+## Report Cards `/api/v1/report-cards`
+
+Report cards are generated from exam results entered via `/results/bulk`.
+
+### `GET /report-cards` 🔒
+
+List report cards. Filter by student, class, term, year.
+
+### `GET /report-cards/:id` 🔒
+
+Full report card: CBC grades per subject, weighted averages, attendance summary, remarks, signature lines.
+
+### `PATCH /report-cards/:id/remarks` 🔒 `ADMIN | HEAD_TEACHER`
+
+Update class teacher remarks.
+
+**Body** `{ "classTeacherRemark": "An excellent student who shows great initiative." }`
+
+### `PATCH /report-cards/:id/subjects/:subjectId/remark` 🔒
+
+Update subject-level teacher remark.
+
+**Body** `{ "remark": "Shows strong numeracy skills." }`
+
+### `GET /report-cards/annual-summary` 🔒 `ADMIN`
+
+Year-end summary across all students and classes.
+
+---
+
+## Lesson Plans `/api/v1/lesson-plans`
+
+### `GET /lesson-plans` 🔒
+
+List lesson plans. Filter by teacher, subject, date range.
+
+### `POST /lesson-plans` 🔒
+
+Upload a lesson plan with optional images (max 20 images, 10 MB each).
+
+**Form:** `multipart/form-data` — fields: `subjectId`, `classId`, `date`, `title`, `content`, `images[]`
+
+### `GET /lesson-plans/:id` 🔒
+
+Lesson plan detail.
+
+### `DELETE /lesson-plans/:id` 🔒
+
+Delete own lesson plan.
+
+### `POST /lesson-plans/:id/share` 🔒
+
+Share with another teacher.
+
+**Body** `{ "teacherId": "..." }`
+
+### `DELETE /lesson-plans/:id/share/:teacherId` 🔒
+
+Unshare with a teacher.
+
+---
+
+## Schools `/api/v1/schools`
+
+### School-Admin (Own School)
+
+#### `GET /schools/me` 🔒
+
+Own school profile: name, principal, address, academic year, term dates, logo URL.
+
+#### `PATCH /schools/me` 🔒 `PRINCIPAL | DIRECTOR | ADMIN`
+
+Update school profile.
+
+#### `POST /schools/me/sms-sender-id-request` 🔒
+
+Request a custom SMS sender ID. Subject to approval by DiraSchool superadmin.
+
+**Body** `{ "requestedSenderId": "SUNRISE" }`
+
+---
+
+### Superadmin (All Schools)
+
+#### `GET /schools` 🔒 `SUPERADMIN`
+
+List all schools with student/staff counts.
+
+#### `POST /schools` 🔒 `SUPERADMIN`
+
+Create a new school tenant.
+
+#### `GET /schools/:id` 🔒 `SUPERADMIN`
+
+School detail with staff breakdown by role.
+
+#### `PATCH /schools/:id` 🔒 `SUPERADMIN`
+
+Update school info, status, subscription tier, plan limits.
+
+#### `PATCH /schools/:id/subscription` 🔒 `SUPERADMIN`
+
+Update subscription plan and trial status.
+
+---
+
+## Parent Portal `/api/v1/parent`
+
+Feature-gated (plan-tier). Accessible only to users with role `PARENT`. Strictly scoped to their own children.
+
+### `GET /parent/children` 🔒 `PARENT`
+
+List all children enrolled in the school linked to this parent account.
+
+### `GET /parent/children/:studentId/fees` 🔒 `PARENT`
+
+Child's fee balance and payment history.
+
+### `GET /parent/children/:studentId/attendance` 🔒 `PARENT`
+
+Child's attendance record.
+
+### `GET /parent/children/:studentId/results` 🔒 `PARENT`
+
+Child's exam results and report cards.
+
+---
+
+## Audit Logs `/api/v1/audit-logs`
+
+Feature-gated. Accessible to admin-level roles only.
+
+### `GET /audit-logs` 🔒
+
+List audit logs.
+
+**Query params:** `userId`, `action`, `resource`, `from`, `to`, `page`, `limit`
+
+Every log entry: `{ userId, userRole, action, resource, resourceId, timestamp, changes, schoolId }`
+
+---
+
+## Settings `/api/v1/settings`
+
+### `GET /settings` 🔒
+
+School settings: calendar, holidays, working days, geofence, check-in times, logo.
+
+### `PUT /settings` 🔒 `PRINCIPAL | ADMIN | DIRECTOR`
+
+Update settings.
+
+### `POST /settings/logo` 🔒 `PRINCIPAL | ADMIN | DIRECTOR`
+
+Upload school logo. `multipart/form-data`, field `logo`.
+
+### `POST /settings/holidays` 🔒
+
+Add a school holiday.
+
+**Body** `{ "name": "Mashujaa Day", "date": "2026-10-20" }`
+
+### `DELETE /settings/holidays/:holidayId` 🔒
+
+Remove holiday.
+
+### `PUT /settings/geofence` 🔒
+
+Set geofence coordinates and radius for check-in validation.
+
+**Body** `{ "latitude": -1.286389, "longitude": 36.817223, "radiusMetres": 200 }`
+
+### `PUT /settings/checkin-times` 🔒
+
+Set check-in/check-out deadline times.
+
+**Body** `{ "checkInDeadline": "07:30", "checkOutTime": "17:00" }`
+
+---
+
+## Timetable `/api/v1/timetables`
+
+Feature-gated.
+
+### `GET /timetables` 🔒
+
+List timetables. Filter by class, term, year.
+
+### `GET /timetables/:id` 🔒
+
+Timetable detail with all time slots (subject, teacher, room).
+
+### `POST /timetables` 🔒 `HEAD_TEACHER | ADMIN`
+
+Create timetable for a class.
+
+**Body** `{ "classId": "...", "term": "Term 2", "academicYear": "2026" }`
+
+### `PUT /timetables/:id/slots` 🔒 `HEAD_TEACHER | ADMIN`
+
+Update time slots.
+
+**Body**
+```json
+{
+  "slots": [
+    { "day": "Monday", "period": 1, "subjectId": "...", "teacherId": "...", "room": "Room 4" }
+  ]
+}
+```
+
+### `DELETE /timetables/:id` 🔒 `HEAD_TEACHER | ADMIN`
+
+Delete timetable.
+
+---
+
+## Transport `/api/v1/transport`
+
+Feature-gated.
+
+### `GET /transport/routes` 🔒
+
+List transport routes.
+
+### `GET /transport/routes/:id` 🔒
+
+Route detail: driver, vehicle, assigned students.
+
+### `POST /transport/routes` 🔒
+
+Create route.
+
+**Body** `{ "name": "Route A - Westlands", "driverName": "...", "vehicle": "KAA 000A", "departureTime": "06:30" }`
+
+### `PATCH /transport/routes/:id` 🔒
+
+Update route.
+
+### `DELETE /transport/routes/:id` 🔒
+
+Delete route.
+
+### `POST /transport/routes/:id/assign` 🔒
+
+Assign students to route.
+
+**Body** `{ "studentIds": ["..."] }`
+
+### `POST /transport/routes/:id/unassign` 🔒
+
+Remove students from route.
+
+**Body** `{ "studentIds": ["..."] }`
+
+---
+
+## Dashboard `/api/v1/dashboard`
+
+### `GET /dashboard` 🔒
+
+School-wide KPIs: student count, fees collected this term, attendance rate, recent activity.
+
+### `GET /dashboard/teacher` 🔒 `TEACHER`
+
+Teacher KPIs: assigned classes, student count, upcoming exams, attendance summary.
+
+---
+
+## Notifications `/api/v1/notifications`
+
+### `GET /notifications` 🔒
+
+List notifications for current user with pagination.
+
+### `GET /notifications/unread-count` 🔒
+
+Get count of unread notifications.
+
+### `POST /notifications/mark-all-read` 🔒
+
+Mark all notifications as read.
+
+### `POST /notifications/:id/read` 🔒
+
+Mark single notification as read.
+
+---
+
+## Email Events `/api/v1/email`
+
+### `GET /email/events` 🔒 `ADMIN | DIRECTOR | HEAD_TEACHER`
+
+List email delivery events: sent / opened / bounced.
+
+### `GET /email/events/:id` 🔒
+
+Email event detail.
+
+---
+
+## Pricing `/api/v1/pricing`
+
+### `GET /pricing/calculate`
+
+**No auth required.** Calculate subscription cost.
+
+**Query params:** `students` (integer), `billing` (`per-term` | `annual` | `multi-year`)
+
+**Response**
+```json
+{
+  "students": 200,
+  "billing": "annual",
+  "subtotal": 23000,
+  "total": 62100,
+  "costPerStudent": 115,
+  "multiplier": 2.70
+}
+```
+
+Pricing formula: **KES 12,000 base + KES 55 × students** per term.  
+Annual (3 terms, 2 billed): 10% discount (×2.70).  
+Multi-year (3 terms upfront): 15% discount (×2.55).
+
+---
+
+## Export `/api/v1/export`
+
+All endpoints return `text/csv`.
+
+### `GET /export/students` 🔒 `ADMIN`
+
+Export all students to CSV.
+
+### `GET /export/payments` 🔒 `ADMIN | ACCOUNTANT`
+
+Export all payments to CSV.
+
+### `GET /export/staff` 🔒 `ADMIN`
+
+Export all staff to CSV.
+
+---
+
+## SMS `/api/v1/sms`
+
+### `POST /sms/send` 🔒
+
+Send SMS to a single parent/guardian.
+
+**Body** `{ "phone": "+254712345678", "message": "Fee balance reminder..." }`
+
+### `POST /sms/broadcast` 🔒
+
+Broadcast SMS to multiple recipients.
+
+**Body**
+```json
+{
+  "recipients": "class" | "parents" | "staff",
+  "classId": "...",
+  "message": "School will be closed on Friday."
+}
+```
+
+SMS cap: **5 messages per parent per term** included in subscription. Additional messages require purchased credits.
+
+### `GET /sms/history` 🔒
+
+SMS send history with delivery status.
+
+**Query params:** `from`, `to`, `trigger`, `page`, `limit`
+
+### `GET /sms/deliveries` 🔒
+
+Per-recipient delivery reports.
+
+### `GET /sms/stats` 🔒
+
+SMS statistics: sent, delivered, failed, cap usage, credit balance.
+
+### `GET /sms/credit-packs` 🔒
+
+List available SMS credit packs for purchase.
+
+**Response**
+```json
+[
+  { "id": "sms_200",  "credits": 200,  "amountKes": 300,  "label": "200 SMS" },
+  { "id": "sms_500",  "credits": 500,  "amountKes": 700,  "label": "500 SMS" },
+  { "id": "sms_1000", "credits": 1000, "amountKes": 1200, "label": "1,000 SMS" },
+  { "id": "sms_2500", "credits": 2500, "amountKes": 2750, "label": "2,500 SMS" }
+]
+```
+
+### `POST /sms/credit-packs/checkout` 🔒
+
+Initiate Paystack checkout to purchase SMS credits.
+
+**Body** `{ "packId": "sms_500" }`
+
+**Response** `{ "checkoutUrl": "https://checkout.paystack.com/..." }`
+
+---
+
+### Inbound / Webhooks (Public)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/sms/inbound` | Africa's Talking inbound SMS callback |
+| POST | `/sms/dlr` | Africa's Talking delivery report (DLR) callback |
+
+---
+
+## OTP `/api/v1/otp`
+
+Phone number verification for parent accounts via SMS.
+
+### `POST /otp/send` 🔒 `PARENT`
+
+Send a 6-digit OTP to the parent's phone number.
+
+**Body** `{ "phone": "+254712345678" }`
+
+Rate limit: 3 sends per phone per 10 minutes. OTP expires in 10 minutes.
+
+### `POST /otp/verify` 🔒 `PARENT`
+
+Verify the OTP and mark `phoneVerified = true` on the user account.
+
+**Body** `{ "phone": "+254712345678", "otp": "482910" }`
+
+Rate limit: 5 verify attempts before OTP is invalidated (request a new one).
+
+---
+
+## M-Pesa `/api/v1/mpesa`
+
+Safaricom Daraja C2B integration. Callback endpoints are IP-whitelisted to Safaricom production and sandbox ranges.
+
+### `GET /mpesa/settings` 🔒 `ACCOUNTANT | FINANCE`
+
+Get M-Pesa configuration for the school.
+
+### `PUT /mpesa/settings` 🔒 `SCHOOL_ADMIN`
+
+Update M-Pesa credentials.
+
+**Body**
+```json
+{
+  "paybillNumber": "247247",
+  "accountPrefix": "STU",
+  "consumerKey": "...",
+  "consumerSecret": "..."
+}
+```
+
+### `POST /mpesa/register-c2b/:schoolId` 🔒 `SCHOOL_ADMIN`
+
+Register school paybill for C2B callbacks with Safaricom.
+
+### `GET /mpesa/payments` 🔒
+
+List M-Pesa payments.
+
+### `GET /mpesa/payments/unallocated` 🔒
+
+List unallocated M-Pesa payments (received but not yet matched to a student).
+
+### `POST /mpesa/payments/allocate` 🔒
+
+Allocate an unmatched payment to a student.
+
+**Body** `{ "paymentId": "...", "studentId": "..." }`
+
+### `POST /mpesa/payments/manual` 🔒
+
+Manually record an M-Pesa payment.
+
+### `GET /mpesa/payments/summary` 🔒
+
+M-Pesa payment summary for the current term.
+
+### `GET /mpesa/payments/student/:studentId` 🔒
+
+All M-Pesa payments for a student.
+
+---
+
+### M-Pesa Callbacks (Public, IP-Protected)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/mpesa/validation` | Safaricom C2B validation callback |
+| POST | `/mpesa/confirmation` | Safaricom C2B confirmation callback |
+
+---
+
+## Visitors `/api/v1/visitors`
+
+### `GET /visitors` 🔒 `ADMIN | PRINCIPAL | SECRETARY`
+
+List visitor logs. Filter by date range, status.
+
+### `POST /visitors` 🔒 `ADMIN | PRINCIPAL | SECRETARY`
+
+Register a visitor.
+
+**Body**
+```json
+{
+  "name": "John Kamau",
+  "company": "Ministry of Education",
+  "nationalId": "12345678",
+  "purpose": "School inspection",
+  "date": "2026-05-07"
+}
+```
+
+### `PATCH /visitors/:id` 🔒
+
+Update visitor record (check-out time, notes).
+
+### `DELETE /visitors/:id` 🔒
+
+Delete visitor record.
+
+---
+
+## Check-ins `/api/v1/checkins`
+
+Staff geofence-based or manual check-in.
+
+### `POST /checkins` 🔒
+
+Create a check-in record.
+
+**Body** `{ "method": "geofence" | "manual", "latitude": -1.286, "longitude": 36.817 }`
+
+### `GET /checkins/today` 🔒
+
+Own check-ins for today.
+
+### `GET /checkins/roster` 🔒 `ADMIN | PRINCIPAL`
+
+Daily roster of all staff check-ins.
+
+### `GET /checkins/staff/:staffId` 🔒 `ADMIN | PRINCIPAL`
+
+Check-in history for a specific staff member.
+
+---
+
+## Leave `/api/v1/leave`
+
+### `POST /leave` 🔒
+
+Apply for leave.
+
+**Body**
+```json
+{
+  "type": "Annual" | "Sick" | "Maternity" | "Paternity" | "Compassionate" | "Study",
+  "startDate": "2026-05-20",
+  "endDate": "2026-05-22",
+  "reason": "Family emergency"
+}
+```
+
+### `GET /leave` 🔒
+
+List own leave applications.
+
+### `GET /leave/balances` 🔒
+
+Available leave balance by type.
+
+### `GET /leave/pending-count` 🔒 `HEAD_TEACHER | PRINCIPAL | DIRECTOR`
+
+Count of pending leave requests awaiting approval.
+
+### `GET /leave/on-leave-today` 🔒 `LEADERSHIP`
+
+Staff currently on approved leave today.
+
+### `GET /leave/summary` 🔒 `LEADERSHIP`
+
+Leave summary across all staff.
+
+### `GET /leave/:id` 🔒
+
+Leave application detail.
+
+### `PATCH /leave/:id/approve` 🔒 `LEADERSHIP`
+
+Approve leave request.
+
+### `PATCH /leave/:id/reject` 🔒 `LEADERSHIP`
+
+Reject with reason.
+
+**Body** `{ "reason": "Insufficient cover" }`
+
+### `DELETE /leave/:id` 🔒
+
+Cancel own leave application (if not yet approved).
+
+---
+
+## Payroll `/api/v1/payroll`
+
+### Salary Grades
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/payroll/grades` | List salary grades |
+| POST | `/payroll/grades` | Create grade |
+| PATCH | `/payroll/grades/:id` | Update grade |
+| DELETE | `/payroll/grades/:id` | Delete grade |
+
+**Body (create):**
+```json
+{
+  "name": "Teacher Grade B5",
+  "baseSalary": 45000,
+  "allowances": [
+    { "name": "House", "amount": 8000 },
     { "name": "Transport", "amount": 3000 }
   ]
 }
 ```
 
-**Response `201`**
-```json
-{
-  "status": "success",
-  "feeStructure": {
-    "_id":         "...",
-    "classId":     "...",
-    "academicYear":"2026",
-    "term":        "Term 1",
-    "items":       [ { "name": "Tuition", "amount": 15000 }, ... ],
-    "totalAmount": 20000
-  }
-}
-```
+### Payroll Runs
 
----
-
-### `GET /api/v1/fees/structures`
-
-**Query Parameters:** `classId`, `academicYear`, `term`, `page`, `limit`
-
----
-
-### `GET /api/v1/fees/structures/:id`
-
----
-
-### `PATCH /api/v1/fees/structures/:id`
-
-Update fee items or amounts.
-
----
-
-### `DELETE /api/v1/fees/structures/:id`
-
----
-
-### `POST /api/v1/fees/payments`
-
-Record a payment for a student.
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `studentId` | string (ObjectId) | ✅ | — |
-| `classId` | string (ObjectId) | ✅ | — |
-| `academicYear` | string | ✅ | 4-digit year |
-| `term` | string | ✅ | Term enum |
-| `amount` | number | ✅ | min 1 |
-| `method` | string | ✅ | `cash` · `mpesa` · `bank` |
-| `reference` | string | — | receipt/transaction number |
-| `notes` | string | — | — |
-
-```json
-{
-  "studentId":    "student-id",
-  "classId":      "class-id",
-  "academicYear": "2026",
-  "term":         "Term 1",
-  "amount":       15000,
-  "method":       "mpesa",
-  "reference":    "QJB8T2XPNQ"
-}
-```
-
-**Response `201`**
-```json
-{
-  "status":  "success",
-  "payment": {
-    "_id":            "...",
-    "studentId":      "...",
-    "amount":         15000,
-    "method":         "mpesa",
-    "reference":      "QJB8T2XPNQ",
-    "status":         "completed",
-    "recordedByUserId": "...",
-    "receiptUrl":     null,
-    "createdAt":      "2026-04-12T10:00:00.000Z"
-  }
-}
-```
-
-> A PDF receipt is generated asynchronously via BullMQ. `receiptUrl` is populated when ready.
-
----
-
-### `GET /api/v1/fees/payments`
-
-**Query Parameters:** `studentId`, `classId`, `academicYear`, `term`, `method`, `status`, `page`, `limit`
-
----
-
-### `GET /api/v1/fees/payments/:id`
-
----
-
-### `POST /api/v1/fees/payments/:id/reverse`
-
-Reverse a completed payment.
-
-**Request Body**
-
-| Field | Type | Required |
+| Method | Endpoint | Description |
 |---|---|---|
-| `reason` | string | ✅ |
+| GET | `/payroll/runs` | List payroll runs |
+| GET | `/payroll/runs/:id` | Run detail (all staff + calculated salaries) |
+| POST | `/payroll/runs` | Generate new run |
+| DELETE | `/payroll/runs/:id` | Delete unapproved run |
+| POST | `/payroll/runs/:id/approve` | Approve run (locks from further editing) |
+| POST | `/payroll/runs/:id/paid` | Mark as paid |
 
+**Body (create run):**
 ```json
-{ "reason": "Duplicate payment recorded in error" }
+{ "period": "May 2026", "type": "monthly" | "termly" }
 ```
 
-**Response `200`**
+---
+
+## Onboarding `/api/v1/onboarding`
+
+### `GET /onboarding/status` 🔒
+
+Get onboarding checklist status.
+
+**Response**
 ```json
 {
-  "status":  "success",
-  "payment": { "...", "status": "reversed", "reversalReason": "...", "reversedAt": "..." }
+  "steps": {
+    "schoolProfile": true,
+    "staffAdded": true,
+    "studentsAdded": false,
+    "classesCreated": true,
+    "subjectsAdded": true,
+    "feeStructureCreated": false
+  },
+  "percentComplete": 66
 }
 ```
 
----
+### `POST /onboarding/complete` 🔒
 
-### `GET /api/v1/fees/balance`
-
-Get the outstanding balance for a student in a term.
-
-**Query Parameters**
-
-| Param | Type | Required |
-|---|---|---|
-| `studentId` | ObjectId | ✅ |
-| `academicYear` | string | ✅ |
-| `term` | string | ✅ |
-
-**Response `200`**
-```json
-{
-  "status": "success",
-  "balance": {
-    "studentId":      "...",
-    "academicYear":   "2026",
-    "term":           "Term 1",
-    "totalFees":      20000,
-    "totalPaid":      15000,
-    "balance":        5000,
-    "overpayment":    0
-  }
-}
-```
+Mark onboarding as complete.
 
 ---
 
-## Report Cards
+## Subscriptions `/api/v1/subscriptions`
 
-**Base path:** `/api/v1/report-cards`  
-**Auth:** Required — admin roles  
-**Feature gate:** `report_cards`
+### `POST /subscriptions/paystack/checkout` 🔒 `SCHOOL_ADMIN | PRINCIPAL`
 
----
+Initiate Paystack checkout for subscription renewal.
 
-### `POST /api/v1/report-cards/generate`
+**Body** `{ "plan": "annual", "students": 200 }`
 
-Generate a report card for a single student for a given term.
+**Response** `{ "checkoutUrl": "https://checkout.paystack.com/..." }`
 
-**Request Body**
+### `GET /subscriptions/paystack/status/:merchantReference` 🔒
 
-| Field | Type | Required |
-|---|---|---|
-| `studentId` | string (ObjectId) | ✅ |
-| `classId` | string (ObjectId) | ✅ |
-| `academicYear` | string | ✅ |
-| `term` | string | ✅ |
+Get payment status.
 
-```json
-{
-  "studentId":    "student-id",
-  "classId":      "class-id",
-  "academicYear": "2026",
-  "term":         "Term 1"
-}
-```
+### `GET /subscriptions/payments` 🔒
 
-**Response `201`**
-```json
-{
-  "status":     "success",
-  "reportCard": {
-    "_id":          "...",
-    "studentId":    "...",
-    "classId":      "...",
-    "academicYear": "2026",
-    "term":         "Term 1",
-    "levelCategory":"Upper Primary",
-    "subjects": [
-      {
-        "subjectId":         "...",
-        "subjectName":       "Mathematics",
-        "subjectCode":       "MATH",
-        "exams": [
-          { "examName": "Midterm", "examType": "midterm", "marks": 78, "totalMarks": 100, "percentage": 78, "grade": "ME" }
-        ],
-        "averagePercentage": 78,
-        "grade":             "ME",
-        "points":            3,
-        "teacherRemark":     null
-      }
-    ],
-    "totalPoints":       18,
-    "averagePoints":     3.0,
-    "overallGrade":      "ME",
-    "attendanceSummary": { "totalDays": 60, "present": 58, "absent": 1, "late": 1, "excused": 0 },
-    "teacherRemarks":    null,
-    "principalRemarks":  null,
-    "status":            "draft"
-  }
-}
-```
+List subscription payment history.
+
+### `POST /subscriptions/paystack/webhook`
+
+**Public.** HMAC-SHA512 verified Paystack webhook. Handles both subscription renewals (`metadata.type = 'subscription'`) and SMS credit top-ups (`metadata.type = 'sms_credits'`).
 
 ---
 
-### `POST /api/v1/report-cards/generate-class`
+## Admin Portal `/api/v1/admin`
 
-Generate report cards for every student in a class in one call.
+All routes require `SUPERADMIN` role.
 
-**Request Body**
+### `GET /admin/stats`
 
-| Field | Type | Required |
-|---|---|---|
-| `classId` | string (ObjectId) | ✅ |
-| `academicYear` | string | ✅ |
-| `term` | string | ✅ |
+Platform-wide statistics: total schools, students, staff.
 
-**Response `201`**
-```json
-{
-  "status":  "success",
-  "message": "Report cards generated for 28 students.",
-  "count":   28
-}
-```
+### `GET /admin/schools`
+
+List all schools with statuses and subscription info.
+
+### `GET /admin/schools/:id`
+
+School detail with staff breakdown.
+
+### `PATCH /admin/schools/:id/status`
+
+Update school status.
+
+**Body** `{ "status": "active" | "suspended" | "trial" }`
+
+### `PATCH /admin/schools/:id/sms-sender-id`
+
+Approve a school's SMS sender ID request.
+
+**Body** `{ "approved": true, "senderId": "SUNRISE" }`
+
+### `GET /admin/audit-logs`
+
+System-wide audit logs across all schools.
+
+### `GET /admin/users`
+
+List all superadmin users.
+
+### `PATCH /admin/users/:id/toggle`
+
+Activate or deactivate a superadmin user.
+
+### `POST /admin/monitoring-test`
+
+Trigger a monitoring health check.
+
+### `GET /admin/sms-analytics`
+
+SMS delivery analytics across all schools: delivery rate, success rate, credit consumption per school.
+
+**Query params:** `from`, `to`, `term`, `academicYear`
 
 ---
 
-### `GET /api/v1/report-cards`
+## Environment Variables
 
-**Query Parameters:** `classId`, `studentId`, `academicYear`, `term`, `status` (`draft`·`published`), `page`, `limit`
+### Required
 
----
-
-### `GET /api/v1/report-cards/annual-summary`
-
-Get a student's aggregated annual performance across all terms.
-
-**Query Parameters:** `studentId` (required), `academicYear` (required)
-
----
-
-### `GET /api/v1/report-cards/:id`
-
----
-
-### `PATCH /api/v1/report-cards/:id/remarks`
-
-Update teacher and principal remarks.
-
-**Request Body**
-
-| Field | Type |
+| Variable | Purpose |
 |---|---|
-| `teacherRemarks` | string |
-| `principalRemarks` | string |
+| `MONGO_URI` | MongoDB connection string |
+| `JWT_SECRET` | Session token signing key (min 32 chars) |
+| `CLIENT_URL` | Web frontend domain (used in email links) |
+| `REDIS_URL` | Redis connection for BullMQ queue |
+| `ZEPTOMAIL_API_KEY` | Transactional email via ZeptoMail (Zoho) |
 
----
+### Optional / Feature-Gated
 
-### `PATCH /api/v1/report-cards/:id/subjects/:subjectId/remark`
-
-Update the teacher's per-subject remark for one student.
-
-**Request Body**
-```json
-{ "teacherRemark": "Excellent performance in algebra." }
-```
-
----
-
-### `POST /api/v1/report-cards/:id/publish`
-
-Publish a report card (status: `draft` → `published`). Published cards are visible to parents.
-
-**Response `200`**
-```json
-{
-  "status":     "success",
-  "reportCard": { "...", "status": "published", "publishedAt": "2026-04-12T..." }
-}
-```
-
----
-
-## Timetable
-
-**Base path:** `/api/v1/timetables`  
-**Auth:** Required  
-**Feature gate:** `timetable`  
-**Read access:** All school staff · **Write access:** Admin roles only
-
----
-
-### `POST /api/v1/timetables`
-
-Create a timetable for a class/term/year.
-
-**Request Body**
-
-| Field | Type | Required |
+| Variable | Default | Purpose |
 |---|---|---|
-| `classId` | string (ObjectId) | ✅ |
-| `academicYear` | string | ✅ |
-| `term` | string | ✅ |
-
-**Response `201`**
-```json
-{ "status": "success", "timetable": { "_id": "...", "classId": "...", "slots": [] } }
-```
-
----
-
-### `GET /api/v1/timetables`
-
-**Query Parameters:** `classId`, `academicYear`, `term`, `page`, `limit`
-
----
-
-### `GET /api/v1/timetables/:id`
-
----
-
-### `PUT /api/v1/timetables/:id/slots`
-
-Replace the entire slots array for a timetable.
-
-**Request Body**
-
-| Field | Type | Required |
-|---|---|---|
-| `slots` | array | ✅ |
-
-**Slot Object:**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `day` | string | ✅ | day of week enum |
-| `period` | number | ✅ | 1–12 |
-| `startTime` | string | ✅ | `HH:MM` format |
-| `endTime` | string | ✅ | `HH:MM` format |
-| `subjectId` | string (ObjectId) | — | — |
-| `teacherId` | string (ObjectId) | — | — |
-| `room` | string | — | — |
-
-```json
-{
-  "slots": [
-    { "day": "monday", "period": 1, "startTime": "07:30", "endTime": "08:30", "subjectId": "...", "teacherId": "..." },
-    { "day": "monday", "period": 2, "startTime": "08:30", "endTime": "09:30", "subjectId": "...", "teacherId": "..." }
-  ]
-}
-```
+| `PORT` | `3000` | API server port |
+| `NODE_ENV` | `development` | Environment flag |
+| `JWT_EXPIRES_IN` | `1d` | Session token TTL |
+| `AT_USERNAME` | — | Africa's Talking username (SMS) |
+| `AT_API_KEY` | — | Africa's Talking API key |
+| `AT_SENDER_ID` | — | SMS sender ID (per school, after approval) |
+| `AT_TEST_NUMBERS` | — | Redirect SMS to test numbers in dev/QA |
+| `DO_SPACES_KEY` | — | DigitalOcean Spaces API key |
+| `DO_SPACES_SECRET` | — | DO Spaces secret |
+| `DO_SPACES_BUCKET` | — | DO Spaces bucket name |
+| `DO_SPACES_REGION` | `ams3` | DO Spaces region |
+| `SENTRY_DSN` | — | Sentry error monitoring |
+| `PAYSTACK_ENABLED` | `false` | Enable Paystack payments |
+| `PAYSTACK_SECRET_KEY` | — | Required if Paystack enabled |
+| `MPESA_CONSUMER_KEY` | — | Safaricom Daraja consumer key |
+| `MPESA_CONSUMER_SECRET` | — | Daraja secret |
+| `MPESA_PASSKEY` | — | M-Pesa passkey |
+| `MPESA_SHORTCODE` | — | School M-Pesa shortcode |
+| `MPESA_ENV` | `production` | `production` or `sandbox` |
+| `MPESA_CALLBACK_BASE_URL` | — | Public URL for Safaricom callbacks |
 
 ---
 
-### `DELETE /api/v1/timetables/:id`
+## Error Reference
+
+| Code | Meaning |
+|---|---|
+| 400 | Bad request — validation failed |
+| 401 | Unauthenticated — no valid session cookie |
+| 403 | Forbidden — authenticated but insufficient role |
+| 404 | Resource not found |
+| 429 | Rate limit exceeded |
+| 502 | Upstream provider error (SMS, email) |
+| 503 | Service temporarily unavailable (Redis down) |
 
 ---
 
-## Library
-
-**Base path:** `/api/v1/library`  
-**Auth:** Required  
-**Feature gate:** `library`
-
----
-
-### `POST /api/v1/library/books` *(admin only)*
-
-Add a book to the catalogue.
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `title` | string | ✅ | — |
-| `totalCopies` | number | ✅ | min 1 |
-| `author` | string | — | — |
-| `isbn` | string | — | unique per school |
-| `category` | string | — | e.g. `"Textbook"` |
-
-```json
-{
-  "title":       "Mathematics Grade 4",
-  "author":      "KLB Publishers",
-  "isbn":        "978-9966-01-123-4",
-  "category":    "Textbook",
-  "totalCopies": 30
-}
-```
-
-**Response `201`**
-```json
-{
-  "status": "success",
-  "book": {
-    "_id":            "...",
-    "title":          "Mathematics Grade 4",
-    "totalCopies":    30,
-    "availableCopies": 30,
-    "isActive":       true
-  }
-}
-```
-
----
-
-### `GET /api/v1/library/books`
-
-**Query Parameters:** `category`, `isActive`, `search` (title/author), `page`, `limit`
-
----
-
-### `GET /api/v1/library/books/:id`
-
----
-
-### `PATCH /api/v1/library/books/:id` *(admin only)*
-
-Update book details (title, author, isbn, category, totalCopies, isActive).
-
----
-
-### `POST /api/v1/library/loans`
-
-Issue a book to a student or staff member.
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `bookId` | string (ObjectId) | ✅ | — |
-| `borrowerType` | string | ✅ | `student` · `staff` |
-| `borrowerId` | string (ObjectId) | ✅ | student or user ID |
-| `dueDate` | string (ISO date) | ✅ | future date |
-| `notes` | string | — | — |
-
-```json
-{
-  "bookId":       "book-id",
-  "borrowerType": "student",
-  "borrowerId":   "student-id",
-  "dueDate":      "2026-05-12"
-}
-```
-
-**Response `201`**
-```json
-{
-  "status": "success",
-  "loan": {
-    "_id":          "...",
-    "bookId":       "...",
-    "borrowerType": "student",
-    "borrowerId":   "...",
-    "borrowerName": "Emma Njeri",
-    "dueDate":      "2026-05-12T00:00:00.000Z",
-    "status":       "active",
-    "issuedByUserId": "..."
-  }
-}
-```
-
----
-
-### `GET /api/v1/library/loans`
-
-**Query Parameters:** `bookId`, `borrowerId`, `status` (`active`·`returned`·`overdue`), `page`, `limit`
-
----
-
-### `GET /api/v1/library/loans/:id`
-
----
-
-### `POST /api/v1/library/loans/:id/return`
-
-Return a book.
-
-**Request Body** (optional)
-```json
-{ "notes": "Minor damage to cover" }
-```
-
-**Response `200`**
-```json
-{
-  "status": "success",
-  "loan": { "...", "status": "returned", "returnedAt": "2026-04-12T..." }
-}
-```
-
----
-
-### `PATCH /api/v1/library/loans/:id/overdue` *(admin only)*
-
-Mark an active loan as overdue.
-
----
-
-## Transport
-
-**Base path:** `/api/v1/transport`  
-**Auth:** Required  
-**Feature gate:** `transport`
-
----
-
-### `POST /api/v1/transport/routes` *(admin only)*
-
-Create a transport route.
-
-**Request Body**
-
-| Field | Type | Required | Rules |
-|---|---|---|---|
-| `name` | string | ✅ | unique per school |
-| `description` | string | — | — |
-| `vehicleReg` | string | — | e.g. `"KBZ 123A"` |
-| `driverName` | string | — | — |
-| `driverPhone` | string | — | — |
-| `capacity` | number | — | min 1 |
-| `morningDeparture` | string | — | `HH:MM` |
-| `afternoonDeparture` | string | — | `HH:MM` |
-| `stops` | array | — | stop objects |
-
-**Stop Object:**
-
-| Field | Type | Required |
-|---|---|---|
-| `name` | string | ✅ |
-| `order` | number | ✅ (min 1) |
-| `lat` | number | — |
-| `lng` | number | — |
-
-```json
-{
-  "name":              "Route A — Karen",
-  "vehicleReg":        "KBZ 123A",
-  "driverName":        "Peter Mwangi",
-  "driverPhone":       "+254711000001",
-  "capacity":          30,
-  "morningDeparture":  "06:30",
-  "afternoonDeparture":"15:30",
-  "stops": [
-    { "name": "Karen Roundabout", "order": 1 },
-    { "name": "Hardy", "order": 2 }
-  ]
-}
-```
-
----
-
-### `GET /api/v1/transport/routes`
-
-**Query Parameters:** `isActive`, `page`, `limit`
-
----
-
-### `GET /api/v1/transport/routes/:id`
-
----
-
-### `PATCH /api/v1/transport/routes/:id` *(admin only)*
-
----
-
-### `DELETE /api/v1/transport/routes/:id` *(admin only)*
-
----
-
-### `POST /api/v1/transport/routes/:id/assign` *(admin only)*
-
-Assign students to a route.
-
-**Request Body**
-```json
-{ "studentIds": ["student-id-1", "student-id-2"] }
-```
-
-**Response `200`**
-```json
-{ "status": "success", "message": "3 student(s) assigned to route." }
-```
-
----
-
-### `POST /api/v1/transport/routes/:id/unassign` *(admin only)*
-
-Remove students from a route.
-
-**Request Body**
-```json
-{ "studentIds": ["student-id-1"] }
-```
-
----
-
-## Settings
-
-**Base path:** `/api/v1/settings`  
-**Auth:** Required — admin roles
-
-Settings are per-school. Each school has exactly one settings document created on registration.
-
----
-
-### `GET /api/v1/settings`
-
-Get the current school's settings.
-
-**Response `200`**
-```json
-{
-  "status": "success",
-  "settings": {
-    "_id":                "...",
-    "schoolId":           "...",
-    "currentAcademicYear": "2026",
-    "terms": [
-      { "name": "Term 1", "startDate": "2026-01-06T00:00:00.000Z", "endDate": "2026-04-04T00:00:00.000Z" },
-      { "name": "Term 2", "startDate": "2026-05-05T00:00:00.000Z", "endDate": "2026-08-07T00:00:00.000Z" },
-      { "name": "Term 3", "startDate": "2026-09-07T00:00:00.000Z", "endDate": "2026-11-06T00:00:00.000Z" }
-    ],
-    "holidays":    [],
-    "workingDays": ["monday","tuesday","wednesday","thursday","friday"],
-    "logo":          null,
-    "motto":         null,
-    "principalName": null,
-    "physicalAddress": null
-  }
-}
-```
-
----
-
-### `PUT /api/v1/settings`
-
-Replace (full update) the school's settings.
-
-**Request Body** (all fields optional)
-
-| Field | Type | Rules |
-|---|---|---|
-| `currentAcademicYear` | string | 4-digit year |
-| `terms` | array | array of term date objects |
-| `workingDays` | string[] | subset of day-of-week enum |
-| `logo` | string | URL |
-| `motto` | string | — |
-| `principalName` | string | — |
-| `physicalAddress` | string | — |
-
-**Term Date Object:**
-
-| Field | Type | Required |
-|---|---|---|
-| `name` | string | ✅ (`Term 1`/`Term 2`/`Term 3`) |
-| `startDate` | string (ISO date) | ✅ |
-| `endDate` | string (ISO date) | ✅ |
-
-```json
-{
-  "currentAcademicYear": "2026",
-  "terms": [
-    { "name": "Term 1", "startDate": "2026-01-06", "endDate": "2026-04-04" },
-    { "name": "Term 2", "startDate": "2026-05-05", "endDate": "2026-08-07" },
-    { "name": "Term 3", "startDate": "2026-09-07", "endDate": "2026-11-06" }
-  ],
-  "workingDays": ["monday","tuesday","wednesday","thursday","friday"],
-  "principalName": "Dr. Jane Otieno"
-}
-```
-
----
-
-### `POST /api/v1/settings/holidays`
-
-Add a school holiday.
-
-**Request Body**
-
-| Field | Type | Required |
-|---|---|---|
-| `name` | string | ✅ |
-| `date` | string (ISO date) | ✅ |
-| `description` | string | — |
-
-```json
-{
-  "name":        "Jamhuri Day",
-  "date":        "2026-12-12",
-  "description": "National holiday"
-}
-```
-
-**Response `201`**
-```json
-{
-  "status":   "success",
-  "settings": { "...", "holidays": [ { "_id": "...", "name": "Jamhuri Day", "date": "..." } ] }
-}
-```
-
----
-
-### `DELETE /api/v1/settings/holidays/:holidayId`
-
-Remove a holiday by its `_id`.
-
----
-
-## Audit Logs
-
-**Base path:** `/api/v1/audit-logs`  
-**Auth:** Required — admin roles  
-**Feature gate:** `audit_log`
-
----
-
-### `GET /api/v1/audit-logs`
-
-Retrieve the school's audit trail.
-
-**Query Parameters**
-
-| Param | Type | Description |
-|---|---|---|
-| `action` | string | Filter by action enum |
-| `resource` | string | Filter by resource enum |
-| `userId` | ObjectId | Filter by actor |
-| `resourceId` | ObjectId | Filter by specific resource |
-| `startDate` | string (ISO) | Date range start |
-| `endDate` | string (ISO) | Date range end |
-| `page` | integer | — |
-| `limit` | integer | — |
-
-**Response `200`**
-```json
-{
-  "status": "success",
-  "logs": [
-    {
-      "_id":        "...",
-      "userId":     "...",
-      "userRole":   "school_admin",
-      "action":     "create",
-      "resource":   "Payment",
-      "resourceId": "...",
-      "meta":       { "amount": 15000, "method": "mpesa" },
-      "ip":         "102.0.10.1",
-      "createdAt":  "2026-04-12T10:00:00.000Z"
-    }
-  ],
-  "meta": { "total": 450, "page": 1, "limit": 20, "totalPages": 23 }
-}
-```
-
-**Audit Actions:** `create` · `update` · `delete` · `publish` · `reverse` · `suspend` · `activate` · `transfer` · `withdraw` · `promote` · `issue` · `return`
-
-**Audit Resources:** `Payment` · `Student` · `ReportCard` · `School` · `User` · `Book` · `BookLoan`
-
----
-
-## Parent Portal
-
-**Base path:** `/api/v1/parent`  
-**Auth:** Required — `parent` role only  
-**Feature gate:** `parent_portal`
-
-Parents can only access their own linked children's data.
-
----
-
-### `GET /api/v1/parent/children`
-
-Get all students linked to the authenticated parent.
-
-**Response `200`**
-```json
-{
-  "status":   "success",
-  "children": [
-    { "_id": "...", "firstName": "Emma", "lastName": "Njeri", "admissionNumber": "ADM2026001", "classId": "..." }
-  ]
-}
-```
-
----
-
-### `GET /api/v1/parent/children/:studentId/fees`
-
-Get fee balance and payment history for a child.
-
-**Query Parameters:** `academicYear`, `term`
-
----
-
-### `GET /api/v1/parent/children/:studentId/attendance`
-
-Get attendance records for a child.
-
-**Query Parameters:** `term`, `academicYear`, `startDate`, `endDate`
-
----
-
-### `GET /api/v1/parent/children/:studentId/results`
-
-Get exam results for a child.
-
-**Query Parameters:** `term`, `academicYear`, `subjectId`
-
----
-
-### `GET /api/v1/parent/children/:studentId/report-cards`
-
-Get published report cards for a child.
-
-**Query Parameters:** `academicYear`, `term`
-
-> Only `published` report cards are returned. Draft cards are hidden from parents.
-
----
-
-## Data Models Reference
-
-### User Object (returned in responses)
-
-```json
-{
-  "_id":              "ObjectId",
-  "firstName":        "string",
-  "lastName":         "string",
-  "email":            "string",
-  "phone":            "string | null",
-  "staffId":          "string | null",
-  "tscNumber":        "string | null",
-  "role":             "role enum",
-  "schoolId":         "ObjectId | null",
-  "classId":          "ObjectId | null",
-  "children":         ["ObjectId"],
-  "mustChangePassword": "boolean",
-  "invitePending":    "boolean",
-  "isActive":         "boolean",
-  "lastLoginAt":      "ISO datetime | null",
-  "createdAt":        "ISO datetime",
-  "updatedAt":        "ISO datetime"
-}
-```
-
-> `password`, `passwordResetToken`, `passwordResetExpiry`, `inviteToken`, `inviteTokenExpiry` are **never** returned in API responses.
-
----
-
-### School Object
-
-```json
-{
-  "_id":                "ObjectId",
-  "name":               "string",
-  "email":              "string",
-  "phone":              "string",
-  "county":             "string",
-  "registrationNumber": "string | null",
-  "address":            "string | null",
-  "subscriptionStatus": "trial | active | suspended | expired",
-  "planTier":           "trial | basic | standard | premium",
-  "trialExpiry":        "ISO datetime",
-  "isActive":           "boolean",
-  "createdAt":          "ISO datetime",
-  "updatedAt":          "ISO datetime"
-}
-```
-
----
-
-### Student Object
-
-```json
-{
-  "_id":             "ObjectId",
-  "schoolId":        "ObjectId",
-  "classId":         "ObjectId",
-  "admissionNumber": "string",
-  "firstName":       "string",
-  "lastName":        "string",
-  "gender":          "male | female",
-  "dateOfBirth":     "ISO date | null",
-  "parentIds":       ["ObjectId"],
-  "status":          "active | transferred | graduated | withdrawn",
-  "transferNote":    "string | null",
-  "routeId":         "ObjectId | null",
-  "photo":           "string (URL) | null",
-  "createdAt":       "ISO datetime"
-}
-```
-
----
-
-### Kenyan Phone Format
-
-Accepted formats: `+254XXXXXXXXX`, `07XXXXXXXX`, `01XXXXXXXX`, `254XXXXXXXXX`  
-All phone numbers are normalised to `+254XXXXXXXXX` before storage.
-
----
-
-*Generated: 2026-04-12 | Diraschool API v1.0*
+*DiraSchool API — Dentrix Technologies, Kenya. Integration support: contact@diraschool.com*
