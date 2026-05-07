@@ -84,7 +84,6 @@ const organizationSchema = {
   logo: `${SITE_URL}/icon.svg`,
 };
 
-
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>

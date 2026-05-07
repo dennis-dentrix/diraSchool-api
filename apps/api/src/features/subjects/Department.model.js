@@ -22,6 +22,12 @@ const departmentSchema = new mongoose.Schema(
       ref: 'User',
       default: null,
     },
+    memberIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     isActive: {
       type: Boolean,
       default: true,

@@ -9,8 +9,6 @@ import { getRedis } from '../../config/redis.js';
 import {
   AUDIT_ACTIONS,
   AUDIT_RESOURCES,
-  FEATURE_ADDON_PRICING,
-  FEATURE_ADDONS,
   PLAN_TIERS,
   SUBSCRIPTION_STATUSES,
 } from '../../constants/index.js';
@@ -24,32 +22,16 @@ const PER_STUDENT_RATE = 50;
 const VAT_RATE = 0.16;
 const MULTIPLIERS = {
   'per-term': 1,
-  annual: 2.70, // 3 terms × 0.90 = 10% off
+  annual: 2.70,      // 3 terms × 0.90 = 10% off
   'multi-year': 2.55, // 3 terms × 0.85 = 15% off per year
 };
 
-const normalizeAddOns = (addOns = {}) => ({
-  [FEATURE_ADDONS.TRANSPORT]: Boolean(addOns?.[FEATURE_ADDONS.TRANSPORT]),
-  [FEATURE_ADDONS.SMS]: Boolean(addOns?.[FEATURE_ADDONS.SMS]),
-});
-
-const calcAmount = ({ studentCount, billingCycle, addOns }) => {
-  const normalized = normalizeAddOns(addOns);
-  const addOnsPerTerm = Object.entries(normalized).reduce(
-    (sum, [key, enabled]) => (enabled ? sum + (FEATURE_ADDON_PRICING[key] ?? 0) : sum),
-    0
-  );
-  const subtotal = BASE_FEE + studentCount * PER_STUDENT_RATE + addOnsPerTerm;
+const calcAmount = ({ studentCount, billingCycle }) => {
+  const subtotal = BASE_FEE + studentCount * PER_STUDENT_RATE;
   const multiplier = MULTIPLIERS[billingCycle] ?? 1;
   const exVat = Math.round(subtotal * multiplier);
   const vat = Math.round(exVat * VAT_RATE);
-  return {
-    addOns: normalized,
-    addOnsPerTerm,
-    subtotalExVat: exVat,
-    vatAmount: vat,
-    total: exVat + vat,
-  };
+  return { subtotalExVat: exVat, vatAmount: vat, total: exVat + vat };
 };
 
 const merchantRef = (schoolId) =>
@@ -65,6 +47,27 @@ const bustSchoolSubCache = async (schoolId) => {
   }
 };
 
+const buildInvoiceSnapshot = (payment, school) => ({
+  invoiceNumber: `INV-${String(payment._id).slice(-8).toUpperCase()}`,
+  issuedAt: payment.paidAt || new Date(),
+  school: {
+    name: school.name,
+    email: school.email,
+    phone: school.phone,
+    address: school.address || null,
+    county: school.county || null,
+    registrationNumber: school.registrationNumber || null,
+  },
+  billingCycle: payment.billingCycle,
+  studentCount: payment.studentCount,
+  subtotalExVat: payment.subtotalExVat,
+  vatAmount: payment.vatAmount,
+  total: payment.amount,
+  currency: payment.currency || 'KES',
+  merchantReference: payment.merchantReference,
+  description: payment.description,
+});
+
 const activateSchool = async (payment) => {
   const school = await School.findById(payment.schoolId);
   if (!school) return;
@@ -75,6 +78,12 @@ const activateSchool = async (payment) => {
   school.trialExpiry = undefined;
   await school.save();
   await bustSchoolSubCache(school._id);
+
+  // Freeze a copy of the invoice at confirmation time
+  if (!payment.invoiceSnapshot) {
+    payment.invoiceSnapshot = buildInvoiceSnapshot(payment, school);
+    await payment.save();
+  }
 
   // If this school is part of a billing group, activate all sibling schools too
   if (school.groupId) {
@@ -114,7 +123,7 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
   const school = await School.findById(req.user.schoolId);
   if (!school) return sendError(res, 'School not found.', 404);
 
-  const { billingCycle, planTier, description, addOns } = req.body;
+  const { billingCycle, planTier, description } = req.body;
   let { studentCount } = req.body;
 
   // If the school is part of a billing group, aggregate active students across all branches
@@ -124,7 +133,7 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
     studentCount = await Student.countDocuments({ schoolId: { $in: groupSchoolIds }, status: 'active' });
   }
 
-  const amounts = calcAmount({ studentCount, billingCycle, addOns });
+  const amounts = calcAmount({ studentCount, billingCycle });
   const reference = merchantRef(school._id);
 
   const callbackUrl = `${env.CLIENT_URL.replace(/\/+$/, '')}/billing?reference=${reference}`;
@@ -136,8 +145,6 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
     status: 'pending',
     billingCycle,
     studentCount,
-    addOns: amounts.addOns,
-    addOnsPerTerm: amounts.addOnsPerTerm,
     amount: amounts.total,
     subtotalExVat: amounts.subtotalExVat,
     vatAmount: amounts.vatAmount,
@@ -173,7 +180,6 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
         provider: 'paystack',
         merchantReference: reference,
         amount: payment.amount,
-        addOns: payment.addOns,
       },
     });
 
@@ -183,8 +189,6 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
         merchantReference: reference,
         amount: payment.amount,
         currency: payment.currency,
-        addOns: payment.addOns,
-        addOnsPerTerm: payment.addOnsPerTerm,
         redirectUrl: result.authorization_url,
         accessCode: result.access_code,
       },
@@ -243,10 +247,11 @@ export const getPaystackStatus = asyncHandler(async (req, res) => {
       currency: payment.currency,
       billingCycle: payment.billingCycle,
       studentCount: payment.studentCount,
-      addOns: payment.addOns,
-      addOnsPerTerm: payment.addOnsPerTerm,
+      subtotalExVat: payment.subtotalExVat,
+      vatAmount: payment.vatAmount,
       checkoutUrl: payment.checkoutUrl,
       paidAt: payment.paidAt,
+      invoiceSnapshot: payment.invoiceSnapshot ?? null,
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
     },

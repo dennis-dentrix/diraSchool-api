@@ -60,39 +60,35 @@ function TierPill({ tier }) {
   );
 }
 
+// ── Initials avatar ───────────────────────────────────────────────────────────
+function Avatar({ name, className = '' }) {
+  const initials = name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <span className={`inline-flex items-center justify-center rounded-full bg-muted text-muted-foreground font-semibold text-[10px] shrink-0 ${className}`}>
+      {initials}
+    </span>
+  );
+}
+
 // ── Department card (admin) ───────────────────────────────────────────────────
-function DepartmentCard({ dept, onEdit, onDelete }) {
-  const hod = dept.hodId
-    ? `${dept.hodId.firstName} ${dept.hodId.lastName}`
-    : null;
+function DepartmentCard({ dept, onEdit, onDelete, onAddMember, onRemoveMember, isPendingMember }) {
+  const hod = dept.hodId ? `${dept.hodId.firstName} ${dept.hodId.lastName}` : null;
+  const members = dept.memberIds ?? [];
 
   return (
-    <Card className="group">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+    <Card className="group flex flex-col">
+      {/* Header */}
+      <CardHeader className="pb-3 pt-4 px-4 border-b">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               <FolderOpen className="h-4 w-4 text-primary" />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-sm">{dept.name}</p>
+              <CardTitle className="text-sm font-semibold leading-tight">{dept.name}</CardTitle>
               {dept.description && (
                 <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{dept.description}</p>
               )}
-              <div className="flex items-center gap-3 mt-2">
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <BookOpen className="h-3 w-3" />
-                  {dept.subjectCount} subject{dept.subjectCount !== 1 ? 's' : ''}
-                </span>
-                {hod ? (
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <UserCircle className="h-3 w-3" />
-                    HOD: {hod}
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground/50">No HOD assigned</span>
-                )}
-              </div>
             </div>
           </div>
           <DropdownMenu>
@@ -111,6 +107,76 @@ function DepartmentCard({ dept, onEdit, onDelete }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+
+        {/* Stats row */}
+        <div className="flex items-center gap-3 mt-2">
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <BookOpen className="h-3 w-3" />
+            {dept.subjectCount} subject{dept.subjectCount !== 1 ? 's' : ''}
+          </span>
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <Users className="h-3 w-3" />
+            {members.length} member{members.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+      </CardHeader>
+
+      {/* HOD row */}
+      <CardContent className="px-4 pt-3 pb-2 flex-1 flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground w-8 shrink-0">HOD</span>
+          {hod ? (
+            <div className="flex items-center gap-1.5">
+              <Avatar name={hod} className="w-5 h-5" />
+              <span className="text-xs font-medium">{hod}</span>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground/50 italic">Not assigned</span>
+          )}
+        </div>
+
+        {/* Members list */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Members</span>
+            <Button
+              variant="ghost" size="sm"
+              className="h-6 px-2 text-xs text-primary hover:text-primary"
+              onClick={() => onAddMember(dept)}
+            >
+              <Plus className="h-3 w-3 mr-0.5" /> Add
+            </Button>
+          </div>
+
+          {members.length === 0 ? (
+            <p className="text-xs text-muted-foreground/50 italic py-1">No members yet</p>
+          ) : (
+            <div className="space-y-1">
+              {members.map((m) => {
+                const name = `${m.firstName} ${m.lastName}`;
+                return (
+                  <div key={m._id} className="flex items-center justify-between group/member py-0.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar name={name} className="w-6 h-6" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium leading-tight truncate">{name}</p>
+                        <p className="text-[10px] text-muted-foreground capitalize">{m.role?.replace('_', ' ')}</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost" size="icon"
+                      className="h-6 w-6 opacity-0 group-hover/member:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                      disabled={isPendingMember}
+                      onClick={() => onRemoveMember(dept._id, m._id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -180,6 +246,45 @@ function DepartmentFormDialog({ open, onOpenChange, editTarget, teachers, onSubm
   );
 }
 
+// ── Add member dialog ─────────────────────────────────────────────────────────
+function AddMemberDialog({ open, onOpenChange, dept, teachers, onAdd, isPending }) {
+  const existing = new Set((dept?.memberIds ?? []).map((m) => m._id ?? m));
+  const available = teachers.filter((t) => !existing.has(t._id));
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Member — {dept?.name}</DialogTitle>
+        </DialogHeader>
+        {available.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">All teachers are already members of this department.</p>
+        ) : (
+          <div className="space-y-1 max-h-64 overflow-y-auto py-1">
+            {available.map((t) => (
+              <button
+                key={t._id}
+                disabled={isPending}
+                onClick={() => onAdd(dept._id, t._id)}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-left"
+              >
+                <Avatar name={`${t.firstName} ${t.lastName}`} className="w-7 h-7" />
+                <div>
+                  <p className="text-sm font-medium">{t.firstName} {t.lastName}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{t.role?.replace('_', ' ')}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Teacher subject card ──────────────────────────────────────────────────────
 function TeacherSubjectCard({ subject, isAssigned, onJoin, onLeave, isPending }) {
   const cls = typeof subject.classId === 'object'
@@ -242,6 +347,7 @@ export default function SubjectsPage() {
   const [deptFormOpen, setDeptFormOpen]           = useState(false);
   const [editDept, setEditDept]                   = useState(null);
   const [deleteDeptTarget, setDeleteDeptTarget]   = useState(null);
+  const [addMemberTarget, setAddMemberTarget]     = useState(null);
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(subjectSchema),
@@ -375,6 +481,25 @@ export default function SubjectsPage() {
       toast.success('Department deleted');
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       setDeleteDeptTarget(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: addDeptMember, isPending: isAddingMember } = useMutation({
+    mutationFn: ({ deptId, userId }) => departmentsApi.addMember(deptId, userId),
+    onSuccess: () => {
+      toast.success('Member added');
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      setAddMemberTarget(null);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: removeDeptMember, isPending: isRemovingMember } = useMutation({
+    mutationFn: ({ deptId, userId }) => departmentsApi.removeMember(deptId, userId),
+    onSuccess: () => {
+      toast.success('Member removed');
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -638,6 +763,9 @@ export default function SubjectsPage() {
                   dept={d}
                   onEdit={(dept) => { setEditDept(dept); setDeptFormOpen(true); }}
                   onDelete={(dept) => setDeleteDeptTarget(dept)}
+                  onAddMember={(dept) => setAddMemberTarget(dept)}
+                  onRemoveMember={(deptId, userId) => removeDeptMember({ deptId, userId })}
+                  isPendingMember={isRemovingMember}
                 />
               ))}
             </div>
@@ -765,6 +893,16 @@ export default function SubjectsPage() {
         teachers={teachers}
         onSubmit={saveDept}
         isPending={isSavingDept}
+      />
+
+      {/* ── Add member dialog ─────────────────────────────────────────────── */}
+      <AddMemberDialog
+        open={!!addMemberTarget}
+        onOpenChange={(v) => !v && setAddMemberTarget(null)}
+        dept={addMemberTarget}
+        teachers={teachers}
+        onAdd={(deptId, userId) => addDeptMember({ deptId, userId })}
+        isPending={isAddingMember}
       />
 
       {/* ── Delete department confirm ──────────────────────────────────────── */}

@@ -13,6 +13,7 @@ import { authApi, getErrorMessage } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const kenyaPhoneRegex = /^(\+254|0|254)?[17]\d{8}$/;
 
@@ -28,6 +29,7 @@ const schema = z.object({
   ),
   password:        z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
+  agreedToTerms:   z.boolean().refine((v) => v === true, { message: 'You must agree to the terms to continue' }),
 }).refine((d) => d.password === d.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],
@@ -38,12 +40,15 @@ export default function RegisterPage() {
   const [showPwd,     setShowPwd]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
+    defaultValues: { agreedToTerms: false },
   });
 
+  const agreedToTerms = watch('agreedToTerms');
+
   const { mutate, isPending } = useMutation({
-    mutationFn: ({ confirmPassword, ...data }) => authApi.register(data),
+    mutationFn: ({ confirmPassword, agreedToTerms, ...data }) => authApi.register(data),
     onSuccess: (res) => {
       const email = res.data.data?.email ?? res.data.email;
       if (!email) {
@@ -122,6 +127,28 @@ export default function RegisterPage() {
               </button>
             </div>
             {errors.confirmPassword && <p className="text-xs text-bad">{errors.confirmPassword.message}</p>}
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-start gap-2.5">
+              <Checkbox
+                id="agreedToTerms"
+                checked={agreedToTerms}
+                onCheckedChange={(checked) => setValue('agreedToTerms', !!checked, { shouldValidate: true })}
+                className="mt-0.5"
+              />
+              <label htmlFor="agreedToTerms" className="text-sm text-muted-foreground leading-snug cursor-pointer select-none">
+                I agree to the{' '}
+                <Link href="/terms" target="_blank" className="font-medium text-foreground hover:underline underline-offset-2">
+                  Terms &amp; Conditions
+                </Link>
+                {' '}and{' '}
+                <Link href="/privacy" target="_blank" className="font-medium text-foreground hover:underline underline-offset-2">
+                  Privacy Policy
+                </Link>
+              </label>
+            </div>
+            {errors.agreedToTerms && <p className="text-xs text-bad">{errors.agreedToTerms.message}</p>}
           </div>
 
           <Button

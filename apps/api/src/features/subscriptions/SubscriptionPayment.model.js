@@ -47,15 +47,6 @@ const subscriptionPaymentSchema = new mongoose.Schema(
       required: true,
       min: 1,
     },
-    addOns: {
-      transport: { type: Boolean, default: false },
-      sms:       { type: Boolean, default: false },
-    },
-    addOnsPerTerm: {
-      type: Number,
-      min: 0,
-      default: 0,
-    },
     subtotalExVat: {
       type: Number,
       required: true,
@@ -83,6 +74,12 @@ const subscriptionPaymentSchema = new mongoose.Schema(
     paidAt: Date,
     paystackRawResponse: {
       type: mongoose.Schema.Types.Mixed,
+    },
+    // Frozen copy of the invoice data captured at time of payment confirmation.
+    // This ensures the invoice is immutable even if pricing logic or school details change later.
+    invoiceSnapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
   },
   { timestamps: true }

@@ -249,7 +249,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="15. Changes to These Terms">
+        <Section title="14. Changes to These Terms">
           <p>
             We may update these Terms from time to time to reflect changes in our service or applicable
             law. We will notify all school administrators by email at least 14 days before material
@@ -262,7 +262,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="16. Governing Law and Disputes">
+        <Section title="15. Governing Law and Disputes">
           <p>
             These Terms are governed by the laws of the <strong>Republic of Kenya</strong>. Any dispute
             arising from or related to these Terms or your use of DiraSchool shall be resolved through
@@ -271,7 +271,7 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="17. Contact">
+        <Section title="16. Contact">
           <p>For questions about these Terms:</p>
           <div className="mt-3 p-4 bg-slate-50 rounded-lg border border-slate-200 text-sm space-y-1">
             <p><strong>DiraSchool</strong></p>

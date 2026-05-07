@@ -23,15 +23,16 @@ import { useSearchParams } from 'next/navigation';
 // ── Only these roles can access billing ─────────────────────────────────────
 const BILLING_ROLES = ['school_admin', 'director', 'headteacher'];
 
-// ── Pricing constants ────────────────────────────────────────────────────────
+// ── Pricing constants (must match apps/api/src/features/subscriptions/subscriptions.controller.js)
 const BASE_FEE = 12000;
-const PER_STUDENT = 45;
+const PER_STUDENT = 50;
 const VAT = 0.16;
+const MULTIPLIERS = { 'per-term': 1, annual: 2.70, 'multi-year': 2.55 };
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 
 function calcBill(students, option = 'per-term') {
   const subtotal = BASE_FEE + students * PER_STUDENT;
-  const multiplier = option === 'annual' ? 2.55 : option === 'multi-year' ? 2.40 : 1;
+  const multiplier = MULTIPLIERS[option] ?? 1;
   const base = subtotal * multiplier;
   const vat = Math.round(base * VAT);
   return { subtotal, base, vat, total: base + vat, multiplier };
@@ -86,8 +87,8 @@ function BillingCalculator({ currentStudents }) {
   const [option, setOption] = useState('per-term');
 
   const p = calcBill(students, option);
-  const perTermTotal = calcBill(students, 'per-term').total;
-  const saving = option === 'annual' ? Math.round(perTermTotal * 3 - p.total) : null;
+  const perTermBaseline = calcBill(students, 'per-term').total;
+  const saving = option !== 'per-term' ? Math.round(perTermBaseline * 3 - p.total) : null;
 
   return (
     <Card>
@@ -123,8 +124,8 @@ function BillingCalculator({ currentStudents }) {
         <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-lg">
           {[
             { id: 'per-term', label: 'Per Term' },
-            { id: 'annual', label: 'Annual −15%' },
-            { id: 'multi-year', label: '3-Year −20%' },
+            { id: 'annual', label: 'Annual −10%' },
+            { id: 'multi-year', label: '3-Year −15%' },
           ].map((tab) => (
             <button key={tab.id} onClick={() => setOption(tab.id)}
               className={cn(
@@ -143,28 +144,30 @@ function BillingCalculator({ currentStudents }) {
             <span>Base fee</span><span className="font-mono">KES 12,000</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
-            <span>{students.toLocaleString()} × KES 40</span>
+            <span>{students.toLocaleString()} × KES 50</span>
             <span className="font-mono">{fmt(students * PER_STUDENT)}</span>
           </div>
+          {option !== 'per-term' && (
+            <div className="flex justify-between text-muted-foreground text-xs pt-1 border-t">
+              <span>× {MULTIPLIERS[option]} ({option === 'annual' ? '3 terms, −10%' : '3 terms, −15%'})</span>
+              <span className="font-mono">{fmt(p.base)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-muted-foreground text-xs pt-1 border-t">
-            <span>Subtotal (ex-VAT)</span>
-            <span className="font-mono">{fmt(p.subtotal * (option !== 'per-term' ? p.multiplier : 1))}</span>
-          </div>
-          <div className="flex justify-between text-muted-foreground text-xs">
             <span>VAT (16%)</span><span className="font-mono">{fmt(p.vat)}</span>
           </div>
           <div className="flex justify-between font-bold text-base pt-2 border-t">
-            <span>{option === 'per-term' ? 'Per term' : option === 'annual' ? 'Annual total' : '3-year annual'}</span>
+            <span>{option === 'per-term' ? 'Per term total' : option === 'annual' ? 'Annual total' : '3-year total'}</span>
             <span className="font-mono text-primary">{fmt(p.total)}</span>
           </div>
-          {saving && (
-            <p className="text-xs text-ok font-medium text-right">You save {fmt(saving)} per year</p>
+          {saving > 0 && (
+            <p className="text-xs text-ok font-medium text-right">You save {fmt(saving)} vs paying per term</p>
           )}
         </div>
 
         <div className="flex items-center justify-between pt-1">
           <p className="text-xs text-muted-foreground">
-            Cost per student: <span className="font-semibold text-foreground">{fmt(p.subtotal / students)}/term</span>
+            Cost per student: <span className="font-semibold text-foreground">{fmt((BASE_FEE + students * PER_STUDENT) / students)}/term</span>
           </p>
           <Button asChild variant="outline" size="sm">
             <Link href="/pricing" target="_blank">Full pricing guide <ArrowRight className="h-3 w-3 ml-1" /></Link>
@@ -233,9 +236,6 @@ function PaymentHistory() {
           <div className="space-y-0">
             {payments.map((p) => {
               const cfg = PAYMENT_STATUS_CONFIG[p.status] ?? PAYMENT_STATUS_CONFIG.pending;
-              const addOnsList = Object.entries(p.addOns ?? {})
-                .filter(([, v]) => v)
-                .map(([k]) => ({ transport: 'Transport', sms: 'Bulk SMS' }[k] ?? k));
               return (
                 <div key={p._id} className="py-3 border-b last:border-0">
                   <div className="flex items-start justify-between gap-3">
@@ -247,9 +247,6 @@ function PaymentHistory() {
                         <span className="text-xs text-muted-foreground">{fmtCycle(p.billingCycle)}</span>
                         {p.studentCount && (
                           <span className="text-xs text-muted-foreground">· {p.studentCount} students</span>
-                        )}
-                        {addOnsList.length > 0 && (
-                          <span className="text-xs text-muted-foreground">· {addOnsList.join(', ')}</span>
                         )}
                       </div>
                       <div className="flex items-center gap-4">
@@ -606,15 +603,15 @@ export default function BillingPage() {
             <div>
               <p className="text-sm font-semibold">How your bill is calculated</p>
               <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                ( KES 12,000 base + enrolled students × KES 40 ) × 1.16 VAT = term cost
+                ( KES 12,000 base + students × KES 50 ) × cycle multiplier × 1.16 VAT
               </p>
             </div>
             <div className="sm:ml-auto flex gap-2 shrink-0">
               <div className="text-center px-3 py-1.5 rounded-lg bg-background border">
-                <p className="text-xs text-muted-foreground">Annual −15%</p>
+                <p className="text-xs text-muted-foreground">Annual −10%</p>
               </div>
               <div className="text-center px-3 py-1.5 rounded-lg bg-background border">
-                <p className="text-xs text-muted-foreground">3-Year −20%</p>
+                <p className="text-xs text-muted-foreground">3-Year −15%</p>
               </div>
             </div>
           </div>

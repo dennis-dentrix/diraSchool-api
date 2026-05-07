@@ -209,6 +209,8 @@ export const departmentsApi = {
   create: (data) => api.post('/subjects/departments', data),
   update: (id, data) => api.patch(`/subjects/departments/${id}`, data),
   delete: (id) => api.delete(`/subjects/departments/${id}`),
+  addMember: (id, userId) => api.post(`/subjects/departments/${id}/members`, { userId }),
+  removeMember: (id, userId) => api.delete(`/subjects/departments/${id}/members/${userId}`),
 };
 
 // ─── Exams ────────────────────────────────────────────────────────────────────

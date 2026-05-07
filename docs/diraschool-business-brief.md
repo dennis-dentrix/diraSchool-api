@@ -1,5 +1,5 @@
 # DiraSchool — Business Brief
-**Confidential · April 2026**
+**Confidential · May 2026**
 
 ---
 
@@ -9,7 +9,9 @@
 
 The system is production-ready, fully functional, and deployed on live cloud infrastructure. It is not a prototype. Every module described in this brief exists and operates end-to-end today.
 
-**The business model is SaaS subscription, billed per school term**, aligned to the Kenyan school calendar and school budget cycles.
+**The business model is SaaS subscription, billed per school term**, aligned to the Kenyan school calendar and school budget cycles. Schools subscribe and pay online via Paystack (card and mobile money), with automated subscription activation on payment confirmation.
+
+DiraSchool is operated by **Dirant Technologies Ltd**, a Kenyan technology company focused on education infrastructure software.
 
 ---
 
@@ -47,7 +49,7 @@ Private and semi-private primary and junior secondary schools in Kenya, particul
 
 ### Secondary Market
 - County government secondary schools seeking digital records compliance
-- School chains and franchises (multi-campus operators) needing consolidated visibility
+- School chains and franchises (multi-campus operators) needing consolidated visibility — multi-campus billing groups are supported natively
 - Early Childhood Development Centres (ECDEs) as entry-level customers
 
 ### Market Size (Conservative Estimate)
@@ -115,7 +117,7 @@ The most technically complex module and a primary differentiator.
 ### 4.10 Fee Management
 **Fee Structures:** Named fee structures per academic year and term with line items (Tuition, Activity Fee, Lunch, Uniform, etc.) and auto-computed totals. Assigned to classes.
 
-**Payments:** Record payments per student against a fee structure. Payment method tracking (cash, M-Pesa, bank transfer, cheque). Running balance calculation (owed vs. paid). Payment reversal with reason. Accountant-only access to sensitive financial operations.
+**Payments:** Record payments per student against a fee structure. Payment method tracking (cash, M-Pesa, bank transfer, cheque). Running balance calculation (owed vs. paid). Payment reversal with reason. M-Pesa C2B integration with automatic payment matching by phone number. Accountant-only access to sensitive financial operations.
 
 ### 4.11 Timetable Management
 Weekly timetable grids per class. Subject, teacher, and room assignment per time slot. View by class or by teacher. Teachers see only their personal timetable.
@@ -126,17 +128,26 @@ Book catalogue with title, author, ISBN, and copies available. Loan issuance, re
 ### 4.13 Transport Management
 Route creation with assigned driver/vehicle details. Student assignment and un-assignment. Route passenger lists.
 
-### 4.14 Audit Logging
+### 4.14 Bulk SMS Notifications
+Integrated bulk SMS via Africa's Talking. School admins send SMS broadcasts to parents — attendance alerts, fee reminders, general announcements. Credits are purchased in packs directly on the platform (Paystack checkout). Delivery tracking and SMS history per school.
+
+### 4.15 Multi-Campus School Groups
+School chains and franchises operate as a billing group — a single subscription covers all branches. Enrolment across all campuses aggregates automatically for billing. The superadmin configures group membership.
+
+### 4.16 Audit Logging
 Every significant action is logged automatically: who (user + role), what (action type), which resource, when, and what changed. School admins review their own school's logs. The system superadmin views logs across all schools — critical for compliance, dispute resolution, and fraud detection.
 
-### 4.15 School Settings
+### 4.17 School Settings
 School profile (principal name, motto, address, academic year), term date windows, school holidays, and working days configuration.
 
-### 4.16 Parent Portal
+### 4.18 Parent Portal
 Read-only portal scoped strictly to the parent's own children: child profile and class, fee balance and payment history, attendance records, exam results, and published report cards. Parents cannot see any other student's data.
 
-### 4.17 Superadmin Portal
+### 4.19 Superadmin Portal
 Separate management interface for DiraSchool platform operators: school listing with student and staff counts, school detail view with staff breakdown by role, subscription management (plan tier, status, trial expiry), system-wide audit log viewer with resource and action filters.
+
+### 4.20 Online Subscription Billing
+Schools subscribe and renew directly through the platform. Paystack checkout handles card and mobile money payments. On confirmation, the school is activated instantly, an invoice is generated, and a confirmation email is dispatched automatically. A full payment history with printable invoices is accessible from the billing dashboard.
 
 ---
 
@@ -155,12 +166,12 @@ DiraSchool is a decoupled full-stack SaaS application with a REST API backend an
                                                             │
                                                ┌────────────▼───────────┐
                                                │   MongoDB Database     │
-                                               │   (14 Collections)     │
+                                               │   (16 Collections)     │
                                                └────────────┬───────────┘
                                                             │
                                                ┌────────────▼───────────┐
                                                │   BullMQ + Redis       │
-                                               │   (Email Queue)        │
+                                               │   (Email / SMS Queue)  │
                                                └────────────────────────┘
 ```
 
@@ -173,13 +184,17 @@ DiraSchool is a decoupled full-stack SaaS application with a REST API backend an
 | Database | MongoDB (Mongoose ODM) | Primary data store |
 | Authentication | JWT (HTTP-only cookies) | Session management |
 | Email Queue | BullMQ + Redis | Async email delivery |
-| Email Service | ZeptoMail (Zoho) | Transactional email (invites, resets, notifications) |
+| Email Service | ZeptoMail (Zoho) | Transactional email |
+| SMS | Africa's Talking | Bulk SMS to parents |
+| Payments | Paystack | Subscription billing (card + M-Pesa) |
+| M-Pesa C2B | Safaricom Daraja | Fee payment matching |
 | Validation | Zod | Request schema validation |
 | Password Hashing | bcrypt (cost factor 12) | Credential security |
 | File Handling | Multer | CSV import |
+| Object Storage | DigitalOcean Spaces (S3) | File storage |
 | Audit Logging | Custom middleware | Action tracking across all modules |
 
-**14 MongoDB Collections:** Users, Schools, SchoolSettings, Classes, Students, Subjects, Exams, Results, Attendance, ReportCards, FeeStructures, Payments, AuditLogs, TransportRoutes, LibraryBooks, LibraryLoans.
+**16 MongoDB Collections:** Users, Schools, SchoolSettings, Classes, Students, Subjects, Exams, Results, Attendance, ReportCards, FeeStructures, Payments, SubscriptionPayments, AuditLogs, TransportRoutes, LibraryBooks, LibraryLoans.
 
 ### 5.3 Frontend Stack
 
@@ -212,29 +227,7 @@ Both servers run on DigitalOcean Droplets, managed with **Nginx** as the reverse
 | **Total (lean / early stage)** | | | **~$27–$40/month** |
 | **Total (at 50+ active schools)** | | | **~$100–$180/month** |
 
-**Why Nginx + PM2:**
-- **Nginx** handles SSL/TLS termination (Let's Encrypt via Certbot), acts as a reverse proxy to Node.js processes, serves static assets directly without hitting Node, enforces rate limiting, and provides request logging at the network layer
-- **PM2** manages the Node.js process lifecycle — auto-restarts on crash, runs in cluster mode to use multiple CPU cores, rotates logs, enables zero-downtime deployments via `pm2 reload`, and provides a real-time process monitor (`pm2 monit`)
-
-This combination is self-hosted, lower cost than managed platforms (Railway, Render, Heroku), and gives full operational control with no vendor lock-in.
-
-### 5.5 Email Service: ZeptoMail
-
-**ZeptoMail** (by Zoho) is the recommended transactional email provider for DiraSchool in production. It is purpose-built for transactional email — meaning it does not support bulk marketing campaigns — which keeps its IP reputation high and ensures inbox delivery for critical messages like staff invites, password resets, and parent notifications.
-
-| Attribute | Detail |
-|---|---|
-| Provider | ZeptoMail by Zoho |
-| Use cases | Staff invite emails, password reset links, email verification, parent notifications |
-| Free tier | 10,000 emails one-time (sufficient for early onboarding) |
-| Paid pricing | ~$2.50 per 10,000 email credits |
-| API | REST API and SMTP relay, easy Node.js integration via Nodemailer transport |
-| Deliverability | High — dedicated transactional infrastructure, not shared with marketing email |
-| Alternative | **Resend** — modern API, 3,000 free emails/month, excellent developer experience |
-
-At DiraSchool's email volume (primarily staff invites and occasional password resets, not bulk sends), ZeptoMail's cost will remain below **KES 500/month** for most of the first year.
-
-### 5.6 Security Architecture
+### 5.5 Security Architecture
 
 | Layer | Implementation |
 |---|---|
@@ -246,28 +239,41 @@ At DiraSchool's email volume (primarily staff invites and occasional password re
 | Password reset | Time-limited secure tokens, single-use |
 | Audit trail | Every significant action logged with actor, timestamp, and change metadata |
 | Transport | HTTPS enforced via Nginx; HTTP redirects to HTTPS automatically |
+| Webhook verification | HMAC-SHA512 signature check on all Paystack and M-Pesa callbacks |
 
-### 5.7 Multi-Tenancy Model
+### 5.6 Multi-Tenancy Model
 
 The system uses a **shared database, tenant-scoped queries** architecture. Every document in every collection carries a `schoolId` field that is automatically applied and enforced by middleware. No query to any collection can return data from another school. This is the right architecture for this scale — simpler than schema-per-tenant, cheaper than database-per-tenant, and secure when consistently enforced via middleware (which it is).
 
 ---
 
-## 6. What DiraSchool Does Not Currently Include
+## 6. Platform Completeness Summary
+
+All core and advanced modules are production-ready as of May 2026.
 
 | Feature | Status |
 |---|---|
+| Student, staff, class, subject management | **Live** |
+| Attendance registers | **Live** |
+| CBC report cards (primary + JSS 8-point scale) | **Live** |
+| Fee structures and payment recording | **Live** |
+| M-Pesa C2B automatic payment matching | **Live** |
+| Bulk SMS to parents (Africa's Talking) | **Live** |
+| Timetable management | **Live** |
+| Library management | **Live** |
+| Transport route management | **Live** |
+| Multi-campus billing groups | **Live** |
+| Online subscription via Paystack | **Live** |
+| Printable invoices with VAT breakdown | **Live** |
+| Parent portal | **Live** |
+| Superadmin portal | **Live** |
+| Audit logging | **Live** |
 | Mobile app (iOS / Android) | Not built — browser is responsive on mobile |
-| SMS notifications | Not built — email only at this stage |
-| M-Pesa direct integration (STK push) | Not built — payments recorded manually |
-| Custom report card branding / logo upload | Not built — school name and motto only |
-| Advanced analytics and performance dashboards | Basic — not advanced |
-| Multi-campus / branch school support | Not built |
+| Custom report card logo upload | Not built — school name and motto only |
+| Advanced analytics dashboards | Basic — not advanced |
 | Online admissions portal | Not built |
 | Lesson planning tools | Not built |
 | HR / payroll for staff | Not built |
-
-These are roadmap items, not gaps. The core platform is complete and functional without them.
 
 ---
 
@@ -284,56 +290,63 @@ These are roadmap items, not gaps. The core platform is complete and functional 
 ### DiraSchool's Key Differentiators
 
 1. **CBC-native from day one** — grading logic, report cards, and terminology are built around CBC, not retrofitted onto an older system
-2. **Per-term billing** — aligned to when schools actually have money, not a monthly invoice during school holidays
+2. **Per-term billing aligned to school cash flow** — schools pay when they have money, not monthly during holidays
 3. **One platform, all modules** — no integration headaches, one login, one support contact for the whole school
-4. **Parent portal included at no extra charge** — most competitors charge extra for parent access
-5. **Transparent audit trail** — every action logged; headteachers see exactly who did what and when
-6. **Built entirely for Kenya** — KES currency, Kenyan school calendar, county fields, CBC rubric, local school terminology throughout
+4. **M-Pesa C2B fee matching built in** — fee payments via M-Pesa are automatically reconciled per student
+5. **Parent portal included at no extra charge** — most competitors charge extra for parent access
+6. **Transparent audit trail** — every action logged; headteachers see exactly who did what and when
+7. **Built entirely for Kenya** — KES currency, Kenyan school calendar, county fields, CBC rubric, local school terminology throughout
+8. **Multi-campus native** — school chains manage all branches under one subscription and one dashboard
 
 ---
 
 ## 8. Pricing Structure
 
-*All prices in Kenyan Shillings. VAT at 16% applicable on all tiers.*
+*All prices in Kenyan Shillings. VAT at 16% applicable.*
 
 ### Per-Term Billing (Primary Model)
 
-| Plan | Student Limit | Per Term (ex-VAT) | Per Term (incl. VAT) | Annual / 3 Terms (ex-VAT) | Annual Saving |
-|---|---|---|---|---|---|
-| **Dira Seed** | Up to 75 | KES 6,500 | KES 7,540 | KES 16,500 | ~KES 3,000 |
-| **Dira Lite** | Up to 200 | KES 12,500 | KES 14,500 | KES 32,000 | ~KES 5,500 |
-| **Starter** | Up to 400 | KES 20,000 | KES 23,200 | KES 51,000 | ~KES 9,000 |
-| **Growth** | Up to 850 | KES 45,000 | KES 52,200 | KES 115,000 | ~KES 20,000 |
-| **Professional** | Up to 1,500 | KES 75,000 | KES 87,000 | KES 190,000 | ~KES 35,000 |
-| **Enterprise** | Unlimited | Custom | Custom | Custom | — |
+Pricing is calculated dynamically based on the school's **actual enrolled student count** at the time of subscription.
 
-**Trial:** 30 days free, up to 50 students, no credit card required.
+| Component | Rate |
+|---|---|
+| Base platform fee | KES 12,000 / term |
+| Per active student | KES 50 / student / term |
+| Annual plan (3 terms) | Base × 2.70 (~10% saving vs. 3 separate terms) |
+| 3-Year annual plan | Base × 2.55 (~15% saving per year) |
+| VAT | 16% on all amounts |
 
-**Monthly billing (on request):** Available at a 20% premium over the per-term equivalent to compensate for billing flexibility.
+**Example — 150-student school, per-term:**
+- Base: KES 12,000
+- Students: 150 × KES 50 = KES 7,500
+- Subtotal: KES 19,500
+- VAT: KES 3,120
+- **Total: KES 22,620**
 
-**Annual billing discount:** Approximately 15% off (equivalent to one term free). Positioned to schools as "pay for 2 terms, get the 3rd at a heavy discount."
+**Trial:** 30 days free, up to 50 students, all features unlocked. No credit card required.
 
-### Cost Per Student (Per Term)
+### Cost Benchmarks
 
-| Plan | Students | Cost per student / term |
+| Students | Per-Term (ex-VAT) | Cost per student / term |
 |---|---|---|
-| Dira Seed | 75 | KES 87 |
-| Dira Lite | 200 | KES 63 |
-| Starter | 400 | KES 50 |
-| Growth | 850 | KES 53 |
-| Professional | 1,500 | KES 50 |
+| 75 | KES 15,750 | KES 210 |
+| 150 | KES 19,500 | KES 130 |
+| 300 | KES 27,000 | KES 90 |
+| 500 | KES 37,000 | KES 74 |
+| 850 | KES 54,500 | KES 64 |
+| 1,200 | KES 72,000 | KES 60 |
 
-At KES 50–87 per student per term — less than the cost of a single exercise book — the value-to-price ratio is objectively strong.
+At under KES 210 per student per term — less than the cost of two exercise books — the value-to-price ratio is objectively strong.
 
 ### DiraSchool as a Percentage of School Fee Income
 
-| Plan | Students | Est. Term Fee Income | DiraSchool as % |
-|---|---|---|---|
-| Dira Seed | 75 | KES 375K–1.1M | 0.6–1.7% |
-| Dira Lite | 200 | KES 1M–3M | 0.4–1.3% |
-| Starter | 400 | KES 2M–6M | 0.33–1.0% |
-| Growth | 850 | KES 4.25M–12.75M | 0.35–1.1% |
-| Professional | 1,500 | KES 7.5M–22.5M | 0.3–1.0% |
+| Students | Est. Term Fee Income | DiraSchool (incl. VAT) as % |
+|---|---|---|
+| 75 | KES 375K–1.1M | 1.7–5% |
+| 150 | KES 750K–2.25M | 1.2–3% |
+| 300 | KES 1.5M–4.5M | 0.7–2% |
+| 500 | KES 2.5M–7.5M | 0.5–1.7% |
+| 850 | KES 4.25M–12.75M | 0.5–1.5% |
 
 *Fee income estimate: KES 5,000–15,000 per student per term depending on school type and location.*
 
@@ -345,24 +358,25 @@ At KES 50–87 per student per term — less than the cost of a single exercise 
 |---|---|
 | Revenue model | B2B SaaS, term-based subscription |
 | Primary billing cycle | Per Kenyan school term (3 times per year) |
-| Secondary billing cycle | Annual (discounted ~15%) / Monthly (20% premium) |
+| Secondary billing cycle | Annual (discounted ~10%) / 3-Year (discounted ~15%) |
+| Payment processing | Paystack — card + mobile money (KES) |
 | Customer acquisition | Direct outreach, head-teacher networks, KNUT/KUPPET connections, school expos |
 | Onboarding | Self-service 30-day trial → sales-assisted conversion |
-| Support model | WhatsApp + email support; in-app documentation (planned) |
+| Support model | WhatsApp + email support |
 | Churn mitigation | Term-aligned billing, sticky historical data (student records, reports, fees), switching cost |
-| Expansion revenue | Automatic plan upgrades as school enrolment grows past tier limit |
-| Break-even point (infrastructure + basic ops) | 5–8 paying schools at Starter tier average |
+| Expansion revenue | Automatic cost increase as school enrolment grows |
+| Break-even point (infrastructure + basic ops) | 3–5 paying schools at 200+ students |
 | Target Year 1 | 30 paying schools |
 | Target Year 2 | 100 paying schools |
 
 ### Revenue Projections
 
-| Schools | Plan Mix (Avg) | Revenue / Term | Infra Cost / Term | Net / Term | Net / Year |
+| Schools | Avg Students | Revenue / Term (incl. VAT) | Infra Cost / Term | Net / Term | Net / Year |
 |---|---|---|---|---|---|
-| 10 | 5 Lite + 3 Starter + 2 Growth | KES 218,500 | KES 20,000 | **KES 198,500** | **KES 595,500** |
-| 20 | Mixed | KES 490,000 | KES 30,000 | **KES 460,000** | **KES 1,380,000** |
-| 40 | Mixed | KES 980,000 | KES 55,000 | **KES 925,000** | **KES 2,775,000** |
-| 80 | Mixed | KES 1,960,000 | KES 100,000 | **KES 1,860,000** | **KES 5,580,000** |
+| 10 | 200 | ~KES 261,600 | KES 20,000 | **KES 241,600** | **KES 724,800** |
+| 20 | 250 | ~KES 580,000 | KES 30,000 | **KES 550,000** | **KES 1,650,000** |
+| 40 | 300 | ~KES 1,250,000 | KES 55,000 | **KES 1,195,000** | **KES 3,585,000** |
+| 80 | 350 | ~KES 2,700,000 | KES 100,000 | **KES 2,600,000** | **KES 7,800,000** |
 
 ---
 
@@ -380,10 +394,10 @@ Send invoices two weeks before each term starts, with payment due by the first d
 
 ## 11. The One-Paragraph Pitch
 
-> DiraSchool is the only school management system in Kenya designed from the ground up for CBC — not adapted from an older curriculum system, not a generic African school platform retrofitted with a CBC label. It handles everything a school runs: student records, daily attendance, CBC report cards with the correct 4-level and 8-point grading rubrics, fee collection, exam results, staff management, a parent portal, and a full audit trail — in one login, on any device, at a price that represents less than 1% of what the school earns in fees each term. It bills per school term because that is when schools have money, not monthly when they are in the middle of the holidays with no income. The target customer is any Kenyan school with 75 to 1,500 students that is tired of losing weekends to handwritten report cards and chasing parents with paper fee statements.
+> DiraSchool is the only school management system in Kenya designed from the ground up for CBC — not adapted from an older curriculum system, not a generic African school platform retrofitted with a CBC label. It handles everything a school runs: student records, daily attendance, CBC report cards with the correct 4-level and 8-point grading rubrics, fee collection with M-Pesa matching, exam results, staff management, bulk SMS to parents, a parent portal, and a full audit trail — in one login, on any device, at a price that represents less than 2% of what the school earns in fees each term. It bills per school term because that is when schools have money, not monthly when they are in the middle of the holidays with no income. Schools subscribe and pay online via card or M-Pesa and are activated in minutes. The target customer is any Kenyan school with 75 to 1,500 students that is tired of losing weekends to handwritten report cards and chasing parents with paper fee statements.
 
 ---
 
-*Document prepared by the DiraSchool founding team*
-*April 2026 · Confidential*
+*Document prepared by Dirant Technologies Ltd — the company behind DiraSchool*
+*May 2026 · Confidential*
 *For pricing strategy consultation, investor conversations, and partnership discussions*

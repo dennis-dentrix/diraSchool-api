@@ -191,6 +191,50 @@ def make_styles():
 ST = make_styles()
 
 
+# ── DiraSchool Logo ───────────────────────────────────────────────────────────
+
+LOGO_TEAL = HexColor('#1f5b5e')
+
+def draw_dira_logo(canvas, x, y, size=12*mm):
+    """Draw the DiraSchool compass icon, bottom-left corner at (x, y)."""
+    canvas.saveState()
+    canvas.translate(x, y)
+    s = size / 64
+
+    canvas.setFillColor(LOGO_TEAL)
+    canvas.roundRect(2*s, 2*s, 60*s, 60*s, 14*s, fill=1, stroke=0)
+
+    canvas.setStrokeColor(HexColor('#3a8f93'))
+    canvas.setLineWidth(1*s)
+    canvas.circle(32*s, 32*s, 18*s, fill=0, stroke=1)
+
+    # Upper arrow point (white, full opacity) — SVG M32,12 L38,32 L32,28 flipped
+    canvas.setFillColor(white)
+    p = canvas.beginPath()
+    p.moveTo(32*s, 52*s)
+    p.lineTo(38*s, 32*s)
+    p.lineTo(32*s, 36*s)
+    p.close()
+    canvas.drawPath(p, fill=1, stroke=0)
+
+    # Lower arrow tail (muted white) — SVG M32,52 L26,32 L32,36 flipped
+    canvas.setFillColor(HexColor('#8fc8cb'))
+    p2 = canvas.beginPath()
+    p2.moveTo(32*s, 12*s)
+    p2.lineTo(26*s, 32*s)
+    p2.lineTo(32*s, 28*s)
+    p2.close()
+    canvas.drawPath(p2, fill=1, stroke=0)
+
+    # Centre pivot dot
+    canvas.setFillColor(LOGO_TEAL)
+    canvas.setStrokeColor(white)
+    canvas.setLineWidth(1.2*s)
+    canvas.circle(32*s, 32*s, 2*s, fill=1, stroke=1)
+
+    canvas.restoreState()
+
+
 # ── Header / Footer ───────────────────────────────────────────────────────────
 
 def draw_cover(canvas, doc):
@@ -207,6 +251,10 @@ def draw_cover(canvas, doc):
     canvas.circle(w + 40, -40, 200, fill=1, stroke=0)
     canvas.setFillColor(HexColor('#2563eb'))
     canvas.circle(-60, h + 30, 150, fill=1, stroke=0)
+
+    # Logo
+    logo_size = 18*mm
+    draw_dira_logo(canvas, (w - logo_size) / 2, h * 0.83, logo_size)
 
     # Main title
     canvas.setFont('Helvetica-Bold', 36)

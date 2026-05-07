@@ -43,13 +43,11 @@ export default function InvoicePage() {
   );
 
   const { payment, school } = data;
-  const schoolName = school?.name ?? user?.school?.name ?? 'School';
+  const schoolName = school?.name ?? user?.school?.name ?? 'John Doe';
+  const contactName = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || 'John Doe' : 'John Doe';
   const invoiceNumber = `INV-${String(payment._id ?? reference).slice(-8).toUpperCase()}`;
   const exVat = payment.subtotalExVat ?? Math.round(payment.amount / 1.16);
   const vat = payment.vatAmount ?? (payment.amount - exVat);
-  const addOnsEnabled = Object.entries(payment.addOns ?? {}).filter(([, v]) => v).map(([k]) =>
-    ({ transport: 'Transport Module', sms: 'Bulk SMS Module' }[k] ?? k)
-  );
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -82,8 +80,10 @@ export default function InvoicePage() {
         <div className="mb-8">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Bill to</p>
           <p className="font-semibold text-slate-900">{schoolName}</p>
+          <p className="text-sm text-slate-600">Attn: {contactName}</p>
           {school?.email && <p className="text-sm text-slate-500">{school.email}</p>}
           {school?.phone && <p className="text-sm text-slate-500">{school.phone}</p>}
+          {school?.address && <p className="text-sm text-slate-500">{school.address}</p>}
         </div>
 
         {/* Line items */}
@@ -104,15 +104,6 @@ export default function InvoicePage() {
               </td>
               <td className="py-3 text-right font-mono text-slate-900">{fmt(exVat)}</td>
             </tr>
-            {addOnsEnabled.map((addon) => (
-              <tr key={addon}>
-                <td className="py-3 pr-4">
-                  <p className="font-medium text-slate-900">{addon}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Add-on module</p>
-                </td>
-                <td className="py-3 text-right font-mono text-slate-500">Included</td>
-              </tr>
-            ))}
           </tbody>
           <tfoot>
             <tr className="border-t border-slate-200">

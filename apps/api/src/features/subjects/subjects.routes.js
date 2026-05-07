@@ -22,6 +22,8 @@ import {
   createDepartment,
   updateDepartment,
   deleteDepartment,
+  addMember,
+  removeMember,
 } from './departments.controller.js';
 
 const router = express.Router();
@@ -35,10 +37,12 @@ const canRead = authorize(
 );
 
 // ── Departments — must be before /:id to avoid param shadowing ───────────────
-router.get('/departments',       canRead,   listDepartments);
-router.post('/departments',      adminOnly, createDepartment);
-router.patch('/departments/:id', adminOnly, updateDepartment);
-router.delete('/departments/:id', adminOnly, deleteDepartment);
+router.get('/departments',                          canRead,   listDepartments);
+router.post('/departments',                         adminOnly, createDepartment);
+router.patch('/departments/:id',                    adminOnly, updateDepartment);
+router.delete('/departments/:id',                   adminOnly, deleteDepartment);
+router.post('/departments/:id/members',             adminOnly, addMember);
+router.delete('/departments/:id/members/:userId',   adminOnly, removeMember);
 
 // My subjects — teacher-facing shortcut
 router.get('/my-subjects', authorize(ROLES.TEACHER, ROLES.DEPARTMENT_HEAD), mySubjects);

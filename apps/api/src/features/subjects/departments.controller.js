@@ -5,15 +5,32 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { ROLES } from '../../constants/index.js';
 
+const MEMBER_ROLES = [ROLES.TEACHER, ROLES.DEPARTMENT_HEAD];
+
+const populateDept = (query) =>
+  query
+    .populate('hodId', 'firstName lastName email')
+    .populate('memberIds', 'firstName lastName email role');
+
+const withSubjectCount = async (schoolId, dept) => {
+  const subjectCount = await Subject.countDocuments({ schoolId, department: dept.name });
+  return { ...dept.toObject(), subjectCount };
+};
+
+const resolveTeacher = async (schoolId, userId, label = 'User') => {
+  const user = await User.findOne({ _id: userId, schoolId, role: { $in: MEMBER_ROLES }, isActive: true });
+  if (!user) return { error: `${label} not found or is not an active teacher in this school.` };
+  return { user };
+};
+
 /**
- * GET /api/v1/departments
+ * GET /api/v1/subjects/departments
  */
 export const listDepartments = asyncHandler(async (req, res) => {
-  const departments = await Department.find({ schoolId: req.user.schoolId })
-    .populate('hodId', 'firstName lastName email')
-    .sort({ name: 1 });
+  const departments = await populateDept(
+    Department.find({ schoolId: req.user.schoolId }).sort({ name: 1 })
+  );
 
-  // Attach subject count per department
   const names = departments.map((d) => d.name);
   const counts = await Subject.aggregate([
     { $match: { schoolId: req.user.schoolId, department: { $in: names } } },
@@ -30,10 +47,10 @@ export const listDepartments = asyncHandler(async (req, res) => {
 });
 
 /**
- * POST /api/v1/departments
+ * POST /api/v1/subjects/departments
  */
 export const createDepartment = asyncHandler(async (req, res) => {
-  const { name, description, hodId } = req.body;
+  const { name, description, hodId, memberIds = [] } = req.body;
 
   if (!name?.trim()) return sendError(res, 'Department name is required.', 400);
 
@@ -41,12 +58,14 @@ export const createDepartment = asyncHandler(async (req, res) => {
   if (exists) return sendError(res, 'A department with that name already exists.', 409);
 
   if (hodId) {
-    const hod = await User.findOne({
-      _id: hodId, schoolId: req.user.schoolId,
-      role: { $in: [ROLES.TEACHER, ROLES.DEPARTMENT_HEAD] }, isActive: true,
-    });
-    if (!hod) return sendError(res, 'Head of Department user not found or inactive.', 404);
-    if (hod.role === ROLES.TEACHER) { hod.role = ROLES.DEPARTMENT_HEAD; await hod.save(); }
+    const { error } = await resolveTeacher(req.user.schoolId, hodId, 'Head of Department');
+    if (error) return sendError(res, error, 404);
+  }
+
+  // Validate member IDs
+  if (memberIds.length) {
+    const found = await User.find({ _id: { $in: memberIds }, schoolId: req.user.schoolId, role: { $in: MEMBER_ROLES }, isActive: true }).select('_id');
+    if (found.length !== memberIds.length) return sendError(res, 'One or more member IDs are invalid.', 400);
   }
 
   const dept = await Department.create({
@@ -54,14 +73,15 @@ export const createDepartment = asyncHandler(async (req, res) => {
     name: name.trim(),
     description: description?.trim(),
     hodId: hodId || null,
+    memberIds,
   });
 
-  const populated = await Department.findById(dept._id).populate('hodId', 'firstName lastName email');
+  const populated = await populateDept(Department.findById(dept._id));
   return sendSuccess(res, { department: { ...populated.toObject(), subjectCount: 0 } }, 201);
 });
 
 /**
- * PATCH /api/v1/departments/:id
+ * PATCH /api/v1/subjects/departments/:id
  */
 export const updateDepartment = asyncHandler(async (req, res) => {
   const dept = await Department.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
@@ -84,31 +104,24 @@ export const updateDepartment = asyncHandler(async (req, res) => {
     if (hodId === null) {
       dept.hodId = null;
     } else {
-      const hod = await User.findOne({
-        _id: hodId, schoolId: req.user.schoolId,
-        role: { $in: [ROLES.TEACHER, ROLES.DEPARTMENT_HEAD] }, isActive: true,
-      });
-      if (!hod) return sendError(res, 'Head of Department user not found or inactive.', 404);
-      if (hod.role === ROLES.TEACHER) { hod.role = ROLES.DEPARTMENT_HEAD; await hod.save(); }
-      dept.hodId = hod._id;
+      const { user, error } = await resolveTeacher(req.user.schoolId, hodId, 'Head of Department');
+      if (error) return sendError(res, error, 404);
+      dept.hodId = user._id;
     }
   }
 
   await dept.save();
 
-  // Cascade rename to subjects that reference the old department name
   if (name !== undefined && dept.name !== oldName) {
     await Subject.updateMany({ schoolId: req.user.schoolId, department: oldName }, { department: dept.name });
   }
 
-  const populated = await Department.findById(dept._id).populate('hodId', 'firstName lastName email');
-  const subjectCount = await Subject.countDocuments({ schoolId: req.user.schoolId, department: dept.name });
-
-  return sendSuccess(res, { department: { ...populated.toObject(), subjectCount } });
+  const populated = await populateDept(Department.findById(dept._id));
+  return sendSuccess(res, { department: await withSubjectCount(req.user.schoolId, populated) });
 });
 
 /**
- * DELETE /api/v1/departments/:id
+ * DELETE /api/v1/subjects/departments/:id
  */
 export const deleteDepartment = asyncHandler(async (req, res) => {
   const dept = await Department.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
@@ -121,4 +134,41 @@ export const deleteDepartment = asyncHandler(async (req, res) => {
 
   await dept.deleteOne();
   return sendSuccess(res, { message: 'Department deleted.' });
+});
+
+/**
+ * POST /api/v1/subjects/departments/:id/members
+ * Body: { userId }
+ */
+export const addMember = asyncHandler(async (req, res) => {
+  const dept = await Department.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
+  if (!dept) return sendError(res, 'Department not found.', 404);
+
+  const { userId } = req.body;
+  if (!userId) return sendError(res, 'userId is required.', 400);
+
+  const { user, error } = await resolveTeacher(req.user.schoolId, userId);
+  if (error) return sendError(res, error, 404);
+
+  if (!dept.memberIds.some((id) => id.equals(user._id))) {
+    dept.memberIds.push(user._id);
+    await dept.save();
+  }
+
+  const populated = await populateDept(Department.findById(dept._id));
+  return sendSuccess(res, { department: await withSubjectCount(req.user.schoolId, populated) });
+});
+
+/**
+ * DELETE /api/v1/subjects/departments/:id/members/:userId
+ */
+export const removeMember = asyncHandler(async (req, res) => {
+  const dept = await Department.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
+  if (!dept) return sendError(res, 'Department not found.', 404);
+
+  dept.memberIds = dept.memberIds.filter((id) => !id.equals(req.params.userId));
+  await dept.save();
+
+  const populated = await populateDept(Department.findById(dept._id));
+  return sendSuccess(res, { department: await withSubjectCount(req.user.schoolId, populated) });
 });
