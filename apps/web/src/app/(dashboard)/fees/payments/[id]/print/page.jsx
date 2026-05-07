@@ -44,6 +44,18 @@ export default function PaymentReceiptPrintPage() {
     queryFn: async () => { const res = await settingsApi.get(); return res.data?.settings ?? res.data?.data ?? res.data; },
   });
 
+  const receipt = issuedPayment ?? payment;
+
+  const { data: balanceData } = useQuery({
+    queryKey: ['fee-balance-receipt', receipt?.studentId?._id ?? receipt?.studentId, receipt?.academicYear, receipt?.term],
+    queryFn: async () => {
+      const studentId = typeof receipt.studentId === 'object' ? receipt.studentId._id : receipt.studentId;
+      const res = await feesApi.getBalance({ studentId, academicYear: receipt.academicYear, term: receipt.term });
+      return res.data;
+    },
+    enabled: !!(receipt?.studentId && receipt?.academicYear && receipt?.term),
+  });
+
   useEffect(() => {
     if (!id || isLoading || !payment || issuingReceipt || issuedPayment || issueFailed) return;
     issueReceipt();
@@ -73,8 +85,7 @@ export default function PaymentReceiptPrintPage() {
     );
   }
 
-  const receipt     = issuedPayment ?? payment;
-  const student     = receipt.studentId;
+  const student     = receipt?.studentId;
   const receiptDate = receipt.receiptIssuedAt ?? receipt.paymentDate ?? receipt.createdAt;
   const recorder    = receipt.receiptIssuedByUserId
     ? `${receipt.receiptIssuedByUserId.firstName} ${receipt.receiptIssuedByUserId.lastName}`
@@ -85,7 +96,7 @@ export default function PaymentReceiptPrintPage() {
     ? `${receipt.classId.name}${receipt.classId.stream ? ` ${receipt.classId.stream}` : ''}`
     : '—';
   const schoolName  = school?.name ?? settings?.schoolName ?? 'School';
-  const schoolLogo  = school?.logoUrl ?? settings?.logoUrl ?? null;
+  const schoolLogo  = settings?.logo ?? null;
   const schoolAddr  = school?.address ?? '';
   const schoolPhone = school?.phone ?? '';
 
@@ -171,11 +182,45 @@ export default function PaymentReceiptPrintPage() {
           </tbody>
         </table>
 
-        {/* Total */}
+        {/* Total paid (this payment) */}
         <div className="border-t-2 border-foreground mt-0 pt-3 flex items-center justify-between">
-          <span className="text-sm font-bold uppercase tracking-wide">Total Paid</span>
+          <span className="text-sm font-bold uppercase tracking-wide">Amount Paid</span>
           <span className="font-mono text-2xl font-bold tabular-nums">{formatCurrency(receipt.amount)}</span>
         </div>
+
+        {/* Fee balance summary */}
+        {balanceData && (
+          <div className="mt-4 rounded border bg-muted/40 px-4 py-3 space-y-1.5 text-sm">
+            {balanceData.feeStructure && (
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>Term fees ({receipt.academicYear} — {receipt.term})</span>
+                <span className="font-mono tabular-nums">{formatCurrency(balanceData.feeStructure.totalAmount)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span>Total paid (all payments this term)</span>
+              <span className="font-mono tabular-nums">{formatCurrency(balanceData.totalPaid ?? 0)}</span>
+            </div>
+            <div className="border-t mt-1 pt-2 flex items-center justify-between font-semibold">
+              {(balanceData.outstanding ?? 0) > 0 ? (
+                <>
+                  <span className="text-destructive">Balance Due</span>
+                  <span className="font-mono tabular-nums text-destructive">{formatCurrency(balanceData.outstanding)}</span>
+                </>
+              ) : (balanceData.overpaid ?? 0) > 0 ? (
+                <>
+                  <span className="text-ok">Overpaid (credit)</span>
+                  <span className="font-mono tabular-nums text-ok">{formatCurrency(balanceData.overpaid)}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-ok">Balance Due</span>
+                  <span className="font-mono tabular-nums text-ok">Nil</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <p className="mt-6 text-center text-[11px] text-muted-foreground border-t pt-4">
