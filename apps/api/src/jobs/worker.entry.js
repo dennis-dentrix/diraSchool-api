@@ -11,12 +11,12 @@
  * for each queue, and runs indefinitely — consuming jobs as they arrive.
  */
 import 'dotenv/config';
-import { Worker } from 'bullmq';
+import { Worker, Queue } from 'bullmq';
 import mongoose from 'mongoose';
 import { validateEnv } from '../config/env.js';
 import { connectDB } from '../config/db.js';
 import logger from '../config/logger.js';
-import { QUEUE_NAMES } from '../constants/index.js';
+import { QUEUE_NAMES, JOB_NAMES } from '../constants/index.js';
 import { createBullMQConnection } from '../config/redis.js';
 import { captureError, initSentry } from '../config/sentry.js';
 import { processSmsJob } from './workers/sms.worker.js';
@@ -24,6 +24,7 @@ import { processReportJob } from './workers/report.worker.js';
 import { processReceiptJob } from './workers/receipt.worker.js';
 import { processImportJob } from './workers/import.worker.js';
 import { startEmailWorker } from './workers/email.worker.js';
+import { processCheckoutReminderScan } from './workers/checkout-reminder.worker.js';
 
 validateEnv();
 initSentry('diraschool-worker');
@@ -58,6 +59,23 @@ const connection = createBullMQConnection();
 
 await connectDB();
 
+
+// ── Checkout-reminder repeatable job ─────────────────────────────────────────
+// Runs every 15 minutes Mon–Fri. The processor checks which schools' checkout
+// window ended ~60 min ago and fans out reminder emails to staff still checked in.
+const checkoutQueue = new Queue(QUEUE_NAMES.CHECKOUT_REMINDER, { connection });
+await checkoutQueue.upsertJobScheduler(
+  'checkout-reminder-scan',
+  { pattern: '*/15 * * * 1-5' }, // every 15 min, Mon–Fri (UTC, runs ~18:00-20:00 EAT)
+  { name: JOB_NAMES.RUN_CHECKOUT_REMINDER_SCAN, data: {} }
+);
+
+const checkoutReminderWorker = new Worker(
+  QUEUE_NAMES.CHECKOUT_REMINDER,
+  async () => processCheckoutReminderScan(),
+  { connection, concurrency: 1 }
+);
+
 const smsWorker = new Worker(QUEUE_NAMES.SMS, processSmsJob, {
   connection,
   concurrency: 5,    // process up to 5 SMS jobs in parallel
@@ -83,11 +101,12 @@ const emailWorker = startEmailWorker();
 // ── Event logging ─────────────────────────────────────────────────────────────
 
 for (const [name, worker] of [
-  ['sms',     smsWorker],
-  ['report',  reportWorker],
-  ['receipt', receiptWorker],
-  ['import',  importWorker],
-  ['email',   emailWorker],
+  ['sms',               smsWorker],
+  ['report',            reportWorker],
+  ['receipt',           receiptWorker],
+  ['import',            importWorker],
+  ['email',             emailWorker],
+  ['checkout-reminder', checkoutReminderWorker],
 ]) {
   worker.on('completed', (job) => {
     logger.info(`[Worker:${name}] Job ${job.id} completed`);
@@ -120,6 +139,8 @@ const shutdown = async (signal) => {
   await receiptWorker.close();
   await importWorker.close();
   await emailWorker.close();
+  await checkoutReminderWorker.close();
+  await checkoutQueue.close();
   await mongoose.disconnect();
   process.exit(0);
 };

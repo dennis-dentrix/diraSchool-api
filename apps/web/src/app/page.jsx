@@ -46,7 +46,7 @@ const jsonLd = {
         '@type': 'Offer',
         price: '10000',
         priceCurrency: 'KES',
-        description: 'Base fee per term plus KES 40 per enrolled student',
+        description: 'Base fee per term plus KES 50 per enrolled student',
       },
       featureList: [
         'CBC Report Card Generation',

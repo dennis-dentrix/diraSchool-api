@@ -16,6 +16,8 @@ import { formatCurrency, formatDate, feeColor } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/shared/refresh-button';
+import { StatCard } from '@/components/shared/stat-card';
+import { SectionCard } from '@/components/shared/section-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckInWidget } from '@/components/shared/check-in-widget';
 import { AddEventButton } from '@/components/shared/add-event-button';
@@ -35,57 +37,6 @@ const METHOD_LABELS = {
 };
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
-
-/** Ledger-cell stat card — no gradients, accent left bar */
-function StatCard({ label, value, hint, tone = 'neutral', onClick, badge }) {
-  const bar = {
-    green:   'bg-ok',
-    red:     'bg-bad',
-    amber:   'bg-warn',
-    blue:    'bg-primary',
-    neutral: 'bg-border',
-  }[tone] ?? 'bg-border';
-
-  return (
-    <div
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
-      className={cn(
-        'relative bg-card border border-border rounded-lg p-4 overflow-hidden',
-        onClick && 'cursor-pointer hover:bg-muted/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-      )}
-    >
-      <span className={`absolute left-0 inset-y-0 w-[3px] rounded-l-lg ${bar}`} />
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-[10px] uppercase tracking-widest font-medium text-muted-foreground leading-none">{label}</p>
-        {badge != null && (
-          <span className="font-mono text-[10px] tabular-nums bg-muted text-muted-foreground rounded px-1.5 py-0.5 leading-none shrink-0">
-            {badge}
-          </span>
-        )}
-      </div>
-      <p className="font-mono text-2xl font-semibold tabular-nums text-foreground leading-none">{value}</p>
-      {hint && <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
-function SectionCard({ title, icon: Icon, action, children, className }) {
-  return (
-    <div className={cn('rounded-lg border border-border bg-card', className)}>
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          {Icon && <Icon className="h-4 w-4 text-muted-foreground shrink-0" />}
-          <p className="text-sm font-semibold text-foreground">{title}</p>
-        </div>
-        {action}
-      </div>
-      <div className="p-4">{children}</div>
-    </div>
-  );
-}
 
 /** Left-rail card for admin — date + fee big number + actions */
 function TodayRail({
@@ -613,8 +564,8 @@ export default function DashboardPage() {
           <RefreshButton queryKeys={[['dashboard-summary', role]]} />
         </div>
 
-        {/* 3-column grid — collapses to 1 on mobile, 2 on md, 3 on xl */}
-        <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr_300px] gap-4" data-tour="dashboard-header">
+        {/* 3-column grid — stacked on mobile, all 3 cols from lg */}
+        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_240px] xl:grid-cols-[280px_1fr_300px] gap-4" data-tour="dashboard-header">
           {/* LEFT: Today rail */}
           <div className="space-y-3">
             <TodayRail
@@ -729,14 +680,14 @@ export default function DashboardPage() {
           {totalTarget > 0 && <CollectionProgressBar collected={totalCollected} target={totalTarget} percent={feeCollectionPct} />}
         </div>
 
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3" data-tour="stats-grid">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-tour="stats-grid">
           <StatCard label="Today's Collections" value={formatCurrency(feeData.todayAmount ?? 0)} hint={`${feeData.todayCount ?? 0} payments today`} tone="green" onClick={() => router.push('/fees/payments')} />
           <StatCard label="This Week" value={formatCurrency(feeData.weekAmount ?? 0)} hint="Completed payments this week" tone="blue" onClick={() => router.push('/fees/payments')} />
           <StatCard label="This Month" value={formatCurrency(feeData.monthAmount ?? 0)} hint={`${feeData.monthCount ?? 0} transactions`} tone="neutral" onClick={() => router.push('/fees/payments')} />
           <StatCard label="Defaulters" value={studentsOverdue} hint="Students with outstanding fees" tone={studentsOverdue > 20 ? 'red' : studentsOverdue > 5 ? 'amber' : 'neutral'} onClick={() => router.push('/fees')} />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div data-tour="mpesa-setup-card">
             <SectionCard title="M-Pesa Reconciliation" icon={Smartphone}>
               <div className="space-y-3">
@@ -900,7 +851,7 @@ export default function DashboardPage() {
           <RefreshButton queryKeys={[['dashboard-summary', role]]} />
         </div>
 
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3" data-tour="stats-grid">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-tour="stats-grid">
           <StatCard label="Active Students" value={activeStudents} hint="Currently enrolled" tone="blue" onClick={() => router.push('/students')} />
           <StatCard label="Staff Members" value={summary?.staff?.total ?? 0} hint="Teaching and non-teaching" tone="neutral" onClick={() => router.push('/staff')} />
           <StatCard label="Today's Attendance" value={attendancePct !== null ? `${attendancePct}%` : '—'} hint={attendance.total > 0 ? `${attendance.present} present · ${attendance.absent} absent` : 'No registers submitted yet'} tone={attendancePct !== null ? (attendancePct < 85 ? 'amber' : 'green') : 'neutral'} onClick={() => router.push('/attendance')} />
@@ -938,7 +889,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <SectionCard
             title="Recent Registrations"
             icon={UserPlus}
@@ -1019,14 +970,14 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3" data-tour="stats-grid">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-tour="stats-grid">
         <StatCard label="My Class" value={myClass ? myClass.fullName : '—'} hint={myClass ? `${myClass.studentCount} active students` : 'Not assigned as class teacher'} tone="blue" onClick={() => router.push('/students')} />
         <StatCard label="Today's Lessons" value={todaySlots.length} hint={todaySlots.length > 0 ? `First at ${todaySlots[0].startTime}` : 'No lessons scheduled today'} tone={todaySlots.length > 0 ? 'neutral' : 'neutral'} onClick={() => router.push('/timetable')} />
         <StatCard label="Attendance" value={att ? `${att.percent ?? 0}%` : (myClass ? 'Pending' : '—')} hint={att ? `${att.present}/${att.total} present` : (myClass ? 'Register not taken yet' : 'No class assigned')} tone={!att ? 'amber' : att.percent >= 90 ? 'green' : att.percent >= 75 ? 'amber' : 'red'} onClick={() => router.push('/attendance')} />
         <StatCard label="Lesson Plans" value={lessonPlansThisWeek} hint="Submitted this week" tone={lessonPlansThisWeek > 0 ? 'green' : 'amber'} onClick={() => router.push('/lesson-plans')} />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div data-tour="timetable-widget">
           <SectionCard
             title="Today's Timetable"

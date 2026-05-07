@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Layers, Plus, Pencil, Trash2, School, Users, ChevronRight, X } from 'lucide-react';
 import { adminApi, getErrorMessage } from '@/lib/api';
@@ -44,6 +44,71 @@ function statusColor(status) {
 
 // ── Group Form Dialog ─────────────────────────────────────────────────────────
 
+function UserSearchPicker({ onSelect }) {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ['admin-users-picker', search],
+    queryFn: async () => {
+      const res = await adminApi.listUsers({ search, limit: 10 });
+      return res.data?.users ?? res.data?.data ?? [];
+    },
+    enabled: search.length >= 2,
+    staleTime: 30_000,
+  });
+
+  const users = Array.isArray(data) ? data : [];
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleSelect = (user) => {
+    onSelect(user);
+    setSearch('');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Input
+        placeholder="Search registered users…"
+        value={search}
+        onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+        onFocus={() => search.length >= 2 && setOpen(true)}
+      />
+      {open && search.length >= 2 && (
+        <div className="absolute z-50 top-full mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
+          {isFetching && (
+            <p className="text-xs text-muted-foreground px-3 py-2">Searching…</p>
+          )}
+          {!isFetching && users.length === 0 && (
+            <p className="text-xs text-muted-foreground px-3 py-2">No users found.</p>
+          )}
+          {users.map((u) => (
+            <button
+              key={u._id}
+              type="button"
+              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors"
+              onMouseDown={(e) => { e.preventDefault(); handleSelect(u); }}
+            >
+              <span className="font-medium">{u.firstName} {u.lastName}</span>
+              <span className="text-xs text-muted-foreground ml-2">{u.email}</span>
+              {u.role && <span className="text-[10px] text-muted-foreground ml-1 capitalize">· {u.role.replace(/_/g, ' ')}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GroupFormDialog({ open, onOpenChange, initial, onSave }) {
   const [form, setForm] = useState(
     initial ?? { name: '', notes: '', contactPerson: '', contactEmail: '' }
@@ -51,6 +116,14 @@ function GroupFormDialog({ open, onOpenChange, initial, onSave }) {
   const [saving, setSaving] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const handleUserSelect = (user) => {
+    setForm((f) => ({
+      ...f,
+      contactPerson: `${user.firstName} ${user.lastName}`.trim(),
+      contactEmail: user.email ?? f.contactEmail,
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -77,6 +150,8 @@ function GroupFormDialog({ open, onOpenChange, initial, onSave }) {
           </div>
           <div className="space-y-1.5">
             <Label>Contact person</Label>
+            <p className="text-[11px] text-muted-foreground -mt-0.5">Search a registered user or type manually below</p>
+            <UserSearchPicker onSelect={handleUserSelect} />
             <Input value={form.contactPerson} onChange={set('contactPerson')} placeholder="e.g. John Kamau" />
           </div>
           <div className="space-y-1.5">

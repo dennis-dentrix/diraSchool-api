@@ -22,7 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { SectionCard } from '@/components/shared/section-card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -270,54 +270,44 @@ function LeaveTab() {
       )}
 
       {/* Leave list */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-base">Leave Requests</CardTitle>
-              <CardDescription>
-                {pendingCount > 0
-                  ? `${pendingCount} pending approval`
-                  : 'No pending applications'}
-              </CardDescription>
-            </div>
-            <Select value={leaveFilter} onValueChange={setLeaveFilter}>
-              <SelectTrigger className="w-36 h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-              </SelectContent>
-            </Select>
+      <SectionCard
+        title={`Leave Requests${pendingCount > 0 ? ` · ${pendingCount} pending` : ''}`}
+        action={
+          <Select value={leaveFilter} onValueChange={setLeaveFilter}>
+            <SelectTrigger className="w-36 h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
+        }
+      >
+        {(leaveFilter === 'pending' ? loadingPending : loadingAll) ? (
+          <SkeletonList count={4} className="h-16" spacing="space-y-3" />
+        ) : displayLeaves.length > 0 ? (
+          <div>
+            {displayLeaves.map((leave) => (
+              <LeaveRow
+                key={leave._id}
+                leave={leave}
+                onApprove={openApprove}
+                onReject={openReject}
+              />
+            ))}
           </div>
-        </CardHeader>
-        <CardContent>
-          {(leaveFilter === 'pending' ? loadingPending : loadingAll) ? (
-            <SkeletonList count={4} className="h-16" spacing="space-y-3" />
-          ) : displayLeaves.length > 0 ? (
-            <div>
-              {displayLeaves.map((leave) => (
-                <LeaveRow
-                  key={leave._id}
-                  leave={leave}
-                  onApprove={openApprove}
-                  onReject={openReject}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10 text-muted-foreground">
-              <Umbrella className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">
-                {leaveFilter === 'pending' ? 'No pending leave requests — all caught up.' : 'No leave records found.'}
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        ) : (
+          <div className="text-center py-10 text-muted-foreground">
+            <Umbrella className="h-8 w-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">
+              {leaveFilter === 'pending' ? 'No pending leave requests — all caught up.' : 'No leave records found.'}
+            </p>
+          </div>
+        )}
+      </SectionCard>
 
       <LeaveActionDialog leave={actionLeave} action={actionType} onClose={closeAction} />
     </div>
@@ -410,80 +400,70 @@ function CheckInsTab() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Present */}
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-sm flex items-center gap-2 text-green-700">
-                <CheckCircle2 className="h-4 w-4" />
-                Checked In ({present.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              {present.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">No check-ins recorded</p>
-              ) : (
-                <div className="divide-y">
-                  {present.map((c) => {
-                    const staff = c.staffId;
-                    const name  = staff ? `${staff.firstName} ${staff.lastName}` : '—';
-                    const time  = new Date(c.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
-                    return (
-                      <div key={c._id} className="flex items-center justify-between py-2.5 gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {ROLE_LABELS[staff?.role] ?? staff?.role} · {TYPE_LABEL[c.check_in_type] ?? c.check_in_type} · {time}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {c.off_site && (
-                            <Badge variant="outline" className="text-[10px] border-purple-200 text-purple-700 bg-purple-50 gap-1">
-                              <MapPin className="h-2.5 w-2.5" /> Off-site
-                            </Badge>
-                          )}
-                          <Badge
-                            variant="outline"
-                            className={cn('text-[10px]', c.status === 'late'
-                              ? 'border-warn/30 text-warn bg-warn/8'
-                              : 'border-ok/30 text-ok bg-ok/8',
-                            )}
-                          >
-                            {c.status === 'late' ? 'Late' : 'On Time'}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Absent */}
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-sm flex items-center gap-2 text-red-700">
-                <XCircle className="h-4 w-4" />
-                Not Checked In ({absent.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              {absent.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-4 text-center">All staff have checked in</p>
-              ) : (
-                <div className="divide-y">
-                  {absent.map((s) => (
-                    <div key={s._id} className="flex items-center gap-3 py-2.5">
-                      <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+          <SectionCard
+            icon={CheckCircle2}
+            title={`Checked In (${present.length})`}
+          >
+            {present.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">No check-ins recorded</p>
+            ) : (
+              <div className="divide-y">
+                {present.map((c) => {
+                  const staff = c.staffId;
+                  const name  = staff ? `${staff.firstName} ${staff.lastName}` : '—';
+                  const time  = new Date(c.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <div key={c._id} className="flex items-center justify-between py-2.5 gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{s.firstName} {s.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{ROLE_LABELS[s.role] ?? s.role}</p>
+                        <p className="text-sm font-medium truncate">{name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {ROLE_LABELS[staff?.role] ?? staff?.role} · {TYPE_LABEL[c.check_in_type] ?? c.check_in_type} · {time}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {c.off_site && (
+                          <Badge variant="outline" className="text-[10px] border-primary/20 text-primary bg-primary/8 gap-1">
+                            <MapPin className="h-2.5 w-2.5" /> Off-site
+                          </Badge>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className={cn('text-[10px]', c.status === 'late'
+                            ? 'border-warn/30 text-warn bg-warn/8'
+                            : 'border-ok/30 text-ok bg-ok/8',
+                          )}
+                        >
+                          {c.status === 'late' ? 'Late' : 'On Time'}
+                        </Badge>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Absent */}
+          <SectionCard
+            icon={XCircle}
+            title={`Not Checked In (${absent.length})`}
+          >
+            {absent.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">All staff have checked in</p>
+            ) : (
+              <div className="divide-y">
+                {absent.map((s) => (
+                  <div key={s._id} className="flex items-center gap-3 py-2.5">
+                    <AlertCircle className="h-4 w-4 text-bad shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{s.firstName} {s.lastName}</p>
+                      <p className="text-xs text-muted-foreground">{ROLE_LABELS[s.role] ?? s.role}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
         </div>
       )}
     </div>

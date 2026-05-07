@@ -27,7 +27,8 @@ const columns = [
     header: 'Time',
     cell: ({ row }) => (
       <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-        {formatDate(row.original.createdAt)}
+        <span className="block">{formatDate(row.original.createdAt)}</span>
+        <span className="block text-[11px]">{formatDate(row.original.createdAt, 'HH:mm:ss')}</span>
       </span>
     ),
   },

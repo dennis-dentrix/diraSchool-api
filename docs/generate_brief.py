@@ -10,6 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm, cm
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
+from reportlab.lib.colors import HexColor, white
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     HRFlowable, PageBreak, KeepTogether
@@ -134,11 +135,56 @@ def space(h=6):
 def section_rule():
     return HRFlowable(width="100%", thickness=1.5, color=NAVY, spaceAfter=8, spaceBefore=2)
 
+# ── DiraSchool Logo ───────────────────────────────────────────────────────────
+
+LOGO_TEAL = HexColor('#1f5b5e')
+
+def draw_dira_logo(canvas, x, y, size=12*mm):
+    """Draw the DiraSchool compass icon, bottom-left corner at (x, y)."""
+    canvas.saveState()
+    canvas.translate(x, y)
+    s = size / 64
+
+    canvas.setFillColor(LOGO_TEAL)
+    canvas.roundRect(2*s, 2*s, 60*s, 60*s, 14*s, fill=1, stroke=0)
+
+    canvas.setStrokeColor(HexColor('#3a8f93'))
+    canvas.setLineWidth(1*s)
+    canvas.circle(32*s, 32*s, 18*s, fill=0, stroke=1)
+
+    canvas.setFillColor(white)
+    p = canvas.beginPath()
+    p.moveTo(32*s, 52*s)
+    p.lineTo(38*s, 32*s)
+    p.lineTo(32*s, 36*s)
+    p.close()
+    canvas.drawPath(p, fill=1, stroke=0)
+
+    canvas.setFillColor(HexColor('#8fc8cb'))
+    p2 = canvas.beginPath()
+    p2.moveTo(32*s, 12*s)
+    p2.lineTo(26*s, 32*s)
+    p2.lineTo(32*s, 28*s)
+    p2.close()
+    canvas.drawPath(p2, fill=1, stroke=0)
+
+    canvas.setFillColor(LOGO_TEAL)
+    canvas.setStrokeColor(white)
+    canvas.setLineWidth(1.2*s)
+    canvas.circle(32*s, 32*s, 2*s, fill=1, stroke=1)
+
+    canvas.restoreState()
+
+
 # ── Page template (header / footer) ──────────────────────────────────────────
 
 def on_page(canvas, doc):
     canvas.saveState()
     w, h = A4
+
+    if doc.page == 1:
+        # Logo on cover — top-left, inside the navy block
+        draw_dira_logo(canvas, 15*mm, h - 20*mm, 14*mm)
 
     if doc.page > 1:
         # Top rule
@@ -617,61 +663,77 @@ def build():
     story += section_header("7", "Pricing Structure")
 
     story.append(p(
-        "All prices in Kenyan Shillings. <b>VAT at 16% applicable on all tiers.</b> "
-        "Per-term billing is the primary model — aligned to school fee collection cycles. "
-        "Monthly billing is available at a 20% premium. Annual billing offers approximately "
-        "15% off (one term effectively free)."
+        "DiraSchool uses <b>transparent, per-student dynamic pricing</b> — no fixed tiers, "
+        "no arbitrary student-count bands. Every school pays exactly for what they use. "
+        "All prices are in Kenyan Shillings and are subject to VAT at 16%."
     ))
 
-    story += subsubsection("Per-Term Pricing (Primary Model)")
+    story += subsubsection("Pricing Formula")
+    story.append(p(
+        "<b>Base fee:</b> KES 12,000 per term (covers platform access, hosting, support, and "
+        "all features regardless of school size)."
+    ))
+    story.append(p(
+        "<b>Per-student fee:</b> KES 50 per active student per term."
+    ))
+    story.append(p(
+        "<b>Formula:</b>  Subtotal (ex-VAT) = (KES 12,000 + students × KES 50) × billing multiplier"
+    ))
+    story.append(p(
+        "<b>VAT:</b> 16% added on top of the subtotal. "
+        "<b>Total payable</b> = Subtotal + VAT."
+    ))
+
+    story += subsubsection("Billing Cycles")
+    cycle_data = [
+        ["Billing Cycle", "Multiplier", "Effective Saving", "Notes"],
+        ["Per-term",   "× 1.00", "—",         "Pay each of the 3 Kenyan school terms separately"],
+        ["Annual",     "× 2.70", "~10% off",  "One payment covers all 3 terms (3 × 0.90)"],
+        ["Multi-year", "× 2.55", "~15% off",  "Best value; covers 3 terms at 85% of per-term rate"],
+    ]
+    cycle_t = Table(cycle_data, colWidths=[30*mm, 24*mm, 28*mm, 78*mm])
+    cycle_t.setStyle(header_table_style(4))
+    story.append(cycle_t)
+
+    story += subsubsection("Illustrative Pricing Examples (Per-Term, ex-VAT)")
     price_data = [
-        ["Plan", "Students", "Per Term\n(ex-VAT)", "Per Term\n(incl. VAT)", "Annual\n(ex-VAT)", "Annual\nSaving"],
-        ["Dira Seed", "Up to 75",    "KES 6,500",  "KES 7,540",   "KES 16,500",  "~KES 3,000"],
-        ["Dira Lite", "Up to 200",   "KES 12,500", "KES 14,500",  "KES 32,000",  "~KES 5,500"],
-        ["Starter",   "Up to 400",   "KES 20,000", "KES 23,200",  "KES 51,000",  "~KES 9,000"],
-        ["Growth",    "Up to 850",   "KES 45,000", "KES 52,200",  "KES 115,000", "~KES 20,000"],
-        ["Professional","Up to 1,500","KES 75,000","KES 87,000",  "KES 190,000", "~KES 35,000"],
-        ["Enterprise", "Unlimited",  "Custom",     "Custom",      "Custom",       "—"],
+        ["Active Students", "Base Fee", "Student Fee", "Subtotal (ex-VAT)", "VAT (16%)", "Total Payable"],
+        ["50",   "KES 12,000", "KES 2,500",  "KES 14,500",  "KES 2,320",  "KES 16,820"],
+        ["100",  "KES 12,000", "KES 5,000",  "KES 17,000",  "KES 2,720",  "KES 19,720"],
+        ["200",  "KES 12,000", "KES 10,000", "KES 22,000",  "KES 3,520",  "KES 25,520"],
+        ["400",  "KES 12,000", "KES 20,000", "KES 32,000",  "KES 5,120",  "KES 37,120"],
+        ["700",  "KES 12,000", "KES 35,000", "KES 47,000",  "KES 7,520",  "KES 54,520"],
+        ["1,200","KES 12,000", "KES 60,000", "KES 72,000",  "KES 11,520", "KES 83,520"],
     ]
     ts_price = header_table_style(6)
     ts_price.add("BACKGROUND", (0, -1), (-1, -1), MID)
     ts_price.add("FONTNAME",   (0, -1), (-1, -1), "Helvetica-Bold")
-    price_t = Table(price_data, colWidths=[28*mm, 24*mm, 26*mm, 27*mm, 27*mm, 28*mm])
+    price_t = Table(price_data, colWidths=[28*mm, 24*mm, 24*mm, 32*mm, 24*mm, 28*mm])
     price_t.setStyle(ts_price)
     story.append(price_t)
 
     story.append(space(4))
     story.append(p(
-        "<b>Trial:</b> 30 days free, up to 50 students, no credit card required. "
-        "Schools upgrade to a paid plan when they are ready — no automatic billing."
+        "<b>Free trial:</b> 30 days free, up to 50 active students, no credit card required. "
+        "Checkout is handled via Paystack (card, M-Pesa). Subscription activates automatically "
+        "on confirmed payment."
     ))
 
-    story += subsubsection("Cost Per Student Per Term")
-    student_data = [
-        ["Plan", "Students", "Cost per student / term", "Comparable cost"],
-        ["Dira Seed",    "75",    "KES 87",  "2 exercise book pages"],
-        ["Dira Lite",    "200",   "KES 63",  "Less than a biro pen"],
-        ["Starter",      "400",   "KES 50",  "Less than a biro pen"],
-        ["Growth",       "850",   "KES 53",  "Less than a biro pen"],
-        ["Professional", "1,500", "KES 50",  "Less than a biro pen"],
-    ]
-    student_t = Table(student_data, colWidths=[32*mm, 28*mm, 50*mm, 50*mm])
-    student_t.setStyle(header_table_style(4))
-    story.append(student_t)
-
-    story += subsubsection("DiraSchool as % of School Fee Income")
+    story += subsubsection("DiraSchool as % of School Fee Income (Per-Term)")
     pct_data = [
-        ["Plan", "Students", "Est. Term Fee Income", "DiraSchool Cost", "As % of Income"],
-        ["Dira Seed",    "75",    "KES 375K–1.1M",  "KES 6,500",  "0.6–1.7%"],
-        ["Dira Lite",    "200",   "KES 1M–3M",      "KES 12,500", "0.4–1.3%"],
-        ["Starter",      "400",   "KES 2M–6M",      "KES 20,000", "0.3–1.0%"],
-        ["Growth",       "850",   "KES 4.25M–12.75M","KES 45,000","0.4–1.1%"],
-        ["Professional", "1,500", "KES 7.5M–22.5M", "KES 75,000", "0.3–1.0%"],
+        ["Active Students", "Est. Term Fee Income", "DiraSchool Cost (incl. VAT)", "As % of Income"],
+        ["50",    "KES 250K–750K",     "KES 16,820",  "2.2–6.7%"],
+        ["100",   "KES 500K–1.5M",    "KES 19,720",  "1.3–3.9%"],
+        ["200",   "KES 1M–3M",        "KES 25,520",  "0.9–2.6%"],
+        ["400",   "KES 2M–6M",        "KES 37,120",  "0.6–1.9%"],
+        ["700",   "KES 3.5M–10.5M",   "KES 54,520",  "0.5–1.6%"],
+        ["1,200", "KES 6M–18M",       "KES 83,520",  "0.5–1.4%"],
     ]
-    pct_t = Table(pct_data, colWidths=[28*mm, 24*mm, 44*mm, 28*mm, 36*mm])
-    pct_t.setStyle(header_table_style(5))
+    pct_t = Table(pct_data, colWidths=[32*mm, 46*mm, 48*mm, 34*mm])
+    pct_t.setStyle(header_table_style(4))
     story.append(pct_t)
-    story.append(p("* Fee income estimate: KES 5,000–15,000 per student per term depending on school type and location.",
+    story.append(p(
+        "* Fee income estimate: KES 5,000–15,000 per student per term depending on school type and location.",
         S("fn", fontSize=8, textColor=GREY, fontName="Helvetica")))
 
     # ── 8. Business Model ─────────────────────────────────────────────────────
@@ -679,15 +741,18 @@ def build():
 
     biz_data = [
         ["Metric", "Detail"],
-        ["Revenue model", "B2B SaaS, term-based subscription"],
+        ["Revenue model", "B2B SaaS, subscription-based"],
+        ["Pricing model", "Dynamic per-student: KES 12,000 base + KES 50/student/term"],
         ["Primary billing cycle", "Per Kenyan school term (3 times per year)"],
-        ["Secondary billing cycles", "Annual (15% discount) / Monthly (20% premium)"],
+        ["Annual billing", "×2.70 multiplier — effectively 10% discount"],
+        ["Multi-year billing", "×2.55 multiplier — effectively 15% discount"],
+        ["Payment processor", "Paystack (card + M-Pesa); auto-activation on confirmed payment"],
         ["Customer acquisition", "Direct outreach, head-teacher networks, KNUT/KUPPET, school expos"],
-        ["Onboarding", "Self-service 30-day trial → sales-assisted conversion"],
-        ["Support model", "WhatsApp + email support; in-app documentation (planned)"],
-        ["Churn mitigation", "Term-aligned billing, sticky historical data, high switching cost"],
-        ["Expansion revenue", "Automatic plan upgrades as school enrolment grows past tier limit"],
-        ["Break-even point", "5–8 paying schools at Starter tier average"],
+        ["Onboarding", "Self-service 30-day trial (50 students) → online checkout conversion"],
+        ["Support model", "Email + WhatsApp, 2 business-day SLA; 99.5% uptime guarantee"],
+        ["Churn mitigation", "Term-aligned billing, sticky CBC report history, high data switching cost"],
+        ["Expansion revenue", "Fee grows naturally as student enrolment grows — no tier upgrades needed"],
+        ["Break-even point", "~8–12 paying schools at 200-student average"],
         ["Target Year 1", "30 paying schools"],
         ["Target Year 2", "100 paying schools"],
     ]
@@ -696,20 +761,23 @@ def build():
     story.append(biz_t)
 
     story.append(space(8))
-    story += subsubsection("Revenue Projections")
+    story += subsubsection("Revenue Projections (Per-Term, Average 250 Students/School)")
     rev_data = [
-        ["Schools", "Plan Mix", "Revenue / Term", "Infra / Term", "Net / Term", "Net / Year"],
-        ["10",  "5 Lite + 3 Starter + 2 Growth",  "KES 218,500",   "KES 20,000",  "KES 198,500",   "KES 595,500"],
-        ["20",  "Mixed across tiers",              "KES 490,000",   "KES 30,000",  "KES 460,000",   "KES 1.38M"],
-        ["40",  "Mixed across tiers",              "KES 980,000",   "KES 55,000",  "KES 925,000",   "KES 2.775M"],
-        ["80",  "Mixed across tiers",              "KES 1,960,000", "KES 100,000", "KES 1,860,000", "KES 5.58M"],
+        ["Schools", "Avg Students", "Revenue/Term (ex-VAT)", "Infra/Term", "Net/Term", "Net/Year"],
+        ["10",  "250", "KES 237,500",   "KES 20,000",  "KES 217,500",   "KES 652,500"],
+        ["20",  "250", "KES 475,000",   "KES 30,000",  "KES 445,000",   "KES 1.34M"],
+        ["40",  "300", "KES 1,152,000", "KES 55,000",  "KES 1,097,000", "KES 3.29M"],
+        ["80",  "300", "KES 2,304,000", "KES 100,000", "KES 2,204,000", "KES 6.61M"],
     ]
     ts_rev = header_table_style(6)
     ts_rev.add("BACKGROUND", (0,-1), (-1,-1), MID)
     ts_rev.add("FONTNAME",   (0,-1), (-1,-1), "Helvetica-Bold")
-    rev_t = Table(rev_data, colWidths=[18*mm, 45*mm, 32*mm, 28*mm, 28*mm, 29*mm])
+    rev_t = Table(rev_data, colWidths=[18*mm, 26*mm, 42*mm, 26*mm, 28*mm, 40*mm])
     rev_t.setStyle(ts_rev)
     story.append(rev_t)
+    story.append(p(
+        "* Revenue/Term = schools × (12,000 + avg_students × 50). Net excludes VAT collected (passed to KRA).",
+        S("fn", fontSize=8, textColor=GREY, fontName="Helvetica")))
 
     story.append(space(8))
     story += subsubsection("Invoice Timing Strategy")

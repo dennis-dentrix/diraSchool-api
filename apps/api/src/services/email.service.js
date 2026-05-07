@@ -299,6 +299,113 @@ export const sendSenderIdReviewedEmail = ({
     meta,
   });
 
+export const sendDepartmentMemberEmail = ({
+  to, firstName, schoolName, departmentName, action, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: action === 'added'
+      ? `You've been added to the ${departmentName} department — ${schoolName}`
+      : `You've been removed from the ${departmentName} department — ${schoolName}`,
+    html: _departmentMemberTemplate({ firstName, schoolName, departmentName, action }),
+    template: 'department-member',
+    meta,
+  });
+
+export const sendAttendancePermissionEmail = ({
+  to, firstName, schoolName, className, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `You've been assigned as class teacher of ${className} — ${schoolName}`,
+    html: _attendancePermissionTemplate({ firstName, schoolName, className }),
+    template: 'attendance-permission',
+    meta,
+  });
+
+export const sendCheckoutReminderEmail = ({
+  to, firstName, schoolName, checkOutTime, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `Reminder: please check out for today — ${schoolName}`,
+    html: _checkoutReminderTemplate({ firstName, schoolName, checkOutTime }),
+    template: 'checkout-reminder',
+    meta,
+  });
+
+const _departmentMemberTemplate = ({ firstName, schoolName, departmentName, action }) =>
+  _shell(
+    action === 'added' ? `Added to ${departmentName} — ${schoolName}` : `Removed from ${departmentName} — ${schoolName}`,
+    action === 'added'
+      ? `
+        <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
+        <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+          You have been added to the <strong>${departmentName}</strong> department at
+          <strong>${schoolName}</strong>.
+        </p>
+        <div style="background:#f0f4ff;border:1px solid #dbeafe;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+          <p style="margin:0;font-size:14px;color:#1e40af;line-height:1.6;">
+            You can now collaborate with other members of this department through the school portal.
+          </p>
+        </div>
+        <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+          If you believe this was done in error, please contact your school administrator.
+        </p>
+      `
+      : `
+        <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
+        <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+          You have been removed from the <strong>${departmentName}</strong> department at
+          <strong>${schoolName}</strong>.
+        </p>
+        <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+          If you believe this was done in error, please contact your school administrator.
+        </p>
+      `
+  );
+
+const _attendancePermissionTemplate = ({ firstName, schoolName, className }) =>
+  _shell(
+    `Class teacher assignment — ${className}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hello ${firstName},</h2>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        You have been assigned as the class teacher of <strong>${className}</strong> at
+        <strong>${schoolName}</strong>.
+      </p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="margin:0;font-size:14px;color:#15803d;line-height:1.6;">
+          You can now take attendance registers for this class through the school portal.
+          Log in and go to <strong>Attendance</strong> to get started.
+        </p>
+      </div>
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+        If you believe this was done in error, please contact your school administrator.
+      </p>
+    `
+  );
+
+const _checkoutReminderTemplate = ({ firstName, schoolName, checkOutTime }) =>
+  _shell(
+    `Reminder: check out — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hi ${firstName}, don't forget to check out!</h2>
+      <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+        It looks like you haven't checked out yet for today at <strong>${schoolName}</strong>.
+        Your designated check-out time was <strong>${checkOutTime}</strong>.
+      </p>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="margin:0;font-size:14px;color:#92400e;line-height:1.6;">
+          Please open the Diraschool app and complete your check-out so your attendance is recorded accurately for today.
+        </p>
+      </div>
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+        If you have already checked out and received this message in error, please contact your school administrator.
+      </p>
+    `
+  );
+
 const _shell = (title, body) => `<!DOCTYPE html>
 <html lang="en">
 <head>

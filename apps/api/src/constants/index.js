@@ -150,6 +150,7 @@ export const QUEUE_NAMES = {
   RECEIPT: 'receipt',
   NOTIFICATION: 'notification',
   EMAIL: 'email',
+  CHECKOUT_REMINDER: 'checkout-reminder',
 };
 
 export const JOB_NAMES = {
@@ -158,10 +159,12 @@ export const JOB_NAMES = {
   GENERATE_PDF: 'generate-pdf',
   IMPORT_STUDENTS_CSV: 'import-students-csv',
   IN_APP_NOTIFICATION: 'in-app-notification',
-  SEND_INVITE_EMAIL:        'send-invite-email',
-  SEND_PARENT_ENROLLMENT_EMAIL: 'send-parent-enrollment-email',
-  SEND_RESET_EMAIL:         'send-reset-email',
-  SEND_VERIFICATION_EMAIL:  'send-verification-email',
+  SEND_INVITE_EMAIL:             'send-invite-email',
+  SEND_PARENT_ENROLLMENT_EMAIL:  'send-parent-enrollment-email',
+  SEND_RESET_EMAIL:              'send-reset-email',
+  SEND_VERIFICATION_EMAIL:       'send-verification-email',
+  SEND_CHECKOUT_REMINDER_EMAIL:  'send-checkout-reminder-email',
+  RUN_CHECKOUT_REMINDER_SCAN:    'run-checkout-reminder-scan',
 };
 
 export const AUDIT_ACTIONS = {

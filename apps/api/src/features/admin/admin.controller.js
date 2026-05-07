@@ -15,6 +15,7 @@ import School      from '../schools/School.model.js';
 import SchoolGroup from './SchoolGroup.model.js';
 import User        from '../users/User.model.js';
 import Student     from '../students/Student.model.js';
+import ClassModel  from '../classes/Class.model.js';
 import AuditLog    from '../audit/AuditLog.model.js';
 import SmsDelivery from '../sms/SmsDelivery.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
@@ -40,25 +41,29 @@ import { getCurrentTermAndYear } from '../../utils/term.js';
 export const getStats = asyncHandler(async (req, res) => {
   const now    = new Date();
   const ago30d = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  const ago7d  = new Date(now - 7  * 24 * 60 * 60 * 1000);
+  const ago24h = new Date(now - 24 * 60 * 60 * 1000);
 
-  const [schoolsByStatus, recentSignups, usersByRole, topCounties] = await Promise.all([
-    // School counts grouped by subscriptionStatus
+  const [
+    schoolsByStatus,
+    recentSignups,
+    usersByRole,
+    topCounties,
+    totalStudents,
+    totalClasses,
+    auditActions7d,
+    logins24h,
+  ] = await Promise.all([
     School.aggregate([
       { $group: { _id: '$subscriptionStatus', count: { $sum: 1 } } },
       { $sort:  { count: -1 } },
     ]),
-
-    // Schools registered in the last 30 days
     School.countDocuments({ createdAt: { $gte: ago30d } }),
-
-    // Users grouped by role (exclude superadmins from this count)
     User.aggregate([
       { $match: { role: { $ne: ROLES.SUPERADMIN } } },
       { $group: { _id: '$role', count: { $sum: 1 } } },
       { $sort:  { count: -1 } },
     ]),
-
-    // Top 5 counties by school count
     School.aggregate([
       { $match:  { county: { $exists: true, $nin: [null, ''] } } },
       { $group:  { _id: '$county', count: { $sum: 1 } } },
@@ -66,14 +71,13 @@ export const getStats = asyncHandler(async (req, res) => {
       { $limit:  5 },
       { $project: { county: '$_id', count: 1, _id: 0 } },
     ]),
+    Student.countDocuments(),
+    ClassModel.countDocuments(),
+    AuditLog.countDocuments({ createdAt: { $gte: ago7d } }),
+    AuditLog.countDocuments({ action: 'login', createdAt: { $gte: ago24h } }),
   ]);
 
-  // Flatten schoolsByStatus into an object: { trial: 45, active: 12, ... }
-  const statusMap = schoolsByStatus.reduce((acc, { _id, count }) => {
-    acc[_id] = count;
-    return acc;
-  }, {});
-
+  const statusMap    = schoolsByStatus.reduce((acc, { _id, count }) => { acc[_id] = count; return acc; }, {});
   const totalSchools = schoolsByStatus.reduce((sum, { count }) => sum + count, 0);
 
   return sendSuccess(res, {
@@ -83,12 +87,15 @@ export const getStats = asyncHandler(async (req, res) => {
       recentSignups,
     },
     users: {
-      byRole: usersByRole.reduce((acc, { _id, count }) => {
-        acc[_id] = count;
-        return acc;
-      }, {}),
+      byRole: usersByRole.reduce((acc, { _id, count }) => { acc[_id] = count; return acc; }, {}),
     },
     topCounties,
+    students: { total: totalStudents },
+    classes:  { total: totalClasses },
+    activity: {
+      auditActions7d,
+      logins24h,
+    },
   });
 });
 
@@ -147,25 +154,35 @@ export const listSchools = asyncHandler(async (req, res) => {
     .limit(limit)
     .lean();
 
-  // Attach staff count to each school
   const schoolIds = schools.map((s) => s._id);
-  const staffCounts = await User.aggregate([
-    { $match: { schoolId: { $in: schoolIds } } },
-    { $group: { _id: '$schoolId', count: { $sum: 1 } } },
+  const [staffCounts, studentCounts, classCounts, usersByRole] = await Promise.all([
+    User.aggregate([
+      { $match: { schoolId: { $in: schoolIds } } },
+      { $group: { _id: '$schoolId', count: { $sum: 1 } } },
+    ]),
+    Student.aggregate([
+      { $match: { schoolId: { $in: schoolIds } } },
+      { $group: { _id: '$schoolId', count: { $sum: 1 } } },
+    ]),
+    ClassModel.aggregate([
+      { $match: { schoolId: { $in: schoolIds } } },
+      { $group: { _id: '$schoolId', count: { $sum: 1 } } },
+    ]),
+    User.aggregate([
+      { $match: { schoolId: { $in: schoolIds }, role: { $ne: ROLES.SUPERADMIN } } },
+      { $group: { _id: { schoolId: '$schoolId', role: '$role' }, count: { $sum: 1 } } },
+    ]),
   ]);
 
-  const staffMap = staffCounts.reduce((acc, { _id, count }) => {
-    acc[_id.toString()] = count;
-    return acc;
-  }, {});
+  const toMap = (arr) => arr.reduce((acc, { _id, count }) => { acc[_id.toString()] = count; return acc; }, {});
+  const staffMap   = toMap(staffCounts);
+  const studentMap = toMap(studentCounts);
+  const classMap   = toMap(classCounts);
 
-  // Also attach student counts
-  const studentCounts = await Student.aggregate([
-    { $match: { schoolId: { $in: schoolIds } } },
-    { $group: { _id: '$schoolId', count: { $sum: 1 } } },
-  ]);
-  const studentMap = studentCounts.reduce((acc, { _id, count }) => {
-    acc[_id.toString()] = count;
+  const roleBySchool = usersByRole.reduce((acc, { _id, count }) => {
+    const sid = _id.schoolId.toString();
+    if (!acc[sid]) acc[sid] = {};
+    acc[sid][_id.role] = count;
     return acc;
   }, {});
 
@@ -173,6 +190,8 @@ export const listSchools = asyncHandler(async (req, res) => {
     ...s,
     staffCount:   staffMap[s._id.toString()]   ?? 0,
     studentCount: studentMap[s._id.toString()] ?? 0,
+    classCount:   classMap[s._id.toString()]   ?? 0,
+    usersByRole:  roleBySchool[s._id.toString()] ?? {},
   }));
 
   return sendSuccess(res, { schools: enriched, meta });

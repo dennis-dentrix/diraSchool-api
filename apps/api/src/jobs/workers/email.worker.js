@@ -16,6 +16,7 @@ import {
   sendParentEnrollmentEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
+  sendCheckoutReminderEmail,
 } from '../../services/email.service.js';
 import logger from '../../config/logger.js';
 
@@ -41,6 +42,10 @@ export const startEmailWorker = () => {
 
         case JOB_NAMES.SEND_VERIFICATION_EMAIL:
           result = await sendVerificationEmail(payload);
+          break;
+
+        case JOB_NAMES.SEND_CHECKOUT_REMINDER_EMAIL:
+          result = await sendCheckoutReminderEmail(payload);
           break;
 
         default:

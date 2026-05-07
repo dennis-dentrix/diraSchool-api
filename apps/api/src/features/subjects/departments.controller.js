@@ -1,9 +1,13 @@
 import Department from './Department.model.js';
 import Subject from './Subject.model.js';
 import User from '../users/User.model.js';
+import School from '../schools/School.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { ROLES } from '../../constants/index.js';
+import { createNotification } from '../../services/notification.service.js';
+import { sendDepartmentMemberEmail } from '../../services/email.service.js';
+import logger from '../../config/logger.js';
 
 const MEMBER_ROLES = [ROLES.TEACHER, ROLES.DEPARTMENT_HEAD];
 
@@ -150,9 +154,36 @@ export const addMember = asyncHandler(async (req, res) => {
   const { user, error } = await resolveTeacher(req.user.schoolId, userId);
   if (error) return sendError(res, error, 404);
 
-  if (!dept.memberIds.some((id) => id.equals(user._id))) {
+  const alreadyMember = dept.memberIds.some((id) => id.equals(user._id));
+  if (!alreadyMember) {
     dept.memberIds.push(user._id);
     await dept.save();
+
+    // Notify and email the added teacher (fire-and-forget)
+    try {
+      const school = await School.findById(req.user.schoolId).select('name').lean();
+      const schoolName = school?.name ?? 'your school';
+      await Promise.all([
+        createNotification({
+          schoolId: req.user.schoolId,
+          userId: user._id,
+          title: `Added to ${dept.name} department`,
+          message: `You have been added to the ${dept.name} department at ${schoolName}.`,
+          type: 'info',
+          link: '/subjects',
+        }),
+        sendDepartmentMemberEmail({
+          to: user.email,
+          firstName: user.firstName,
+          schoolName,
+          departmentName: dept.name,
+          action: 'added',
+          meta: { schoolId: req.user.schoolId, userId: String(user._id) },
+        }).catch((err) => logger.warn('[Dept] member-added email failed', { err: err.message })),
+      ]);
+    } catch (err) {
+      logger.warn('[Dept] Failed to notify added member', { err: err.message });
+    }
   }
 
   const populated = await populateDept(Department.findById(dept._id));
@@ -166,8 +197,42 @@ export const removeMember = asyncHandler(async (req, res) => {
   const dept = await Department.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
   if (!dept) return sendError(res, 'Department not found.', 404);
 
+  const wasMember = dept.memberIds.some((id) => id.equals(req.params.userId));
   dept.memberIds = dept.memberIds.filter((id) => !id.equals(req.params.userId));
   await dept.save();
+
+  // Notify and email the removed teacher (fire-and-forget)
+  if (wasMember) {
+    try {
+      const [removedUser, school] = await Promise.all([
+        User.findById(req.params.userId).select('firstName lastName email').lean(),
+        School.findById(req.user.schoolId).select('name').lean(),
+      ]);
+      if (removedUser) {
+        const schoolName = school?.name ?? 'your school';
+        await Promise.all([
+          createNotification({
+            schoolId: req.user.schoolId,
+            userId: removedUser._id,
+            title: `Removed from ${dept.name} department`,
+            message: `You have been removed from the ${dept.name} department at ${schoolName}.`,
+            type: 'info',
+            link: '/subjects',
+          }),
+          sendDepartmentMemberEmail({
+            to: removedUser.email,
+            firstName: removedUser.firstName,
+            schoolName,
+            departmentName: dept.name,
+            action: 'removed',
+            meta: { schoolId: req.user.schoolId, userId: String(removedUser._id) },
+          }).catch((err) => logger.warn('[Dept] member-removed email failed', { err: err.message })),
+        ]);
+      }
+    } catch (err) {
+      logger.warn('[Dept] Failed to notify removed member', { err: err.message });
+    }
+  }
 
   const populated = await populateDept(Department.findById(dept._id));
   return sendSuccess(res, { department: await withSubjectCount(req.user.schoolId, populated) });

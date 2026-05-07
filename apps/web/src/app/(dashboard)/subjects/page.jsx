@@ -139,7 +139,14 @@ function DepartmentCard({ dept, onEdit, onDelete, onAddMember, onRemoveMember, i
         {/* Members list */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Members</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Members</span>
+              {members.length > 0 && (
+                <span className="font-mono text-[10px] tabular-nums bg-muted text-muted-foreground rounded px-1.5 py-0.5 leading-none">
+                  {members.length}
+                </span>
+              )}
+            </div>
             <Button
               variant="ghost" size="sm"
               className="h-6 px-2 text-xs text-primary hover:text-primary"
@@ -152,7 +159,7 @@ function DepartmentCard({ dept, onEdit, onDelete, onAddMember, onRemoveMember, i
           {members.length === 0 ? (
             <p className="text-xs text-muted-foreground/50 italic py-1">No members yet</p>
           ) : (
-            <div className="space-y-1">
+            <div className="max-h-[120px] overflow-y-auto space-y-1 pr-1">
               {members.map((m) => {
                 const name = `${m.firstName} ${m.lastName}`;
                 return (
@@ -168,7 +175,7 @@ function DepartmentCard({ dept, onEdit, onDelete, onAddMember, onRemoveMember, i
                       variant="ghost" size="icon"
                       className="h-6 w-6 opacity-0 group-hover/member:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                       disabled={isPendingMember}
-                      onClick={() => onRemoveMember(dept._id, m._id)}
+                      onClick={() => onRemoveMember(dept._id, m._id, name)}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -348,6 +355,7 @@ export default function SubjectsPage() {
   const [editDept, setEditDept]                   = useState(null);
   const [deleteDeptTarget, setDeleteDeptTarget]   = useState(null);
   const [addMemberTarget, setAddMemberTarget]     = useState(null);
+  const [removeMemberConfirm, setRemoveMemberConfirm] = useState({ open: false, deptId: null, userId: null, memberName: '' });
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(subjectSchema),
@@ -764,7 +772,7 @@ export default function SubjectsPage() {
                   onEdit={(dept) => { setEditDept(dept); setDeptFormOpen(true); }}
                   onDelete={(dept) => setDeleteDeptTarget(dept)}
                   onAddMember={(dept) => setAddMemberTarget(dept)}
-                  onRemoveMember={(deptId, userId) => removeDeptMember({ deptId, userId })}
+                  onRemoveMember={(deptId, userId, memberName) => setRemoveMemberConfirm({ open: true, deptId, userId, memberName })}
                   isPendingMember={isRemovingMember}
                 />
               ))}
@@ -924,6 +932,31 @@ export default function SubjectsPage() {
               onClick={() => deleteDeptTarget && deleteDept(deleteDeptTarget._id)}
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Remove department member confirm ──────────────────────────────── */}
+      <AlertDialog open={removeMemberConfirm.open} onOpenChange={(v) => !v && setRemoveMemberConfirm({ open: false, deptId: null, userId: null, memberName: '' })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {removeMemberConfirm.memberName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              They will be removed from this department. You can add them back at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isRemovingMember}
+              onClick={() => {
+                removeDeptMember({ deptId: removeMemberConfirm.deptId, userId: removeMemberConfirm.userId });
+                setRemoveMemberConfirm({ open: false, deptId: null, userId: null, memberName: '' });
+              }}
+            >
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -2,15 +2,51 @@ import mongoose from 'mongoose';
 import Class from './Class.model.js';
 import Student from '../students/Student.model.js';
 import ReportCard from '../report-cards/ReportCard.model.js';
+import User from '../users/User.model.js';
+import School from '../schools/School.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { getRedis } from '../../config/redis.js';
 import { CACHE_TTL, STUDENT_STATUSES, PAYMENT_STATUSES } from '../../constants/index.js';
+import { createNotification } from '../../services/notification.service.js';
+import { sendAttendancePermissionEmail } from '../../services/email.service.js';
+import logger from '../../config/logger.js';
 
 // Lazy-load to avoid circular deps at module init time
 const getPaymentModel  = () => mongoose.model('Payment');
 const getFeeStructureModel = () => mongoose.model('FeeStructure');
+
+const notifyClassTeacher = async (schoolId, teacherId, cls) => {
+  try {
+    const [teacher, school] = await Promise.all([
+      User.findById(teacherId).select('firstName lastName email').lean(),
+      School.findById(schoolId).select('name').lean(),
+    ]);
+    if (!teacher) return;
+    const schoolName = school?.name ?? 'your school';
+    const className = `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}`;
+    await Promise.all([
+      createNotification({
+        schoolId,
+        userId: teacher._id,
+        title: `Class teacher — ${className}`,
+        message: `You have been assigned as class teacher of ${className} at ${schoolName}. You can now take attendance for this class.`,
+        type: 'info',
+        link: '/attendance',
+      }),
+      sendAttendancePermissionEmail({
+        to: teacher.email,
+        firstName: teacher.firstName,
+        schoolName,
+        className,
+        meta: { schoolId: String(schoolId), userId: String(teacher._id) },
+      }).catch((err) => logger.warn('[Class] attendance-permission email failed', { err: err.message })),
+    ]);
+  } catch (err) {
+    logger.warn('[Class] Failed to notify class teacher', { err: err.message });
+  }
+};
 
 // Invalidate ALL class-list cache entries for a school (on any create/update/delete)
 const bustClassCache = async (schoolId) => {
@@ -40,6 +76,11 @@ export const createClass = asyncHandler(async (req, res) => {
   });
 
   await bustClassCache(req.user.schoolId);
+
+  if (classTeacherId) {
+    notifyClassTeacher(req.user.schoolId, classTeacherId, cls).catch(() => {});
+  }
+
   return sendSuccess(res, { class: cls }, 201);
 });
 
@@ -206,6 +247,8 @@ export const updateClass = asyncHandler(async (req, res) => {
 
   const { name, stream, levelCategory, academicYear, term, classTeacherId, isActive } = req.body;
 
+  const prevTeacherId = cls.classTeacherId ? String(cls.classTeacherId) : null;
+
   if (name !== undefined) cls.name = name;
   if (stream !== undefined) cls.stream = stream;
   if (levelCategory !== undefined) cls.levelCategory = levelCategory;
@@ -216,6 +259,12 @@ export const updateClass = asyncHandler(async (req, res) => {
 
   await cls.save();
   await bustClassCache(req.user.schoolId);
+
+  // Notify newly assigned class teacher
+  const newTeacherId = classTeacherId && classTeacherId !== prevTeacherId ? classTeacherId : null;
+  if (newTeacherId) {
+    notifyClassTeacher(req.user.schoolId, newTeacherId, cls).catch(() => {});
+  }
 
   return sendSuccess(res, { class: cls });
 });
