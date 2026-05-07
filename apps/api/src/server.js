@@ -44,6 +44,7 @@ import notificationRoutes from './features/notifications/notifications.routes.js
 import subscriptionRoutes from './features/subscriptions/subscriptions.routes.js';
 import lessonPlanRoutes from './features/lesson-plans/lesson-plans.routes.js';
 import smsRoutes from './features/sms/sms.routes.js';
+import mpesaRoutes from './features/mpesa/mpesa.routes.js';
 import visitorRoutes from './features/visitors/visitors.routes.js';
 import checkInRoutes from './features/checkins/checkins.routes.js';
 import leaveRoutes from './features/leave/leave.routes.js';
@@ -197,6 +198,7 @@ app.use('/api/v1/export', exportRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/subscriptions', subscriptionRoutes);
 app.use('/api/v1/sms', smsRoutes);
+app.use('/api/v1/mpesa', mpesaRoutes);
 app.use('/api/v1/visitors', visitorRoutes);
 app.use('/api/v1/checkins', checkInRoutes);
 app.use('/api/v1/leave',       leaveRoutes);

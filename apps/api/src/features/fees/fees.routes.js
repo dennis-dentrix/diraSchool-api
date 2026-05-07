@@ -28,6 +28,7 @@ import {
   getStudentBalance,
   getFinanceDashboardSummary,
   listPaymentNotifications,
+  getBulkFeeStats,
 } from './fees.controller.js';
 
 const router = express.Router();
@@ -68,5 +69,6 @@ router.get('/payment-notifications', canManageFees, validateListPaymentNotificat
 
 // ── Balance ───────────────────────────────────────────────────────────────────
 router.get('/balance', canManageFees, validateBalanceQuery, getStudentBalance);
+router.get('/bulk-stats', canManageFees, getBulkFeeStats);
 
 export default router;

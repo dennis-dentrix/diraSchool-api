@@ -102,8 +102,8 @@ function ClassRegisterCard({ cls, todayReg, onOpen, onTake, isCreating, schoolCl
       <Card className={`border-dashed transition-colors ${schoolClosed ? 'opacity-60' : 'hover:border-primary/40 hover:bg-primary/5'}`}>
         <CardContent className="flex items-center justify-between py-4 px-5">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-              <ClipboardCheck className="h-4 w-4 text-slate-400" />
+            <div className="w-9 h-9 rounded-full bg-muted/50 flex items-center justify-center shrink-0">
+              <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <p className="font-medium text-sm">{className}</p>
@@ -139,18 +139,18 @@ function ClassRegisterCard({ cls, todayReg, onOpen, onTake, isCreating, schoolCl
   return (
     <Card
       className={`cursor-pointer hover:shadow-md transition-all ${
-        isSubmitted ? 'border-green-200 bg-green-50/30' : 'border-amber-200 bg-amber-50/30'
+        isSubmitted ? 'border-ok/20 bg-ok/5' : 'border-warn/20 bg-warn/5'
       }`}
       onClick={() => onOpen(todayReg._id)}
     >
       <CardContent className="flex items-center justify-between py-4 px-5">
         <div className="flex items-center gap-3">
           <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-            isSubmitted ? 'bg-green-100' : 'bg-amber-100'
+            isSubmitted ? 'bg-ok/15' : 'bg-warn/15'
           }`}>
             {isSubmitted
-              ? <CheckCircle2 className="h-4 w-4 text-green-600" />
-              : <Clock className="h-4 w-4 text-amber-600" />}
+              ? <CheckCircle2 className="h-4 w-4 text-ok" />
+              : <Clock className="h-4 w-4 text-warn" />}
           </div>
           <div>
             <p className="font-medium text-sm">{className}</p>
@@ -159,7 +159,7 @@ function ClassRegisterCard({ cls, todayReg, onOpen, onTake, isCreating, schoolCl
                 ? `Submitted · ${presentCount}P · ${absentCount}A${halfDayCount > 0 ? ` · ${halfDayCount}H` : ''}`
                 : `Draft · ${entries.length} entries`}
               {todayReg.isSubstitute && todayReg.substituteTeacherId && (
-                <span className="ml-1 text-blue-600">
+                <span className="ml-1 text-primary">
                   · Sub: {todayReg.substituteTeacherId.firstName} {todayReg.substituteTeacherId.lastName}
                 </span>
               )}
@@ -170,9 +170,9 @@ function ClassRegisterCard({ cls, todayReg, onOpen, onTake, isCreating, schoolCl
           {isSubmitted && entries.length > 0 && (
             <Badge
               className={`text-xs font-semibold ${
-                rate >= 80 ? 'bg-green-100 text-green-800' :
-                rate >= 60 ? 'bg-amber-100 text-amber-800' :
-                'bg-red-100 text-red-800'
+                rate >= 80 ? 'bg-ok/15 text-ok' :
+                rate >= 60 ? 'bg-warn/15 text-warn' :
+                'bg-bad/15 text-bad'
               }`}
               variant="secondary"
             >
@@ -180,7 +180,7 @@ function ClassRegisterCard({ cls, todayReg, onOpen, onTake, isCreating, schoolCl
             </Badge>
           )}
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-            isSubmitted ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+            isSubmitted ? 'bg-ok/12 text-ok' : 'bg-warn/12 text-warn'
           }`}>
             {isSubmitted ? 'Done' : 'In progress'}
           </span>
@@ -207,7 +207,7 @@ function RegisterRow({ reg, onOpen }) {
       onClick={() => onOpen(reg._id)}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <div className={`w-2 h-2 rounded-full shrink-0 ${isSubmitted ? 'bg-green-500' : 'bg-amber-400'}`} />
+        <div className={`w-2 h-2 rounded-full shrink-0 ${isSubmitted ? 'bg-ok' : 'bg-warn'}`} />
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">{className}</p>
           <p className="text-xs text-muted-foreground">
@@ -222,9 +222,9 @@ function RegisterRow({ reg, onOpen }) {
         {isSubmitted && entries.length > 0 && (
           <Badge
             className={`text-xs font-semibold min-w-[2.8rem] justify-center ${
-              rate >= 80 ? 'bg-green-100 text-green-800' :
-              rate >= 60 ? 'bg-amber-100 text-amber-800' :
-              'bg-red-100 text-red-800'
+              rate >= 80 ? 'bg-ok/15 text-ok' :
+              rate >= 60 ? 'bg-warn/15 text-warn' :
+              'bg-bad/15 text-bad'
             }`}
             variant="secondary"
           >
@@ -232,7 +232,7 @@ function RegisterRow({ reg, onOpen }) {
           </Badge>
         )}
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          isSubmitted ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+          isSubmitted ? 'bg-ok/12 text-ok' : 'bg-warn/12 text-warn'
         }`}>
           {capitalize(reg.status)}
         </span>
@@ -475,13 +475,13 @@ function SummaryTab({ classes, defaultTerm, defaultAcademicYear }) {
         <div className="space-y-4">
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             <StatCard
-              label="Present"  value={totals.present}   color="bg-green-50 text-green-700"
+              label="Present"  value={totals.present}   color="bg-ok/10 text-ok"
               sub={totals.total > 0 ? `${Math.round((totals.present / totals.total) * 100)}%` : undefined}
             />
-            <StatCard label="Absent"   value={totals.absent}            color="bg-red-50 text-red-700" />
-            <StatCard label="Late"     value={totals.late}              color="bg-amber-50 text-amber-700" />
-            <StatCard label="Half Day" value={totals.half_day ?? 0}     color="bg-purple-50 text-purple-700" />
-            <StatCard label="Excused"  value={totals.excused}           color="bg-blue-50 text-blue-700" />
+            <StatCard label="Absent"   value={totals.absent}            color="bg-bad/10 text-bad" />
+            <StatCard label="Late"     value={totals.late}              color="bg-warn/10 text-warn" />
+            <StatCard label="Half Day" value={totals.half_day ?? 0}     color="bg-muted/50 text-muted-foreground" />
+            <StatCard label="Excused"  value={totals.excused}           color="bg-primary/10 text-primary" />
           </div>
 
           {attendanceRate !== null && (
@@ -489,15 +489,15 @@ function SummaryTab({ classes, defaultTerm, defaultAcademicYear }) {
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground text-xs">Attendance rate · {periodLabel}</span>
                 <span className={`font-bold text-sm ${
-                  attendanceRate >= 80 ? 'text-green-600' :
-                  attendanceRate >= 60 ? 'text-amber-600' : 'text-red-600'
+                  attendanceRate >= 80 ? 'text-ok' :
+                  attendanceRate >= 60 ? 'text-warn' : 'text-bad'
                 }`}>{attendanceRate}%</span>
               </div>
               <div className="h-2.5 rounded-full bg-muted overflow-hidden">
                 <div
                   className={`h-2.5 rounded-full transition-all duration-500 ${
-                    attendanceRate >= 80 ? 'bg-green-500' :
-                    attendanceRate >= 60 ? 'bg-amber-500' : 'bg-red-500'
+                    attendanceRate >= 80 ? 'bg-ok' :
+                    attendanceRate >= 60 ? 'bg-warn' : 'bg-bad'
                   }`}
                   style={{ width: `${attendanceRate}%` }}
                 />
@@ -521,16 +521,16 @@ function SummaryTab({ classes, defaultTerm, defaultAcademicYear }) {
                         <p className="text-sm font-medium">{row.label}</p>
                         <div className="flex items-center gap-3">
                           <div className="hidden sm:flex gap-2 text-xs">
-                            <span className="text-green-700 font-medium">{row.present}P</span>
-                            <span className="text-red-700 font-medium">{row.absent}A</span>
-                            {row.late > 0 && <span className="text-amber-700 font-medium">{row.late}L</span>}
-                            {(row.half_day ?? 0) > 0 && <span className="text-purple-700 font-medium">{row.half_day}H</span>}
+                            <span className="text-ok font-medium">{row.present}P</span>
+                            <span className="text-bad font-medium">{row.absent}A</span>
+                            {row.late > 0 && <span className="text-warn font-medium">{row.late}L</span>}
+                            {(row.half_day ?? 0) > 0 && <span className="text-muted-foreground font-medium">{row.half_day}H</span>}
                           </div>
                           <Badge
                             className={`text-xs font-semibold min-w-[3rem] justify-center ${
-                              rate >= 80 ? 'bg-green-100 text-green-800' :
-                              rate >= 60 ? 'bg-amber-100 text-amber-800' :
-                              'bg-red-100 text-red-800'
+                              rate >= 80 ? 'bg-ok/15 text-ok' :
+                              rate >= 60 ? 'bg-warn/15 text-warn' :
+                              'bg-bad/15 text-bad'
                             }`}
                             variant="secondary"
                           >
@@ -663,6 +663,7 @@ export default function AttendancePage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        overline="Attendance"
         title="Attendance"
         description={`${formatDate(new Date())} · ${todayDone}/${classes.length} classes submitted today`}
       >
@@ -672,10 +673,30 @@ export default function AttendancePage() {
       {/* Today quick stats (admin only) */}
       {adminView && allEntries.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Classes Done" value={`${todayDone}/${classes.length}`} color="bg-slate-50 text-slate-700" />
-          <StatCard label="Present"      value={presentToday}  color="bg-green-50 text-green-700"  sub="today" />
-          <StatCard label="Absent"       value={absentToday}   color="bg-red-50 text-red-700"     sub="today" />
-          <StatCard label="Rate"         value={`${rateToday}%`} color="bg-blue-50 text-blue-700" sub="today" />
+          <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
+            <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-muted-foreground/40" />
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Classes Done</p>
+            <p className="font-mono text-2xl font-semibold tabular-nums leading-none">{todayDone}/{classes.length}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">today</p>
+          </div>
+          <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
+            <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-ok" />
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Present</p>
+            <p className="font-mono text-2xl font-semibold tabular-nums leading-none text-ok">{presentToday}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">today</p>
+          </div>
+          <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
+            <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-bad" />
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Absent</p>
+            <p className="font-mono text-2xl font-semibold tabular-nums leading-none text-bad">{absentToday}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">today</p>
+          </div>
+          <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
+            <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-primary" />
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Rate</p>
+            <p className="font-mono text-2xl font-semibold tabular-nums leading-none text-primary">{rateToday}%</p>
+            <p className="text-[11px] text-muted-foreground mt-1">today</p>
+          </div>
         </div>
       )}
 
@@ -696,7 +717,7 @@ export default function AttendancePage() {
         <TabsContent value="today" className="space-y-3 pt-4">
           {/* School closed banner */}
           {schoolClosedReason && (
-            <div className="flex items-center gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+            <div className="flex items-center gap-2.5 rounded-lg border border-warn/30 bg-warn/5 px-4 py-3 text-warn">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <p className="text-sm font-medium">{schoolClosedReason} Attendance marking is disabled.</p>
             </div>

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const BASE_FEE = 10000;
+const BASE_FEE = 12000;
 const PER_STUDENT = 40;
 const VAT = 0.16;
 const SCHOOL_FEE_PER_STUDENT = 10000;
@@ -106,7 +106,7 @@ const FAQS = [
   },
   {
     q: 'Are all features available at every plan level?',
-    a: 'Core platform pricing is the same for all schools. Optional add-ons are billed per term: Transport (KES 1,500) and Bulk SMS (KES 2,000).',
+    a: 'Yes. Every feature is available at every price point — no locked modules, no premium tiers. The same system that powers a 1,000-student school powers a 100-student school.',
   },
 ];
 
@@ -160,11 +160,10 @@ function Hero() {
         </p>
 
         {/* Value props */}
-        <div className="mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+        <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm max-w-xl mx-auto w-full">
           {[
             ['Under 1% of a student\'s term fees', 'for the whole management system'],
             ['Billed at term start', 'when schools collect fees'],
-            ['Optional add-ons', 'transport, bulk SMS'],
           ].map(([bold, sub]) => (
             <div key={bold} className="flex flex-col items-center gap-1 px-4 py-3 rounded-xl bg-white/5 border border-white/10">
               <span className="font-semibold text-white">{bold}</span>
@@ -253,7 +252,7 @@ function PricingTable() {
                 {!plan.custom && (
                   <div className={cn('mt-4 rounded-lg p-3 text-xs space-y-1', plan.highlight ? 'bg-white/10' : 'bg-slate-50')}>
                     <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
-                      <span>Base fee</span><span>KES 8,500</span>
+                      <span>Base fee</span><span>KES 12,000</span>
                     </div>
                     <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
                       <span>{plan.example} × KES 40</span><span>{fmt(plan.example * 40)}</span>
@@ -288,7 +287,7 @@ function PricingTable() {
         <div className="mt-10 rounded-2xl bg-slate-50 border border-slate-200 p-6 text-center">
           <p className="text-sm text-slate-600 font-medium">The formula behind every plan</p>
           <p className="mt-2 text-slate-800 font-mono text-sm">
-            ( KES 8,500 base + students × KES 40 ) × 1.16 VAT = your term cost
+            ( KES 12,000 base + students × KES 40 ) × 1.16 VAT = your term cost
           </p>
           <p className="mt-2 text-xs text-slate-400">Linear scaling — no step increases, no surprises</p>
         </div>
@@ -390,7 +389,7 @@ function PriceCalculator() {
                 <div className="space-y-2.5 text-sm">
                   <div className="flex justify-between text-slate-400">
                     <span>Base fee</span>
-                    <span className="font-mono">KES 8,500</span>
+                    <span className="font-mono">KES 12,000</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
                     <span>{students.toLocaleString()} × KES 40</span>

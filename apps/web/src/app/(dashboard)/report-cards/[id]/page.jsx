@@ -5,96 +5,331 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ArrowLeft,
-  Printer,
-  CheckCircle,
-  Pencil,
-  RefreshCw,
-  FileDown,
-  Loader2,
-  AlertCircle,
+  ArrowLeft, Printer, CheckCircle, Pencil, RefreshCw, Loader2,
 } from 'lucide-react';
 import { reportCardsApi, settingsApi, schoolsApi, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
 // ── Grade colour map ──────────────────────────────────────────────────────────
-
-const gradeColors = {
-  EE:  'bg-green-100 text-green-800',
-  ME:  'bg-blue-100 text-blue-800',
-  AE:  'bg-yellow-100 text-yellow-800',
-  BE:  'bg-red-100 text-red-800',
-  EE1: 'bg-green-100 text-green-800',
-  EE2: 'bg-green-100 text-green-800',
-  ME1: 'bg-blue-100 text-blue-800',
-  ME2: 'bg-blue-100 text-blue-800',
-  AE1: 'bg-yellow-100 text-yellow-800',
-  AE2: 'bg-yellow-100 text-yellow-800',
-  BE1: 'bg-red-100 text-red-800',
-  BE2: 'bg-red-100 text-red-800',
+const GRADE_COLORS = {
+  EE: 'text-green-700', EE1: 'text-green-700', EE2: 'text-green-600',
+  ME: 'text-blue-700',  ME1: 'text-blue-700',  ME2: 'text-blue-600',
+  AE: 'text-amber-700', AE1: 'text-amber-700', AE2: 'text-amber-600',
+  BE: 'text-red-700',   BE1: 'text-red-700',   BE2: 'text-red-600',
 };
 
-// ── Small helpers ─────────────────────────────────────────────────────────────
+// ── Paper preview ─────────────────────────────────────────────────────────────
+function PaperPreview({ rc, school }) {
+  if (!rc) return null;
+  const student = rc.studentId;
+  const cls     = rc.classId;
+  const att     = rc.attendanceSummary ?? {};
+  const docSerial = rc.documentSerial
+    ?? `RPT-${rc.academicYear}-${String(rc._id).slice(-6).toUpperCase()}`;
 
-function InfoItem({ label, value }) {
   return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium">{value ?? '—'}</p>
+    <div
+      className="bg-[#fafaf8] rounded-lg border p-6 text-[11pt] leading-snug font-[Georgia,serif] space-y-4"
+      style={{ backgroundImage: 'repeating-linear-gradient(transparent, transparent 27px, #e8e8e0 27px, #e8e8e0 28px)' }}
+    >
+      {/* School header */}
+      <div className="text-center pb-3 border-b border-gray-300 space-y-0.5" style={{ backgroundImage: 'none' }}>
+        {school?.name && <p className="font-bold text-base uppercase tracking-wide">{school.name}</p>}
+        {school?.address && <p className="text-xs text-gray-500">{school.address}</p>}
+        <p className="text-sm font-semibold mt-1">Student Progress Report</p>
+        <p className="text-xs text-gray-500 font-mono">{rc.term} · {rc.academicYear} · {docSerial}</p>
+      </div>
+
+      {/* Student details */}
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10pt]" style={{ backgroundImage: 'none' }}>
+        {[
+          ['Name', typeof student === 'object' ? `${student.firstName} ${student.lastName}` : '—'],
+          ['Adm No.', typeof student === 'object' ? student.admissionNumber : '—'],
+          ['Class', cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—'],
+          ['Gender', typeof student === 'object' ? student.gender : '—'],
+          ['Overall Grade', rc.overallGrade ?? '—'],
+          ['Avg Points', rc.averagePoints?.toFixed(2) ?? '—'],
+        ].map(([label, value]) => (
+          <div key={label} className="flex gap-1.5">
+            <span className="text-gray-500 shrink-0">{label}:</span>
+            <span className={`font-semibold ${label === 'Overall Grade' ? (GRADE_COLORS[rc.overallGrade] ?? '') : ''}`}>
+              {value}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Attendance */}
+      {rc.attendanceSummary && (
+        <div style={{ backgroundImage: 'none' }}>
+          <p className="text-[9pt] font-bold uppercase tracking-widest text-gray-400 mb-1">Attendance</p>
+          <div className="flex gap-4 text-[10pt]">
+            {[
+              ['Days', att.totalDays ?? 0],
+              ['Present', att.present ?? 0],
+              ['Absent', att.absent ?? 0],
+              ['Late', att.late ?? 0],
+            ].map(([l, v]) => (
+              <div key={l} className="text-center">
+                <p className="font-bold font-mono">{v}</p>
+                <p className="text-[8pt] text-gray-400">{l}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Subject table */}
+      <div style={{ backgroundImage: 'none' }}>
+        <p className="text-[9pt] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Subject Performance</p>
+        <table className="w-full text-[10pt] border-collapse">
+          <thead>
+            <tr className="border-b border-gray-300">
+              <th className="text-left py-1 text-[8pt] font-bold uppercase tracking-widest text-gray-400">Subject</th>
+              <th className="text-center py-1 text-[8pt] font-bold uppercase tracking-widest text-gray-400">Avg %</th>
+              <th className="text-center py-1 text-[8pt] font-bold uppercase tracking-widest text-gray-400">Grade</th>
+              <th className="text-center py-1 text-[8pt] font-bold uppercase tracking-widest text-gray-400">Pts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(rc.subjects ?? []).map((sub) => (
+              <tr key={sub.subjectId?.toString() ?? sub.subjectName} className="border-b border-gray-100">
+                <td className="py-1.5 pr-2 font-medium">{sub.subjectName}</td>
+                <td className="py-1.5 text-center font-mono text-[10pt]">{sub.averagePercentage?.toFixed(1) ?? '—'}%</td>
+                <td className={`py-1.5 text-center font-bold ${GRADE_COLORS[sub.grade] ?? 'text-gray-700'}`}>
+                  {sub.grade ?? '—'}
+                </td>
+                <td className="py-1.5 text-center font-mono font-semibold">{sub.points ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-gray-300">
+              <td className="py-1.5 font-bold uppercase text-[9pt]">Overall</td>
+              <td />
+              <td className={`py-1.5 text-center font-bold ${GRADE_COLORS[rc.overallGrade] ?? ''}`}>
+                {rc.overallGrade ?? '—'}
+              </td>
+              <td className="py-1.5 text-center font-mono font-bold">{rc.averagePoints?.toFixed(2) ?? '—'}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {/* Remarks */}
+      {(rc.teacherRemarks || rc.principalRemarks) && (
+        <div style={{ backgroundImage: 'none' }}>
+          <p className="text-[9pt] font-bold uppercase tracking-widest text-gray-400 mb-1.5">Remarks</p>
+          {rc.teacherRemarks && (
+            <div className="mb-2">
+              <p className="text-[9pt] text-gray-400">Class Teacher</p>
+              <p className="text-[10pt]" style={{ textWrap: 'balance' }}>{rc.teacherRemarks}</p>
+            </div>
+          )}
+          {rc.principalRemarks && (
+            <div>
+              <p className="text-[9pt] text-gray-400">Principal</p>
+              <p className="text-[10pt]" style={{ textWrap: 'balance' }}>{rc.principalRemarks}</p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// ── PDF status card ───────────────────────────────────────────────────────────
-// Disabled until Cloudinary PDF download is confirmed working.
-// eslint-disable-next-line no-unused-vars
-function PdfStatusCard({ rc, reportCardId }) {
-  return null;
+// ── Edit panel ─────────────────────────────────────────────────────────────────
+function EditPanel({
+  rc, id, isDraft, publishing, regenerating,
+  onPublish, onRegenerate,
+  remarks, setRemarks, savingRemarks, onSaveRemarks,
+  subjectRemarks, setSubjectRemarks, savingSubject, onSaveSubjectRemark,
+}) {
+  const [editRemarks, setEditRemarks] = useState(false);
+  const student = rc.studentId;
+  const cls     = rc.classId;
+
+  return (
+    <div className="w-72 shrink-0 border-l flex flex-col overflow-y-auto">
+      {/* Student summary */}
+      <div className="p-4 border-b space-y-3">
+        <div className="flex items-center gap-2.5">
+          {typeof student === 'object' && (
+            student.photo ? (
+              <img src={student.photo} alt="" className="w-10 h-10 rounded-full object-cover border shrink-0" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-muted text-foreground text-sm font-bold flex items-center justify-center shrink-0">
+                {student.firstName?.[0]}{student.lastName?.[0]}
+              </div>
+            )
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold text-sm truncate">
+              {typeof student === 'object' ? `${student.firstName} ${student.lastName}` : '—'}
+            </p>
+            <p className="text-[10px] text-muted-foreground font-mono">
+              {typeof student === 'object' ? student.admissionNumber : '—'}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-1 text-xs">
+          {[
+            ['Class',      cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—'],
+            ['Term',       rc.term],
+            ['Year',       rc.academicYear],
+            ['Status',     rc.status],
+          ].map(([l, v]) => (
+            <div key={l} className="flex justify-between">
+              <span className="text-muted-foreground">{l}</span>
+              <span className="font-medium capitalize">{v ?? '—'}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      {isDraft && (
+        <div className="p-4 border-b space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Actions</p>
+          <Button
+            variant="outline" size="sm" className="w-full justify-start gap-2"
+            onClick={onRegenerate} disabled={regenerating}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? 'animate-spin' : ''}`} />
+            {regenerating ? 'Regenerating…' : 'Regenerate'}
+          </Button>
+          <Button
+            size="sm" className="w-full justify-start gap-2"
+            onClick={onPublish} disabled={publishing}
+          >
+            <CheckCircle className="h-3.5 w-3.5" />
+            {publishing ? 'Publishing…' : 'Publish'}
+          </Button>
+        </div>
+      )}
+
+      {/* Remarks editor */}
+      <div className="p-4 border-b flex-1">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Remarks</p>
+          {isDraft && !editRemarks && (
+            <button onClick={() => setEditRemarks(true)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <Pencil className="h-3 w-3" /> Edit
+            </button>
+          )}
+        </div>
+
+        {editRemarks ? (
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Class Teacher</Label>
+              <Textarea
+                rows={3}
+                value={remarks.teacherRemarks}
+                onChange={(e) => setRemarks((p) => ({ ...p, teacherRemarks: e.target.value }))}
+                placeholder="Teacher's remarks…"
+                className="text-xs resize-none"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Principal</Label>
+              <Textarea
+                rows={3}
+                value={remarks.principalRemarks}
+                onChange={(e) => setRemarks((p) => ({ ...p, principalRemarks: e.target.value }))}
+                placeholder="Principal's remarks…"
+                className="text-xs resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" className="flex-1" onClick={onSaveRemarks} disabled={savingRemarks}>
+                {savingRemarks ? 'Saving…' : 'Save'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setEditRemarks(false)}>Cancel</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 text-xs">
+            <div>
+              <p className="text-muted-foreground mb-0.5">Class Teacher</p>
+              <p style={{ textWrap: 'balance' }}>
+                {rc.teacherRemarks || <span className="text-muted-foreground italic">No remarks</span>}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground mb-0.5">Principal</p>
+              <p style={{ textWrap: 'balance' }}>
+                {rc.principalRemarks || <span className="text-muted-foreground italic">No remarks</span>}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Subject remarks */}
+      {isDraft && (rc.subjects ?? []).length > 0 && (
+        <div className="p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Subject Remarks</p>
+          <div className="space-y-2.5">
+            {(rc.subjects ?? []).map((sub) => {
+              const subKey = sub.subjectId?.toString() ?? sub.subjectName;
+              return (
+                <div key={subKey}>
+                  <p className="text-[10px] text-muted-foreground mb-1">{sub.subjectName}</p>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      placeholder="Add remark…"
+                      value={subjectRemarks[subKey] ?? ''}
+                      onChange={(e) => setSubjectRemarks((p) => ({ ...p, [subKey]: e.target.value }))}
+                      className="flex-1 text-xs border border-input rounded px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-w-0"
+                    />
+                    <Button
+                      size="sm" variant="outline" className="text-xs h-7 px-2 shrink-0"
+                      disabled={savingSubject === subKey}
+                      onClick={() => onSaveSubjectRemark(subKey, subjectRemarks[subKey])}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-
+// ── Main page ──────────────────────────────────────────────────────────────────
 export default function ReportCardDetailPage() {
   const params  = useParams();
   const id      = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const router  = useRouter();
   const queryClient = useQueryClient();
 
-  const [editing,                setEditing]                = useState(false);
-  const [publishConfirmOpen,     setPublishConfirmOpen]     = useState(false);
-  const [regenerateConfirmOpen,  setRegenerateConfirmOpen]  = useState(false);
-  const [remarks, setRemarks] = useState({ teacherRemarks: '', principalRemarks: '' });
-  const [subjectRemarks,         setSubjectRemarks]         = useState({});
-  const [savingSubject,          setSavingSubject]          = useState(null);
+  const [publishConfirmOpen,    setPublishConfirmOpen]    = useState(false);
+  const [regenerateConfirmOpen, setRegenerateConfirmOpen] = useState(false);
+  const [remarks,        setRemarks]        = useState({ teacherRemarks: '', principalRemarks: '' });
+  const [subjectRemarks, setSubjectRemarks] = useState({});
+  const [savingSubject,  setSavingSubject]  = useState(null);
 
-  // Poll every 5 s while the PDF worker is running so the status card updates
-  // automatically without the user needing to refresh.
   const { data: rc, isLoading } = useQuery({
     queryKey: ['report-card', id],
     queryFn: async () => {
       const res  = await reportCardsApi.get(id);
       const card = res.data?.reportCard ?? res.data?.data ?? res.data;
-      setRemarks({
-        teacherRemarks:   card?.teacherRemarks   ?? '',
-        principalRemarks: card?.principalRemarks ?? '',
-      });
+      setRemarks({ teacherRemarks: card?.teacherRemarks ?? '', principalRemarks: card?.principalRemarks ?? '' });
       const subjMap = {};
       (card?.subjects ?? []).forEach((s) => {
         subjMap[s.subjectId?.toString() ?? s.subjectName] = s.teacherRemark ?? '';
@@ -113,24 +348,14 @@ export default function ReportCardDetailPage() {
     },
   });
 
-  const { data: settings } = useQuery({
-    queryKey: ['settings'],
-    queryFn: async () => {
-      const res = await settingsApi.get();
-      return res.data?.settings ?? res.data?.data ?? res.data;
-    },
-  });
-
   const { mutate: saveRemarks, isPending: savingRemarks } = useMutation({
-    mutationFn: () =>
-      reportCardsApi.updateRemarks(id, {
-        teacherRemarks:   remarks.teacherRemarks   || undefined,
-        principalRemarks: remarks.principalRemarks || undefined,
-      }),
+    mutationFn: () => reportCardsApi.updateRemarks(id, {
+      teacherRemarks:   remarks.teacherRemarks   || undefined,
+      principalRemarks: remarks.principalRemarks || undefined,
+    }),
     onSuccess: () => {
       toast.success('Remarks saved');
       queryClient.invalidateQueries({ queryKey: ['report-card', id] });
-      setEditing(false);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -146,12 +371,11 @@ export default function ReportCardDetailPage() {
   });
 
   const { mutate: regenerate, isPending: regenerating } = useMutation({
-    mutationFn: () =>
-      reportCardsApi.generate({
-        studentId:    typeof rc?.studentId === 'object' ? rc.studentId._id : rc?.studentId,
-        academicYear: rc?.academicYear,
-        term:         rc?.term,
-      }),
+    mutationFn: () => reportCardsApi.generate({
+      studentId:    typeof rc?.studentId === 'object' ? rc.studentId._id : rc?.studentId,
+      academicYear: rc?.academicYear,
+      term:         rc?.term,
+    }),
     onSuccess: () => {
       toast.success('Report card regenerated with latest results');
       queryClient.invalidateQueries({ queryKey: ['report-card', id] });
@@ -172,442 +396,88 @@ export default function ReportCardDetailPage() {
     }
   }
 
-  // ── Loading skeleton ────────────────────────────────────────────────────────
-
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-5xl">
         <Skeleton className="h-8 w-56" />
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-40 w-full" />
+        <div className="flex gap-4">
+          <Skeleton className="flex-1 h-[500px]" />
+          <Skeleton className="w-64 h-[500px]" />
+        </div>
       </div>
     );
   }
 
-  if (!rc) {
-    return <p className="text-muted-foreground">Report card not found.</p>;
-  }
+  if (!rc) return <p className="text-muted-foreground">Report card not found.</p>;
 
-  // ── Derived values ──────────────────────────────────────────────────────────
-
-  const student        = rc.studentId;
-  const cls            = rc.classId;
-  const isDraft        = rc.status === 'draft';
-  const documentSerial = rc.documentSerial
-    ?? `RPT-${rc.academicYear}-${String(rc._id).slice(-6).toUpperCase()}`;
-
-  // eslint-disable-next-line no-unused-vars
-  const principalName = settings?.principalName ?? school?.principalName ?? '';
-
-  // ── Render ──────────────────────────────────────────────────────────────────
+  const student = rc.studentId;
+  const cls     = rc.classId;
+  const isDraft = rc.status === 'draft';
 
   return (
-    <div className="space-y-5 max-w-4xl">
-
-      {/* ── Page header ──────────────────────────────────────────────────── */}
+    <div className="space-y-4 max-w-5xl">
+      {/* Page header */}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold">
-            {typeof student === 'object'
-              ? `${student.firstName} ${student.lastName}`
-              : 'Report Card'}
+          <h1 className="text-lg font-bold">
+            {typeof student === 'object' ? `${student.firstName} ${student.lastName}` : 'Report Card'}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground font-mono">
             {cls?.name}{cls?.stream ? ` ${cls.stream}` : ''} · {rc.term} · {rc.academicYear}
           </p>
         </div>
-        <div className="flex gap-2 items-center flex-wrap">
-          <Badge className={isDraft ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}>
-            {isDraft ? 'Draft' : 'Published'}
-          </Badge>
+        <div className="flex items-center gap-2">
           <Button
-            variant="outline"
-            size="sm"
+            variant="outline" size="sm"
             onClick={() => window.open(`/report-cards/${id}/print`, '_blank')}
           >
             <Printer className="h-4 w-4 mr-1" /> Print
           </Button>
-          {isDraft && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRegenerateConfirmOpen(true)}
-              disabled={regenerating}
-              title="Re-pulls all exam results and rebuilds subject grades. Remarks are kept."
-            >
-              <RefreshCw className={`h-4 w-4 mr-1 ${regenerating ? 'animate-spin' : ''}`} />
-              {regenerating ? 'Regenerating…' : 'Regenerate'}
-            </Button>
-          )}
-          {isDraft && (
-            <Button
-              size="sm"
-              onClick={() => setPublishConfirmOpen(true)}
-              disabled={publishing}
-            >
-              <CheckCircle className="h-4 w-4 mr-1" /> Publish
-            </Button>
-          )}
         </div>
       </div>
 
-      {/* ── PDF status ───────────────────────────────────────────────────── */}
-      <PdfStatusCard rc={rc} reportCardId={id} />
+      {/* Two-pane layout */}
+      <div className="flex gap-0 rounded-lg border overflow-hidden" style={{ minHeight: '500px' }}>
+        {/* Left: paper preview */}
+        <div className="flex-1 p-5 overflow-y-auto bg-muted/10">
+          <PaperPreview rc={rc} school={school} />
+        </div>
 
-      {/* ── Student info ─────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Student Information
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {typeof student === 'object' && (
-            <div className="flex items-center gap-3 mb-4">
-              {student.photo ? (
-                <img
-                  src={student.photo}
-                  alt={`${student.firstName} ${student.lastName}`}
-                  className="w-16 h-16 rounded-full object-cover border"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-700 text-lg font-bold flex items-center justify-center">
-                  {student.firstName?.[0]}{student.lastName?.[0]}
-                </div>
-              )}
-              <div>
-                <p className="text-base font-semibold">
-                  {student.firstName} {student.lastName}
-                </p>
-                <p className="text-xs text-muted-foreground font-mono">
-                  {student.admissionNumber}
-                </p>
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <InfoItem
-              label="Full Name"
-              value={typeof student === 'object'
-                ? `${student.firstName} ${student.lastName}`
-                : '—'}
-            />
-            <InfoItem
-              label="Admission No."
-              value={typeof student === 'object' ? student.admissionNumber : '—'}
-            />
-            <InfoItem
-              label="Class"
-              value={cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—'}
-            />
-            <InfoItem label="Gender"        value={typeof student === 'object' ? student.gender : '—'} />
-            <InfoItem label="Academic Year" value={rc.academicYear} />
-            <InfoItem label="Term"          value={rc.term} />
-            <InfoItem label="Document Serial" value={documentSerial} />
-            <InfoItem label="Overall Grade"   value={rc.overallGrade ?? '—'} />
-            <InfoItem label="Average Points"  value={rc.averagePoints?.toFixed(2) ?? '—'} />
-          </div>
-        </CardContent>
-      </Card>
+        {/* Right: edit panel */}
+        <EditPanel
+          rc={rc}
+          id={id}
+          isDraft={isDraft}
+          publishing={publishing}
+          regenerating={regenerating}
+          onPublish={() => setPublishConfirmOpen(true)}
+          onRegenerate={() => setRegenerateConfirmOpen(true)}
+          remarks={remarks}
+          setRemarks={setRemarks}
+          savingRemarks={savingRemarks}
+          onSaveRemarks={saveRemarks}
+          subjectRemarks={subjectRemarks}
+          setSubjectRemarks={setSubjectRemarks}
+          savingSubject={savingSubject}
+          onSaveSubjectRemark={saveSubjectRemark}
+        />
+      </div>
 
-      {/* ── Attendance summary ────────────────────────────────────────────── */}
-      {rc.attendanceSummary && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-              Attendance Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-5 gap-3 text-center">
-              {[
-                { label: 'Total Days', value: rc.attendanceSummary.totalDays },
-                { label: 'Present',    value: rc.attendanceSummary.present },
-                { label: 'Absent',     value: rc.attendanceSummary.absent },
-                { label: 'Late',       value: rc.attendanceSummary.late },
-                { label: 'Excused',    value: rc.attendanceSummary.excused },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-muted/40 rounded-lg py-3">
-                  <p className="text-xl font-bold">{value ?? 0}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ── Subject performance ───────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Subject Performance
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30">
-                  <th className="text-left py-2.5 px-4 font-medium text-muted-foreground">Subject</th>
-                  <th className="text-center py-2.5 px-3 font-medium text-muted-foreground">Avg %</th>
-                  <th className="text-center py-2.5 px-3 font-medium text-muted-foreground">Grade</th>
-                  <th className="text-center py-2.5 px-3 font-medium text-muted-foreground">Points</th>
-                  <th className="text-left py-2.5 px-4 font-medium text-muted-foreground">
-                    Teacher Remark
-                    {isDraft && (
-                      <span className="text-xs font-normal ml-1 text-muted-foreground">
-                        (editable)
-                      </span>
-                    )}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {(rc.subjects ?? []).map((subject) => {
-                  const subKey = subject.subjectId?.toString() ?? subject.subjectName;
-                  return (
-                    <tr key={subKey} className="hover:bg-muted/20 transition-colors">
-                      <td className="py-3 px-4 font-medium">
-                        {subject.subjectName}
-                        {subject.subjectCode && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({subject.subjectCode})
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-center tabular-nums">
-                        {subject.averagePercentage?.toFixed(1) ?? '—'}%
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {subject.grade ? (
-                          <Badge
-                            className={`text-xs ${gradeColors[subject.grade] ?? 'bg-gray-100 text-gray-800'}`}
-                          >
-                            {subject.grade}
-                          </Badge>
-                        ) : '—'}
-                      </td>
-                      <td className="py-3 px-3 text-center font-semibold tabular-nums">
-                        {subject.points ?? '—'}
-                      </td>
-                      <td className="py-3 px-4">
-                        {isDraft ? (
-                          <div className="flex items-center gap-2 min-w-0">
-                            <input
-                              type="text"
-                              placeholder="Add remark…"
-                              value={subjectRemarks[subKey] ?? ''}
-                              onChange={(e) =>
-                                setSubjectRemarks((p) => ({ ...p, [subKey]: e.target.value }))
-                              }
-                              className="flex-1 text-xs border border-input rounded-md px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-ring min-w-0"
-                            />
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7 px-2 shrink-0"
-                              disabled={savingSubject === subKey}
-                              onClick={() => saveSubjectRemark(subKey, subjectRemarks[subKey])}
-                            >
-                              Save
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {subject.teacherRemark ?? '—'}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t bg-muted/30">
-                  <td className="py-2.5 px-4 font-semibold">Overall</td>
-                  <td className="py-2.5 px-3 text-center tabular-nums font-semibold">—</td>
-                  <td className="py-2.5 px-3 text-center">
-                    {rc.overallGrade ? (
-                      <Badge
-                        className={gradeColors[rc.overallGrade] ?? 'bg-gray-100 text-gray-800'}
-                      >
-                        {rc.overallGrade}
-                      </Badge>
-                    ) : '—'}
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-bold tabular-nums">
-                    {rc.averagePoints?.toFixed(2) ?? '—'}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Remarks ───────────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Remarks
-          </CardTitle>
-          {isDraft && !editing && (
-            <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-              <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {editing ? (
-            <>
-              <div className="space-y-1.5">
-                <Label>Class Teacher&apos;s Remarks</Label>
-                <Textarea
-                  rows={3}
-                  value={remarks.teacherRemarks}
-                  onChange={(e) =>
-                    setRemarks((p) => ({ ...p, teacherRemarks: e.target.value }))
-                  }
-                  placeholder="Enter class teacher's remarks…"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Principal&apos;s Remarks</Label>
-                <Textarea
-                  rows={3}
-                  value={remarks.principalRemarks}
-                  onChange={(e) =>
-                    setRemarks((p) => ({ ...p, principalRemarks: e.target.value }))
-                  }
-                  placeholder="Enter principal's remarks…"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => saveRemarks()} disabled={savingRemarks}>
-                  Save Remarks
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setEditing(false);
-                    setRemarks({
-                      teacherRemarks:   rc.teacherRemarks   ?? '',
-                      principalRemarks: rc.principalRemarks ?? '',
-                    });
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
-                  Class Teacher&apos;s Remarks
-                </p>
-                <p className="text-sm">
-                  {rc.teacherRemarks || (
-                    <span className="text-muted-foreground italic">No remarks added.</span>
-                  )}
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Principal&apos;s Remarks</p>
-                <p className="text-sm">
-                  {rc.principalRemarks || (
-                    <span className="text-muted-foreground italic">No remarks added.</span>
-                  )}
-                </p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Exam breakdown ────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-            Exam Breakdown by Subject
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {(rc.subjects ?? []).map((subject) => (
-            <div
-              key={subject.subjectId?.toString() ?? subject.subjectName}
-              className="border-b last:border-0"
-            >
-              <div className="px-4 py-2 bg-muted/20">
-                <span className="text-sm font-semibold">{subject.subjectName}</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-muted-foreground">
-                      <th className="text-left px-4 py-1.5 font-medium">Exam</th>
-                      <th className="text-left px-3 py-1.5 font-medium">Type</th>
-                      <th className="text-center px-3 py-1.5 font-medium">Marks</th>
-                      <th className="text-center px-3 py-1.5 font-medium">Out of</th>
-                      <th className="text-center px-3 py-1.5 font-medium">%</th>
-                      <th className="text-center px-3 py-1.5 font-medium">Grade</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50">
-                    {(subject.exams ?? []).map((exam) => (
-                      <tr key={exam.examId?.toString()} className="hover:bg-muted/10">
-                        <td className="px-4 py-1.5">{exam.examName}</td>
-                        <td className="px-3 py-1.5 capitalize text-muted-foreground">
-                          {exam.examType}
-                        </td>
-                        <td className="px-3 py-1.5 text-center tabular-nums">{exam.marks}</td>
-                        <td className="px-3 py-1.5 text-center tabular-nums text-muted-foreground">
-                          {exam.totalMarks}
-                        </td>
-                        <td className="px-3 py-1.5 text-center tabular-nums">
-                          {exam.percentage?.toFixed(1)}%
-                        </td>
-                        <td className="px-3 py-1.5 text-center">
-                          {exam.grade ? (
-                            <Badge
-                              className={`text-xs ${gradeColors[exam.grade] ?? 'bg-gray-100 text-gray-800'}`}
-                            >
-                              {exam.grade}
-                            </Badge>
-                          ) : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* ── Confirm dialogs ───────────────────────────────────────────────── */}
+      {/* Confirm dialogs */}
       <AlertDialog open={regenerateConfirmOpen} onOpenChange={setRegenerateConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Regenerate Report Card?</AlertDialogTitle>
             <AlertDialogDescription>
-              This rebuilds the report card using the latest results. Existing remarks will be
-              preserved.
+              This rebuilds the report card using the latest results. Existing remarks will be preserved.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => regenerate()} disabled={regenerating}>
-              Continue
-            </AlertDialogAction>
+            <AlertDialogAction onClick={() => regenerate()} disabled={regenerating}>Continue</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -622,13 +492,10 @@ export default function ReportCardDetailPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => publish()} disabled={publishing}>
-              Publish
-            </AlertDialogAction>
+            <AlertDialogAction onClick={() => publish()} disabled={publishing}>Publish</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }

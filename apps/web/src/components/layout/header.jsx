@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Menu, Bell, LogOut, Settings, Loader2, CheckCheck, UserPen, LogIn, MapPin, CheckCircle2 } from 'lucide-react';
+import { Menu, Bell, LogOut, Settings, Loader2, CheckCheck, UserPen, LogIn, CheckCircle2, Search } from 'lucide-react';
+import { SearchDialog } from './search-dialog';
 import { toast } from 'sonner';
 import { useMutation, useQuery, useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { authApi, notificationsApi, checkInsApi, getErrorMessage } from '@/lib/api';
@@ -30,12 +31,72 @@ const CHECK_IN_ROLES = [
 ];
 const SOFT_ENFORCE_ROLES = ['headteacher', 'deputy_headteacher', 'director'];
 
-export function Header({ onMenuClick, title, schoolName, termLabel, schoolDayStatus }) {
+function TermChip({ termLabel, termWeek, termTotalWeeks, termProgressPct, schoolDayStatus, tomorrowHoliday }) {
+  if (!termLabel && !schoolDayStatus) return null;
+
+  return (
+    <div className="hidden md:flex items-center gap-2 shrink-0">
+      {termLabel && (
+        <div className="flex items-center gap-2 rounded-full border border-border px-3 py-1">
+          <span className="text-xs font-medium text-foreground">{termLabel.split(' · ')[0]}</span>
+          {termProgressPct != null && (
+            <div className="w-14 h-1 rounded-full bg-border overflow-hidden">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.min(100, termProgressPct)}%` }}
+              />
+            </div>
+          )}
+          {termWeek != null && termTotalWeeks != null && (
+            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+              wk {termWeek}/{termTotalWeeks}
+            </span>
+          )}
+        </div>
+      )}
+      {tomorrowHoliday && (
+        <span className="text-[11px] font-medium text-warn border border-warn/30 bg-warn/8 rounded-full px-2.5 py-1">
+          Holiday tomorrow
+        </span>
+      )}
+      {schoolDayStatus && !tomorrowHoliday && (
+        <span className="text-[11px] font-medium text-muted-foreground border border-border rounded-full px-2.5 py-1 max-w-[200px] truncate">
+          {schoolDayStatus}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function Header({
+  onMenuClick,
+  title,
+  schoolName,
+  termLabel,
+  termWeek,
+  termTotalWeeks,
+  termProgressPct,
+  schoolDayStatus,
+  tomorrowHoliday,
+}) {
   const router = useRouter();
   const { user, logout, setUser } = useAuthStore();
   const queryClient = useQueryClient();
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', phone: '' });
+  const [profileOpen, setProfileOpen]   = useState(false);
+  const [profileForm, setProfileForm]   = useState({ firstName: '', lastName: '', phone: '' });
+  const [searchOpen, setSearchOpen]     = useState(false);
+
+  // ⌘K / Ctrl+K shortcut
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, []);
   const isFetching = useIsFetching();
   const {
     notifications,
@@ -60,10 +121,9 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
     mutationFn: markReadSocket,
   });
 
-  // ── Check-in (header quick button) ────────────────────────────────────────
+  // ── Check-in ──────────────────────────────────────────────────────────────
   const canCheckIn = !!user && CHECK_IN_ROLES.includes(user.role);
-  const [ciState, setCiState]       = useState('idle'); // idle | locating | submitting
-  const [pendingCiPayload, setPendingCiPayload] = useState(null);
+  const [ciState, setCiState] = useState('idle');
 
   const { data: todayCheckIns } = useQuery({
     queryKey: ['checkins-today'],
@@ -81,13 +141,13 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
   const checkInType = morningIn && !eveningOut ? 'evening_out' : 'morning_in';
   const allDoneToday = !!(morningIn && eveningOut);
 
+  const checkedInTime = morningIn
+    ? new Date(morningIn.timestamp ?? morningIn.createdAt).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
   const { mutate: submitCi } = useMutation({
     mutationFn: (data) => checkInsApi.checkIn(data),
-    onSuccess: (res) => {
-      const data = res.data?.checkIn ?? res.data?.data?.checkIn;
-      const isLate = data?.status === 'late';
-      const label  = checkInType === 'morning_in' ? 'Checked in' : 'Checked out';
-      toast.success(`${label}${isLate ? ' (late)' : ''} · ${new Date().toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}`);
+    onSuccess: () => {
       setCiState('idle');
       queryClient.invalidateQueries({ queryKey: ['checkins-today'] });
       queryClient.invalidateQueries({ queryKey: ['teacher-dashboard'] });
@@ -114,14 +174,11 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
     }
     navigator.geolocation.getCurrentPosition(
       ({ coords: { latitude, longitude, accuracy } }) => {
-        const payload = { latitude, longitude, accuracy, check_in_type: checkInType, client_timestamp: new Date().toISOString() };
-        setPendingCiPayload(payload);
         setCiState('submitting');
-        submitCi(payload);
+        submitCi({ latitude, longitude, accuracy, check_in_type: checkInType, client_timestamp: new Date().toISOString() });
       },
       (err) => {
-        const msg = err.code === 1 ? 'Location access denied. Enable location to check in.' : 'Could not get your location. Please try again.';
-        toast.error(msg);
+        toast.error(err.code === 1 ? 'Location access denied.' : 'Could not get your location.');
         setCiState('idle');
       },
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
@@ -141,61 +198,80 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
   });
 
   return (
-    <header className="h-14 border-b border-border/60 bg-background/80 backdrop-blur-sm flex items-center gap-4 px-4 shrink-0 sticky top-0 z-40">
+    <header className="h-12 border-b border-border bg-background flex items-center gap-3 px-4 shrink-0 sticky top-0 z-40">
+      {/* Loading bar */}
+      {isFetching > 0 && (
+        <div className="absolute inset-x-0 bottom-0 h-[2px] bg-primary/20">
+          <div className="h-full w-1/3 bg-primary animate-pulse rounded-full" />
+        </div>
+      )}
+
       {/* Mobile menu toggle */}
-      <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>
-        <Menu className="h-5 w-5" />
+      <Button variant="ghost" size="icon" className="lg:hidden h-8 w-8 shrink-0" onClick={onMenuClick}>
+        <Menu className="h-4 w-4" />
       </Button>
 
-      {/* Page title + global fetch indicator */}
-      <div className="flex-1 hidden sm:flex items-center gap-2.5 min-w-0">
-        <h1 className="text-base font-semibold tracking-tight shrink-0">{title}</h1>
-        {schoolName && (
-          <span className="text-xs text-muted-foreground truncate border-l pl-2">
-            {schoolName}
-          </span>
-        )}
-        {termLabel && (
-          <span className="text-xs text-muted-foreground truncate border-l pl-2">
-            {termLabel}
-          </span>
-        )}
-        {schoolDayStatus && (
-          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 truncate">
-            {schoolDayStatus}
-          </span>
-        )}
-        {isFetching > 0 && (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-        )}
-      </div>
-      <div className="flex-1 sm:hidden min-w-0">
-        <div className="flex items-center gap-2">
-          <h1 className="text-sm font-semibold tracking-tight truncate">{title}</h1>
-          {isFetching > 0 && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground shrink-0" />}
-        </div>
-        {(termLabel || schoolDayStatus) && (
-          <p className="text-[11px] text-muted-foreground truncate">
-            {termLabel}
-            {termLabel && schoolDayStatus ? ' · ' : ''}
-            {schoolDayStatus}
-          </p>
-        )}
-      </div>
+      {/* Page title */}
+      <h1 className="font-display text-sm font-semibold tracking-tight text-foreground shrink-0">
+        {title}
+      </h1>
 
-      {/* Right side */}
-      <div className="flex items-center gap-2">
-        {/* Check-in quick button */}
+      {/* Term chip — desktop */}
+      <TermChip
+        termLabel={termLabel}
+        termWeek={termWeek}
+        termTotalWeeks={termTotalWeeks}
+        termProgressPct={termProgressPct}
+        schoolDayStatus={schoolDayStatus}
+        tomorrowHoliday={tomorrowHoliday}
+      />
+
+      <div className="flex-1" />
+
+      {/* Search — desktop full field */}
+      <button
+        type="button"
+        aria-label="Search (⌘K)"
+        onClick={() => setSearchOpen(true)}
+        className="hidden lg:flex items-center gap-2 h-8 w-56 rounded-md border border-border bg-background px-3 text-xs text-muted-foreground shadow-[inset_0_1px_2px_hsl(var(--border)/0.5)] hover:border-foreground/25 hover:shadow-[inset_0_1px_2px_hsl(var(--border)/0.8)] transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Search className="h-3.5 w-3.5 shrink-0 opacity-50" />
+        <span className="flex-1 text-left truncate">Quick search…</span>
+        <kbd className="font-mono text-[9px] tabular-nums leading-none shrink-0 bg-muted border border-border/70 rounded px-1.5 py-0.5 text-muted-foreground/70">
+          ⌘K
+        </kbd>
+      </button>
+
+      {/* Search — mobile icon only */}
+      <button
+        type="button"
+        aria-label="Search"
+        onClick={() => setSearchOpen(true)}
+        className="lg:hidden h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+
+      <SearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+
+      {/* Right side actions */}
+      <div className="flex items-center gap-1.5">
+        {/* Check-in button */}
         {canCheckIn && (
           allDoneToday ? (
-            <span className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Done for today
+            <span className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-muted-foreground border border-border rounded-full px-3 py-1 shrink-0">
+              <CheckCircle2 className="h-3.5 w-3.5 text-ok" />
+              <span className="font-mono tabular-nums">{checkedInTime ?? 'Done'}</span>
             </span>
           ) : (
             <Button
               size="sm"
               variant={morningIn ? 'outline' : 'default'}
-              className={`gap-1.5 h-8 px-3 text-xs font-medium ${morningIn ? 'border-slate-300' : 'bg-cyan-700 hover:bg-cyan-800 text-white'}`}
+              className={`gap-1.5 h-8 px-3 text-xs font-medium shrink-0 ${
+                morningIn
+                  ? 'border-border text-foreground hover:bg-muted'
+                  : 'bg-foreground text-background hover:bg-foreground/90'
+              }`}
               disabled={ciState !== 'idle'}
               onClick={handleHeaderCheckIn}
               data-tour="checkin-button"
@@ -203,20 +279,21 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
               {ciState === 'locating' || ciState === 'submitting' ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : morningIn ? (
-                <><LogOut className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Check Out</span></>
+                <><LogOut className="h-3.5 w-3.5" /><span className="hidden sm:inline">Check Out</span></>
               ) : (
-                <><LogIn className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Check In</span></>
+                <><LogIn className="h-3.5 w-3.5" /><span className="hidden sm:inline">Check In</span></>
               )}
             </Button>
           )
         )}
 
+        {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-muted-foreground relative">
-              <Bell className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground relative">
+              <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] leading-4 text-center">
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-bad text-white text-[9px] leading-4 text-center font-mono tabular-nums">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
@@ -261,11 +338,12 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* Avatar / user menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-blue-600 text-white text-xs">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                   {user ? getInitials(user.firstName, user.lastName) : '??'}
                 </AvatarFallback>
               </Avatar>
@@ -300,6 +378,8 @@ export function Header({ onMenuClick, title, schoolName, termLabel, schoolDaySta
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Profile edit dialog */}
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>

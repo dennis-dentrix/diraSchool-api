@@ -17,8 +17,14 @@ const paymentNotificationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['matched', 'unmatched', 'duplicate', 'parse_failed', 'ambiguous'],
+      enum: ['matched', 'unmatched', 'duplicate', 'parse_failed', 'ambiguous', 'allocated'],
       required: true,
+      index: true,
+    },
+    source: {
+      type: String,
+      enum: ['sms', 'daraja_c2b'],
+      default: 'sms',
       index: true,
     },
     messageId: {
@@ -71,6 +77,13 @@ const paymentNotificationSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    allocatedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    allocatedAt: {
+      type: Date,
+    },
     parsedAt: {
       type: Date,
       default: Date.now,
@@ -86,6 +99,7 @@ paymentNotificationSchema.index(
     partialFilterExpression: { transactionId: { $type: 'string' } },
   }
 );
+paymentNotificationSchema.index({ schoolId: 1, source: 1, status: 1, createdAt: -1 });
 
 export default mongoose.models.PaymentNotification ||
   mongoose.model('PaymentNotification', paymentNotificationSchema);

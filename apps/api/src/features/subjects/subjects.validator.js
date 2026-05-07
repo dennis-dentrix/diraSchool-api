@@ -8,6 +8,7 @@ const createSubjectSchema = z.object({
   name:       z.string().trim().min(1, 'Subject name is required'),
   code:       z.string().trim().min(1).max(20).optional(),
   department: z.string().trim().min(1).optional(),
+  tier:       z.enum(['core', 'optional', 'kcse']).optional(),
   // Primary + additional teachers who can deliver this subject
   teacherIds: z.array(z.string().regex(objectIdRegex, 'Invalid teacher ID')).optional(),
   // Head of Department
@@ -20,6 +21,7 @@ const updateSubjectSchema = z.object({
   code:       z.string().trim().min(1).max(20).nullable().optional(),
   isActive:   z.boolean().optional(),
   department: z.string().trim().min(1).nullable().optional(),
+  tier:       z.enum(['core', 'optional', 'kcse']).nullable().optional(),
   teacherIds: z.array(z.string().regex(objectIdRegex, 'Invalid teacher ID')).optional(),
   hodId:      z.string().regex(objectIdRegex, 'Invalid HOD ID').nullable().optional(),
 }).strict();

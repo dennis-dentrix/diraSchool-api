@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, Download, Receipt, Wallet, Printer } from 'lucide-react';
+import { Plus, Search, Download, Wallet, Printer, Receipt, ChevronRight, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -11,314 +11,588 @@ import {
   feesApi, studentsApi, classesApi, exportApi, settingsApi, schoolsApi,
   downloadBlob, getErrorMessage,
 } from '@/lib/api';
-import { buildDocumentHeaderHtml, getDocumentHeaderCss, getDocumentHeaderData, escapeHtml } from '@/lib/document-print';
-import { formatCurrency, formatDate, getStatusColor, capitalize } from '@/lib/utils';
+import { formatCurrency, formatDate, capitalize } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { PAYMENT_METHODS, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { getCurrentTermFromSettings } from '@/lib/school-term';
 import { useAuth } from '@/hooks/use-auth';
+import { useDebounce } from '@/hooks/use-debounce';
 import { PageHeader } from '@/components/shared/page-header';
 import { RefreshButton } from '@/components/shared/refresh-button';
-import { SchoolDocumentHeader } from '@/components/shared/school-document-header';
-import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useDebounce } from '@/hooks/use-debounce';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+
+const METHODS = ['cash', 'mpesa', 'bank', 'cheque'];
 
 const schema = z.object({
-  studentId: z.string().min(1, 'Please select a student'),
-  amount: z.coerce.number().positive('Amount must be positive'),
-  method: z.enum(['cash', 'mpesa', 'bank']),
-  reference: z.string().optional(),
-  paymentDate: z.string().optional(),
+  studentId:    z.string().min(1, 'Please select a student'),
+  amount:       z.coerce.number().positive('Amount must be positive'),
+  method:       z.enum(['cash', 'mpesa', 'bank', 'cheque']),
+  reference:    z.string().optional(),
+  paymentDate:  z.string().optional(),
   academicYear: z.string().min(4, 'Required'),
-  term: z.string().min(1, 'Required'),
-  notes: z.string().optional(),
+  term:         z.string().min(1, 'Required'),
+  notes:        z.string().optional(),
 });
 
-function ReceiptPreview({ data }) {
-  const receiptRef = useRef(null);
+// ── Method pill ───────────────────────────────────────────────────────────────
+const METHOD_CLS = {
+  mpesa:  'border-ok/30 text-ok bg-ok/5',
+  bank:   'border-primary/30 text-primary bg-primary/5',
+  cash:   'border-border text-foreground',
+  cheque: 'border-muted-foreground/30 text-muted-foreground',
+};
+function MethodPill({ method }) {
+  const m = (method ?? '').toLowerCase();
+  const label = m === 'mpesa' ? 'M-Pesa' : m ? m[0].toUpperCase() + m.slice(1) : 'Cash';
+  return (
+    <span className={cn('inline-flex items-center rounded-full border px-2 py-0 text-[10px] font-medium', METHOD_CLS[m] ?? METHOD_CLS.cash)}>
+      {label}
+    </span>
+  );
+}
 
-  const handlePrint = () => {
-    const header = getDocumentHeaderData({
-      school: data.school || {},
-      settings: data.settings || {},
-      title: 'Finance',
-      subtitle: 'Fee Payment Receipt',
-      serial: data.receiptNumber ?? '',
-      generatedAt: data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString()),
-    });
-    const win = window.open('', '', 'width=700,height=950');
-    win.document.write(`<!DOCTYPE html><html><head><title>Fee Receipt</title><style>
-      *{margin:0;padding:0;box-sizing:border-box;}
-      body{font-family:Arial,sans-serif;padding:24px;color:#111;}
-      ${getDocumentHeaderCss()}
-      .receipt{border:1px solid #d7deea;border-radius:8px;overflow:hidden;}
-      .receipt-head{display:flex;justify-content:space-between;gap:16px;padding:12px 14px;border-bottom:1px solid #e5e7eb;background:#f8fafc;}
-      .receipt-title{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;}
-      .receipt-no{font-size:12px;text-align:right;}
-      .body{padding:12px 14px;}
-      .row{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:13px;}
-      .row:last-child{border-bottom:none;}
-      .lbl{color:#555;}
-      .val{font-weight:600;text-align:right;}
-      .total{border-top:2px solid #111;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;}
-      .total .t-label{font-size:14px;font-weight:700;}
-      .total .t-amount{font-size:18px;font-weight:800;}
-      .footer{padding:12px;text-align:center;font-size:11px;color:#666;}
-    </style></head><body>
-      ${buildDocumentHeaderHtml(header)}
-      <div class="receipt">
-        <div class="receipt-head">
-          <div class="receipt-title">Fee Payment Receipt</div>
-          <div class="receipt-no">Receipt No.<br><strong>${escapeHtml(data.receiptNumber ?? 'Pending')}</strong></div>
-        </div>
-        <div class="body">
-        ${[
-          ['Date', data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())],
-          ['Student', data.studentName],
-          ['Admission No.', data.admissionNumber],
-          ['Class', data.className],
-          ['Academic Year', data.academicYear],
-          ['Term', data.term],
-          ['Payment Method', capitalize(data.method)],
-          data.reference ? ['Reference / Code', data.reference] : null,
-          ['Issued By', data.recordedBy],
-          data.notes ? ['Notes', data.notes] : null,
-        ]
-          .filter(Boolean)
-          .map(([label, value]) => `<div class="row"><span class="lbl">${escapeHtml(label)}</span><span class="val">${escapeHtml(value)}</span></div>`)
-          .join('')}
-        </div>
-        <div class="total">
-          <span class="t-label">TOTAL PAID</span>
-          <span class="t-amount">${escapeHtml(formatCurrency(data.amount))}</span>
-        </div>
-      </div>
-      <div class="footer">This is an official receipt. Please retain for your records. Powered by Diraschool</div>
-    </body></html>`);
-    win.document.close();
-    win.print();
-    win.close();
-  };
+// ── Ledger totals strip ───────────────────────────────────────────────────────
+function TotalsStrip({ payments, loading }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const all = Array.isArray(payments) ? payments : [];
+
+  const todayItems = all.filter((p) => String(p.paymentDate ?? p.createdAt ?? '').slice(0, 10) === today);
+  const weekItems  = all.filter((p) => String(p.paymentDate ?? p.createdAt ?? '').slice(0, 10) >= weekAgo);
+
+  const stats = [
+    { label: "Today's count", value: loading ? '—' : String(todayItems.length) },
+    { label: "Today's KES",   value: loading ? '—' : formatCurrency(todayItems.reduce((s, p) => s + (p.amount ?? 0), 0)) },
+    { label: 'Week to date',  value: loading ? '—' : formatCurrency(weekItems.reduce((s, p) => s + (p.amount ?? 0), 0)) },
+  ];
 
   return (
-    <div>
-      <div ref={receiptRef}>
-        <SchoolDocumentHeader
-          school={data.school}
-          settings={data.settings}
-          title="Finance"
-          subtitle="Fee Payment Receipt"
-          serial={data.receiptNumber ?? ''}
-          generatedAt={data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())}
-        />
-        <div className="overflow-hidden rounded-lg border">
-          <div className="flex items-start justify-between gap-3 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-700">Fee Payment Receipt</p>
-            <div className="text-right">
-              <p className="text-[10px] uppercase text-muted-foreground">Receipt No.</p>
-              <p className="font-mono text-sm font-semibold">{data.receiptNumber ?? 'Pending'}</p>
-            </div>
-          </div>
-          <div className="px-4 py-3">
-          {[
-            ['Date', data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())],
-            ['Student', data.studentName],
-            ['Admission No.', data.admissionNumber],
-            ['Class', data.className],
-            ['Academic Year', data.academicYear],
-            ['Term', data.term],
-            ['Payment Method', capitalize(data.method)],
-            data.reference ? ['Reference / Code', data.reference] : null,
-            ['Issued By', data.recordedBy],
-            data.notes ? ['Notes', data.notes] : null,
-          ].filter(Boolean).map(([label, value]) => (
-            <div key={label} className="flex justify-between py-2 border-b last:border-0 text-sm">
-              <span className="text-muted-foreground">{label}</span>
-              <span className="font-medium text-right max-w-[60%]">{value}</span>
-            </div>
-          ))}
-          </div>
-          <div className="border-t-2 border-slate-900 px-4 py-3 flex justify-between items-center">
-            <span className="font-bold text-sm">TOTAL PAID</span>
-            <span className="font-bold text-xl">{formatCurrency(data.amount)}</span>
-          </div>
+    <div className="grid grid-cols-3 gap-px rounded-lg border bg-border overflow-hidden mb-4">
+      {stats.map((s) => (
+        <div key={s.label} className="bg-card px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{s.label}</p>
+          <p className="font-mono text-base font-semibold tabular-nums">{s.value}</p>
         </div>
-        <div className="p-3 text-center text-xs text-muted-foreground">
-          This is an official receipt. Please retain for your records. Powered by Diraschool
+      ))}
+    </div>
+  );
+}
+
+// ── Receipt preview ───────────────────────────────────────────────────────────
+function ReceiptPreview({ data }) {
+  const rows = [
+    ['Date', data.paymentDate ? formatDate(data.paymentDate) : formatDate(new Date().toISOString())],
+    ['Student', data.studentName],
+    ['Admission No.', data.admissionNumber],
+    ['Class', data.className],
+    ['Academic Year', data.academicYear],
+    ['Term', data.term],
+    ['Payment Method', capitalize(data.method)],
+    data.reference ? ['Reference / Code', data.reference] : null,
+    ['Issued By', data.recordedBy],
+    data.notes ? ['Notes', data.notes] : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="rounded-lg border overflow-hidden">
+      <div className="flex items-start justify-between gap-3 bg-muted/40 px-4 py-3 border-b">
+        <p className="text-xs font-bold uppercase tracking-wider">Fee Payment Receipt</p>
+        <div className="text-right">
+          <p className="text-[10px] uppercase text-muted-foreground">Receipt No.</p>
+          <p className="font-mono text-sm font-semibold">{data.receiptNumber ?? 'Pending'}</p>
         </div>
       </div>
-      <div className="flex justify-end mt-4">
-        <Button onClick={handlePrint} className="gap-2">
-          <Printer className="h-4 w-4" /> Print Receipt
-        </Button>
+      <div className="divide-y">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex justify-between px-4 py-2 text-sm">
+            <span className="text-muted-foreground">{label}</span>
+            <span className="font-medium text-right max-w-[55%]">{value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="border-t-2 border-foreground px-4 py-3 flex justify-between items-center">
+        <span className="font-bold text-sm uppercase tracking-wide">Total Paid</span>
+        <span className="font-mono font-bold text-2xl tabular-nums">{formatCurrency(data.amount)}</span>
       </div>
     </div>
   );
 }
 
-const buildColumns = ({ canIssueReceipts }) => [
-  {
-    id: 'receiptNumber',
-    header: 'Receipt No.',
-    cell: ({ row }) => (
-      <span className="font-mono text-xs font-semibold text-blue-700">
-        {row.original.receiptNumber ?? '—'}
-      </span>
-    ),
-  },
-  {
-    id: 'student',
-    header: 'Student',
-    cell: ({ row }) => (
-      <div>
-        <p className="font-medium text-sm">
-          {row.original.studentId?.firstName ?? '—'} {row.original.studentId?.lastName ?? ''}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {row.original.studentId?.admissionNumber ?? ''} · {row.original.term} · {row.original.academicYear}
-        </p>
-      </div>
-    ),
-  },
-  {
-    accessorKey: 'amount',
-    header: 'Amount',
-    cell: ({ row }) => <span className="font-semibold">{formatCurrency(row.original.amount)}</span>,
-  },
-  {
-    accessorKey: 'method',
-    header: 'Method',
-    cell: ({ row }) => <span className="capitalize text-sm">{row.original.method}</span>,
-  },
-  {
-    accessorKey: 'reference',
-    header: 'Ref / Code',
-    cell: ({ row }) => <span className="text-sm font-mono">{row.original.reference ?? '—'}</span>,
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
-    cell: ({ row }) => (
-      <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(row.original.status)}`}>
-        {row.original.status}
-      </span>
-    ),
-  },
-  {
-    id: 'dateRecorder',
-    header: 'Date / By',
-    cell: ({ row }) => {
-      const recorder = row.original.recordedByUserId;
-      return (
-        <div>
-          <p className="text-sm">{formatDate(row.original.paymentDate ?? row.original.createdAt)}</p>
-          {recorder && (
-            <p className="text-xs text-muted-foreground">
-              {recorder.firstName} {recorder.lastName}
-            </p>
+// ── Record Payment side panel (3-step flow) ──────────────────────────────────
+function RecordPaymentPanel({ open, onClose, settingsData, schoolData, studentsData, classesData, user, onSuccess }) {
+  const [step, setStep]             = useState(1);
+  const [selectedClassId, setSelectedClassId] = useState('');
+  const [studentSearch, setStudentSearch]     = useState('');
+  const [pendingPayload, setPendingPayload]   = useState(null);
+  const [previewData, setPreviewData]         = useState(null);
+
+  const defaultYear = settingsData?.currentAcademicYear ?? String(new Date().getFullYear());
+  const defaultTerm = getCurrentTermFromSettings(settingsData);
+  const todayIso    = new Date().toISOString().split('T')[0];
+
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors }, trigger, getValues } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { academicYear: defaultYear, term: defaultTerm, paymentDate: todayIso, method: 'cash' },
+  });
+  const method          = watch('method');
+  const formAcademicYear= watch('academicYear');
+  const formTerm        = watch('term');
+  const amountVal       = watch('amount');
+
+  useEffect(() => {
+    if (settingsData) {
+      setValue('academicYear', settingsData.currentAcademicYear ?? String(new Date().getFullYear()));
+      setValue('term', getCurrentTermFromSettings(settingsData));
+    }
+  }, [settingsData, setValue]);
+
+  const { mutate: createPayment, isPending } = useMutation({
+    mutationFn: (data) => feesApi.createPayment(data),
+    onSuccess: () => {
+      toast.success('Payment recorded');
+      onSuccess?.();
+      handleClose();
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const handleClose = () => {
+    setStep(1);
+    setSelectedClassId('');
+    setStudentSearch('');
+    setPendingPayload(null);
+    setPreviewData(null);
+    reset({ academicYear: defaultYear, term: defaultTerm, paymentDate: todayIso, method: 'cash' });
+    onClose();
+  };
+
+  const filteredStudents = useMemo(() => {
+    const all = studentsData?.data ?? studentsData ?? [];
+    const byClass = selectedClassId
+      ? all.filter((s) => (s.classId?._id ?? s.classId) === selectedClassId)
+      : all;
+    if (!studentSearch.trim()) return byClass;
+    const q = studentSearch.toLowerCase();
+    return byClass.filter(
+      (s) => `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) || s.admissionNumber?.toLowerCase().includes(q)
+    );
+  }, [studentsData, selectedClassId, studentSearch]);
+
+  const goToStep2 = async () => {
+    const valid = await trigger(['studentId']);
+    if (valid) setStep(2);
+  };
+
+  const goToStep3 = async () => {
+    const valid = await trigger(['amount', 'method']);
+    if (!valid) return;
+    const values   = getValues();
+    const student  = (studentsData?.data ?? studentsData ?? []).find((s) => s._id === values.studentId);
+    const cls      = (classesData?.data ?? classesData?.classes ?? []).find((c) => c._id === selectedClassId);
+    const payload  = {
+      studentId:    values.studentId,
+      amount:       Number(values.amount),
+      method:       values.method,
+      reference:    values.reference || undefined,
+      paymentDate:  values.paymentDate || undefined,
+      academicYear: values.academicYear,
+      term:         values.term,
+      notes:        values.notes || undefined,
+    };
+    setPendingPayload(payload);
+    setPreviewData({
+      studentName:    student ? `${student.firstName} ${student.lastName}` : '—',
+      admissionNumber:student?.admissionNumber ?? '—',
+      className:      cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—',
+      academicYear:   values.academicYear,
+      term:           values.term,
+      amount:         Number(values.amount),
+      method:         values.method,
+      reference:      values.reference ?? '',
+      paymentDate:    values.paymentDate ?? todayIso,
+      notes:          values.notes ?? '',
+      recordedBy:     user ? `${user.firstName} ${user.lastName}` : '—',
+    });
+    setStep(3);
+  };
+
+  const classes = classesData?.data ?? classesData?.classes ?? [];
+  const selectedStudent = (studentsData?.data ?? studentsData ?? []).find((s) => s._id === watch('studentId'));
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-[420px] p-0 flex flex-col border-l border-border"
+      >
+        {/* Header */}
+        <SheetHeader className="px-5 pt-5 pb-4 border-b shrink-0">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="text-base font-semibold">Record Payment</SheetTitle>
+            <button onClick={handleClose} className="p-1 rounded hover:bg-muted text-muted-foreground">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {/* Step indicators */}
+          <div className="flex gap-1 mt-2">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={cn(
+                  'h-1 flex-1 rounded-full transition-colors',
+                  s <= step ? 'bg-foreground' : 'bg-muted',
+                )}
+              />
+            ))}
+          </div>
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+            <span className={step >= 1 ? 'text-foreground font-medium' : ''}>Student</span>
+            <span className={step >= 2 ? 'text-foreground font-medium' : ''}>Payment</span>
+            <span className={step >= 3 ? 'text-foreground font-medium' : ''}>Review</span>
+          </div>
+        </SheetHeader>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {/* Step 1: Student picker */}
+          {step === 1 && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Class</Label>
+                <Select
+                  value={selectedClassId}
+                  onValueChange={(v) => { setSelectedClassId(v); setValue('studentId', ''); setStudentSearch(''); }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Filter by class (optional)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All classes</SelectItem>
+                    {classes.map((c) => (
+                      <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Search student</Label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    placeholder="Name or admission number…"
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Select student</Label>
+                <div className="rounded-lg border overflow-hidden max-h-64 overflow-y-auto divide-y">
+                  {filteredStudents.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-6 text-center">No students found</p>
+                  ) : filteredStudents.slice(0, 50).map((s) => {
+                    const isSelected = watch('studentId') === s._id;
+                    return (
+                      <button
+                        key={s._id}
+                        type="button"
+                        onClick={() => setValue('studentId', s._id)}
+                        className={cn(
+                          'w-full text-left px-3 py-2.5 flex items-center justify-between transition-colors',
+                          isSelected ? 'bg-primary/8 text-primary' : 'hover:bg-muted/40',
+                        )}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{s.firstName} {s.lastName}</p>
+                          <p className="font-mono text-[11px] text-muted-foreground tabular-nums">{s.admissionNumber}</p>
+                        </div>
+                        {isSelected && <ChevronRight className="h-4 w-4 shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.studentId && <p className="text-xs text-destructive">{errors.studentId.message}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: Payment details */}
+          {step === 2 && (
+            <div className="space-y-4">
+              {selectedStudent && (
+                <div className="rounded-lg bg-muted/40 border px-4 py-3">
+                  <p className="text-sm font-medium">{selectedStudent.firstName} {selectedStudent.lastName}</p>
+                  <p className="font-mono text-xs text-muted-foreground tabular-nums">{selectedStudent.admissionNumber}</p>
+                </div>
+              )}
+
+              {/* Method segmented control */}
+              <div className="space-y-1.5">
+                <Label>Payment Method</Label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {METHODS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setValue('method', m)}
+                      className={cn(
+                        'py-2 text-xs rounded-md border transition-colors font-medium',
+                        method === m
+                          ? 'bg-foreground text-background border-foreground'
+                          : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/40',
+                      )}
+                    >
+                      {m === 'mpesa' ? 'M-Pesa' : m[0].toUpperCase() + m.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                {errors.method && <p className="text-xs text-destructive">{errors.method.message}</p>}
+              </div>
+
+              {/* Amount (large mono) */}
+              <div className="space-y-1.5">
+                <Label>Amount (KES)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-mono">KES</span>
+                  <Input
+                    {...register('amount')}
+                    type="number"
+                    placeholder="0"
+                    className="pl-12 font-mono text-2xl h-14 tabular-nums"
+                  />
+                </div>
+                {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
+              </div>
+
+              {/* Reference */}
+              <div className="space-y-1.5">
+                <Label>Reference <span className="text-muted-foreground text-xs">(M-Pesa code, slip no.)</span></Label>
+                <Input {...register('reference')} placeholder="e.g. QGK7XXXXXXX" className="font-mono" />
+              </div>
+
+              {/* Date + Year + Term */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Payment Date</Label>
+                  <Input {...register('paymentDate')} type="date" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Term</Label>
+                  <Select value={formTerm || defaultTerm} onValueChange={(v) => setValue('term', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Academic Year</Label>
+                <Select value={formAcademicYear || defaultYear} onValueChange={(v) => setValue('academicYear', v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Textarea {...register('notes')} placeholder="Any additional notes…" rows={2} />
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Receipt preview + confirm */}
+          {step === 3 && previewData && (
+            <div className="space-y-4">
+              <p className="text-xs text-muted-foreground">Review before submitting:</p>
+              <ReceiptPreview data={previewData} />
+            </div>
           )}
         </div>
-      );
-    },
-  },
-  {
-    id: 'receipt',
-    header: 'Receipt',
-    cell: ({ row }) => (
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1 text-blue-600 hover:text-blue-700 h-7 px-2 disabled:text-gray-400 disabled:hover:text-gray-400"
-          onClick={() => window.open(`/fees/payments/${row.original._id}/print`, '_blank')}
-          disabled={!canIssueReceipts}
-        >
-          <Printer className="h-3.5 w-3.5" /> Print
-        </Button>
-        {row.original.receiptUrl && (
-          <a href={row.original.receiptUrl} target="_blank" rel="noopener noreferrer">
-            <Button variant="ghost" size="sm" className="gap-1 h-7 px-2">
-              <Receipt className="h-3.5 w-3.5" /> PDF
-            </Button>
-          </a>
-        )}
-      </div>
-    ),
-  },
-];
 
+        {/* Footer actions */}
+        <div className="px-5 py-4 border-t shrink-0 flex gap-2">
+          {step > 1 && (
+            <Button variant="outline" onClick={() => setStep((s) => s - 1)} className="flex-1">
+              Back
+            </Button>
+          )}
+          {step === 1 && (
+            <Button onClick={goToStep2} className="flex-1" disabled={!watch('studentId')}>
+              Next: Payment <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          )}
+          {step === 2 && (
+            <Button onClick={goToStep3} className="flex-1">
+              Preview Receipt <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          )}
+          {step === 3 && (
+            <Button
+              onClick={() => pendingPayload && createPayment(pendingPayload)}
+              disabled={isPending}
+              className="flex-1"
+            >
+              {isPending ? 'Saving…' : 'Confirm & Save'}
+            </Button>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ── Check Balance dialog ──────────────────────────────────────────────────────
+function BalanceDialog({ open, onClose, studentsData, settingsData }) {
+  const [studentId, setStudentId] = useState('');
+  const [year, setYear]           = useState(String(new Date().getFullYear()));
+  const [term, setTerm]           = useState(TERMS[0]);
+
+  const { data: balanceData, isFetching, refetch } = useQuery({
+    queryKey: ['balance', studentId, year, term],
+    queryFn: async () => {
+      const res = await feesApi.getBalance({ studentId, academicYear: year, term });
+      return res.data.data;
+    },
+    enabled: false,
+  });
+
+  const students = studentsData?.data ?? studentsData ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Check Fee Balance</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Student</Label>
+            <Select value={studentId} onValueChange={setStudentId}>
+              <SelectTrigger><SelectValue placeholder="Select student" /></SelectTrigger>
+              <SelectContent>
+                {students.map((s) => (
+                  <SelectItem key={s._id} value={s._id}>
+                    {s.firstName} {s.lastName} — {s.admissionNumber}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Year</Label>
+              <Select value={year} onValueChange={setYear}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Term</Label>
+              <Select value={term} onValueChange={setTerm}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button className="w-full" disabled={!studentId || isFetching} onClick={() => refetch()}>
+            {isFetching ? 'Loading…' : 'Fetch Balance'}
+          </Button>
+          {balanceData && (
+            <div className="rounded-lg border p-3 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Expected fee</span>
+                <span className="font-mono font-medium tabular-nums">{formatCurrency(balanceData.feeStructure?.totalAmount ?? 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total paid</span>
+                <span className="font-mono font-medium text-ok tabular-nums">{formatCurrency(balanceData.totalPaid)}</span>
+              </div>
+              <div className="flex justify-between border-t pt-1.5">
+                <span className="font-semibold">Outstanding</span>
+                <span className={cn('font-mono font-bold tabular-nums', balanceData.outstanding > 0 ? 'text-bad' : 'text-ok')}>
+                  {balanceData.outstanding > 0 ? formatCurrency(balanceData.outstanding) : 'Fully paid'}
+                </span>
+              </div>
+              {balanceData.overpaid > 0 && (
+                <div className="flex justify-between text-primary">
+                  <span>Overpaid</span>
+                  <span className="font-mono font-medium tabular-nums">{formatCurrency(balanceData.overpaid)}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Status badge ──────────────────────────────────────────────────────────────
+function StatusBadge({ status }) {
+  const cls = status === 'completed' ? 'text-ok border-ok/30 bg-ok/5'
+    : status === 'reversed' ? 'text-bad border-bad/30 bg-bad/5'
+    : status === 'pending'  ? 'text-warn border-warn/30 bg-warn/5'
+    : 'border-border text-muted-foreground';
+  return (
+    <span className={cn('inline-flex items-center rounded-full border px-2 py-0 text-[10px] font-medium', cls)}>
+      {status ?? '—'}
+    </span>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function PaymentsPage() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user }    = useAuth();
   const canIssueReceipts = ['secretary', 'accountant', 'school_admin', 'director', 'headteacher', 'deputy_headteacher'].includes(user?.role);
-  const [page, setPage] = useState(1);
-  const [open, setOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewData, setPreviewData] = useState(null);
-  const [pendingPayload, setPendingPayload] = useState(null);
+
+  const [page, setPage]               = useState(1);
+  const [panelOpen, setPanelOpen]     = useState(false);
   const [balanceOpen, setBalanceOpen] = useState(false);
-  const [balanceStudentId, setBalanceStudentId] = useState('');
-  const [balanceYear, setBalanceYear] = useState(String(new Date().getFullYear()));
-  const [balanceTerm, setBalanceTerm] = useState(TERMS[0]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch]           = useState('');
   const [methodFilter, setMethodFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [yearFilter, setYearFilter] = useState('');
-  const [termFilter, setTermFilter] = useState('');
-  const [selectedClassId, setSelectedClassId] = useState('');
-  const [studentSearch, setStudentSearch] = useState('');
+  const [yearFilter, setYearFilter]   = useState('');
+  const [termFilter, setTermFilter]   = useState('');
   const debouncedSearch = useDebounce(search, 400);
 
   const { data: settingsData } = useQuery({
     queryKey: ['settings'],
-    queryFn: async () => {
-      const res = await settingsApi.get();
-      return res.data?.settings ?? res.data?.data ?? res.data;
-    },
+    queryFn: async () => { const res = await settingsApi.get(); return res.data?.settings ?? res.data?.data ?? res.data; },
   });
-
   const { data: schoolData } = useQuery({
     queryKey: ['school', 'me'],
-    queryFn: async () => {
-      const res = await schoolsApi.me();
-      return res.data.data ?? res.data;
-    },
+    queryFn: async () => { const res = await schoolsApi.me(); return res.data.data ?? res.data; },
   });
-
-  const defaultYear = settingsData?.currentAcademicYear ?? String(new Date().getFullYear());
-  const defaultTerm = getCurrentTermFromSettings(settingsData);
-  const todayIso = new Date().toISOString().split('T')[0];
-
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors }, trigger, getValues } = useForm({
-    resolver: zodResolver(schema),
-    defaultValues: { academicYear: defaultYear, term: defaultTerm, paymentDate: todayIso },
+  const { data: studentsData } = useQuery({
+    queryKey: ['students', 'all'],
+    queryFn: async () => { const res = await studentsApi.list({ limit: 500, status: 'active' }); return res.data; },
   });
-  const formAcademicYear = watch('academicYear');
-  const formTerm = watch('term');
-
-  // Sync defaults when settings load
-  useEffect(() => {
-    if (settingsData) {
-      const year = settingsData.currentAcademicYear ?? String(new Date().getFullYear());
-      const term = getCurrentTermFromSettings(settingsData);
-      reset({ academicYear: year, term, paymentDate: todayIso });
-      setBalanceYear(year);
-      setBalanceTerm(term);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsData]);
+  const { data: classesData } = useQuery({
+    queryKey: ['classes'],
+    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; },
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['payments', page, debouncedSearch, methodFilter, statusFilter, yearFilter, termFilter],
     queryFn: async () => {
       const res = await feesApi.listPayments({
-        page,
-        limit: 20,
+        page, limit: 25,
         search: debouncedSearch || undefined,
         method: methodFilter || undefined,
         status: statusFilter || undefined,
@@ -329,130 +603,9 @@ export default function PaymentsPage() {
     },
   });
 
-  const { data: studentsData } = useQuery({
-    queryKey: ['students', 'all'],
-    queryFn: async () => {
-      const res = await studentsApi.list({ limit: 500, status: 'active' });
-      return res.data;
-    },
-  });
-
-  const { data: classesData } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const res = await classesApi.list({ limit: 100 });
-      return res.data;
-    },
-  });
-
-  const { data: balanceData, isFetching: balanceFetching, refetch: fetchBalance } = useQuery({
-    queryKey: ['balance', balanceStudentId, balanceYear, balanceTerm],
-    queryFn: async () => {
-      const res = await feesApi.getBalance({ studentId: balanceStudentId, academicYear: balanceYear, term: balanceTerm });
-      return res.data.data;
-    },
-    enabled: false,
-  });
-
-  const { mutate: createPayment, isPending } = useMutation({
-    mutationFn: (data) => feesApi.createPayment(data),
-    onSuccess: () => {
-      toast.success('Payment recorded successfully');
-      queryClient.invalidateQueries({ queryKey: ['payments'] });
-      setOpen(false);
-      setPreviewOpen(false);
-      setPendingPayload(null);
-      setSelectedClassId('');
-      setStudentSearch('');
-      reset({ academicYear: defaultYear, term: defaultTerm, paymentDate: todayIso });
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
-
-  const filteredStudents = useMemo(() => {
-    const all = studentsData?.data ?? [];
-    const byClass = selectedClassId
-      ? all.filter((s) => (s.classId?._id ?? s.classId) === selectedClassId)
-      : all;
-    if (!studentSearch.trim()) return byClass;
-    const q = studentSearch.toLowerCase();
-    return byClass.filter(
-      (s) =>
-        `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) ||
-        s.admissionNumber?.toLowerCase().includes(q)
-    );
-  }, [studentsData, selectedClassId, studentSearch]);
-
-  const buildReceiptData = (values, fromTable = null) => {
-    if (fromTable) {
-      return {
-        receiptNumber: fromTable.receiptNumber ?? '',
-        studentName: `${fromTable.studentId?.firstName ?? ''} ${fromTable.studentId?.lastName ?? ''}`.trim() || '—',
-        admissionNumber: fromTable.studentId?.admissionNumber ?? '—',
-        className: fromTable.classId
-          ? `${fromTable.classId.name}${fromTable.classId.stream ? ` ${fromTable.classId.stream}` : ''}`
-          : '—',
-        academicYear: fromTable.academicYear,
-        term: fromTable.term,
-        amount: fromTable.amount,
-        method: fromTable.method,
-        reference: fromTable.reference ?? '',
-        paymentDate: fromTable.paymentDate ?? fromTable.createdAt,
-        notes: fromTable.notes ?? '',
-        recordedBy: fromTable.recordedByUserId
-          ? `${fromTable.recordedByUserId.firstName} ${fromTable.recordedByUserId.lastName}`
-          : '—',
-        schoolName: schoolData?.name ?? '',
-        school: schoolData ?? {},
-        settings: settingsData ?? {},
-      };
-    }
-    const student = (studentsData?.data ?? []).find((s) => s._id === values.studentId);
-    const cls = (classesData?.data ?? []).find((c) => c._id === selectedClassId);
-    return {
-      studentName: student ? `${student.firstName} ${student.lastName}` : '—',
-      admissionNumber: student?.admissionNumber ?? '—',
-      className: cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—',
-      academicYear: values.academicYear,
-      term: values.term,
-      amount: Number(values.amount),
-      method: values.method,
-      reference: values.reference ?? '',
-      paymentDate: values.paymentDate ?? todayIso,
-      notes: values.notes ?? '',
-      recordedBy: user ? `${user.firstName} ${user.lastName}` : '—',
-      schoolName: schoolData?.name ?? '',
-      school: schoolData ?? {},
-      settings: settingsData ?? {},
-    };
-  };
-
-  const handlePreview = async () => {
-    const valid = await trigger();
-    if (!valid) return;
-    const values = getValues();
-    const preview = buildReceiptData(values);
-    const payload = {
-      studentId: values.studentId,
-      amount: Number(values.amount),
-      method: values.method,
-      reference: values.reference || undefined,
-      paymentDate: values.paymentDate || undefined,
-      academicYear: values.academicYear,
-      term: values.term,
-      notes: values.notes || undefined,
-    };
-    setPendingPayload(payload);
-    setPreviewData(preview);
-    setPreviewOpen(true);
-  };
-
-  const handleCloseForm = () => {
-    setOpen(false);
-    setSelectedClassId('');
-    setStudentSearch('');
-    reset({ academicYear: defaultYear, term: defaultTerm, paymentDate: todayIso });
-  };
+  const payments    = data?.data ?? [];
+  const pagination  = data?.pagination ?? {};
+  const hasFilters  = search || methodFilter || statusFilter || yearFilter || termFilter;
 
   return (
     <div>
@@ -462,8 +615,7 @@ export default function PaymentsPage() {
           <Wallet className="h-4 w-4 mr-1" /> Check Balance
         </Button>
         <Button
-          variant="outline"
-          size="sm"
+          variant="outline" size="sm"
           onClick={async () => {
             try { downloadBlob(await exportApi.payments(), 'payments.csv'); }
             catch { toast.error('Export failed'); }
@@ -471,10 +623,13 @@ export default function PaymentsPage() {
         >
           <Download className="h-4 w-4 mr-1" /> Export CSV
         </Button>
-        <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" /> Record Payment
+        <Button size="sm" onClick={() => setPanelOpen(true)}>
+          <Plus className="h-4 w-4 mr-1" /> Record Payment
         </Button>
       </PageHeader>
+
+      {/* Running-totals strip */}
+      <TotalsStrip payments={payments} loading={isLoading} />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -508,262 +663,126 @@ export default function PaymentsPage() {
             {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
-        {(search || methodFilter || yearFilter || termFilter) && (
+        {hasFilters && (
           <Button variant="ghost" size="sm" className="h-9"
-            onClick={() => { setSearch(''); setMethodFilter(''); setYearFilter(''); setTermFilter(''); setPage(1); }}>
+            onClick={() => { setSearch(''); setMethodFilter(''); setStatusFilter(''); setYearFilter(''); setTermFilter(''); setPage(1); }}>
             Clear
           </Button>
         )}
       </div>
 
-      <DataTable
-        columns={buildColumns({ canIssueReceipts })}
-        data={data?.data}
-        loading={isLoading}
-        pageCount={data?.pagination?.totalPages}
-        currentPage={page}
-        onPageChange={setPage}
+      {/* Hairline table */}
+      <div className="rounded-lg border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b bg-muted/30">
+                {['Date / Time', 'Student', 'Class', 'Method', 'Amount', 'Reference', 'Status', ''].map((h) => (
+                  <th key={h} className="py-2.5 px-3 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap first:pl-4 last:pr-4">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {isLoading ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <td key={j} className="px-3 py-2.5 first:pl-4 last:pr-4">
+                        <Skeleton className="h-4 w-full" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : payments.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center text-muted-foreground text-sm">
+                    {hasFilters ? 'No payments match your filters.' : 'No payments recorded yet.'}
+                  </td>
+                </tr>
+              ) : (
+                payments.map((p) => {
+                  const student  = p.studentId;
+                  const cls      = p.classId ? `${p.classId.name}${p.classId.stream ? ` ${p.classId.stream}` : ''}` : '—';
+                  const dateTime = p.paymentDate ?? p.createdAt;
+                  return (
+                    <tr key={p._id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-3 py-2.5 pl-4 whitespace-nowrap">
+                        <p className="text-sm tabular-nums">{dateTime ? formatDate(dateTime) : '—'}</p>
+                        <p className="font-mono text-[10px] text-muted-foreground tabular-nums">
+                          {dateTime ? new Date(dateTime).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </p>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <p className="font-medium leading-tight">{student?.firstName ?? '—'} {student?.lastName ?? ''}</p>
+                        <p className="font-mono text-[11px] text-muted-foreground tabular-nums">{student?.admissionNumber ?? ''}</p>
+                      </td>
+                      <td className="px-3 py-2.5 text-muted-foreground text-xs whitespace-nowrap">{cls}</td>
+                      <td className="px-3 py-2.5"><MethodPill method={p.method} /></td>
+                      <td className="px-3 py-2.5 text-right">
+                        <span className="font-mono text-sm font-semibold tabular-nums">{formatCurrency(p.amount)}</span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{p.reference ?? '—'}</span>
+                      </td>
+                      <td className="px-3 py-2.5"><StatusBadge status={p.status} /></td>
+                      <td className="px-3 py-2.5 pr-4 text-right whitespace-nowrap">
+                        {canIssueReceipts && (
+                          <button
+                            onClick={() => window.open(`/fees/payments/${p._id}/print`, '_blank')}
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                          >
+                            <Printer className="h-3 w-3" /> Receipt
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t text-sm text-muted-foreground">
+            <span>
+              Page {pagination.currentPage ?? page} of {pagination.totalPages}
+              {pagination.totalCount ? ` · ${pagination.totalCount} payments` : ''}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                Previous
+              </Button>
+              <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Side panel */}
+      <RecordPaymentPanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        settingsData={settingsData}
+        schoolData={schoolData}
+        studentsData={studentsData}
+        classesData={classesData}
+        user={user}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ['payments'] })}
       />
 
-      {/* Record Payment Dialog */}
-      <Dialog open={open} onOpenChange={(v) => { if (!v) handleCloseForm(); else setOpen(true); }}>
-        <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
-          <form
-            onSubmit={handleSubmit((values) =>
-              createPayment({
-                studentId: values.studentId,
-                amount: Number(values.amount),
-                method: values.method,
-                reference: values.reference || undefined,
-                paymentDate: values.paymentDate || undefined,
-                academicYear: values.academicYear,
-                term: values.term,
-                notes: values.notes || undefined,
-              })
-            )}
-            className="space-y-4"
-          >
-            {/* 1. Class */}
-            <div className="space-y-1.5">
-              <Label>Class</Label>
-              <Select
-                value={selectedClassId}
-                onValueChange={(v) => {
-                  setSelectedClassId(v);
-                  setValue('studentId', '');
-                  setStudentSearch('');
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Select class to filter students" /></SelectTrigger>
-                <SelectContent>
-                  {classesData?.data?.map((c) => (
-                    <SelectItem key={c._id} value={c._id}>
-                      {c.name}{c.stream ? ` ${c.stream}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* 2. Student with search */}
-            <div className="space-y-1.5">
-              <Label>Student</Label>
-              <Input
-                placeholder="Search by name or admission number…"
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-              />
-              <Select onValueChange={(v) => setValue('studentId', v)} disabled={!selectedClassId}>
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      selectedClassId
-                        ? filteredStudents.length
-                          ? `${filteredStudents.length} student(s) — select one`
-                          : 'No matching students'
-                        : 'Select a class first'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredStudents.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground text-center">No students found</div>
-                  ) : (
-                    filteredStudents.map((s) => (
-                      <SelectItem key={s._id} value={s._id}>
-                        {s.firstName} {s.lastName} — {s.admissionNumber}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-              {errors.studentId && <p className="text-xs text-destructive">{errors.studentId.message}</p>}
-            </div>
-
-            {/* 3. Method + Amount */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Payment Method</Label>
-                <Select onValueChange={(v) => setValue('method', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{capitalize(m)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {errors.method && <p className="text-xs text-destructive">{errors.method.message}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Amount (KES)</Label>
-                <Input {...register('amount')} type="number" placeholder="5000" />
-                {errors.amount && <p className="text-xs text-destructive">{errors.amount.message}</p>}
-              </div>
-            </div>
-
-            {/* 4. Reference + Date */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Transaction Reference</Label>
-                <Input {...register('reference')} placeholder="M-Pesa code, slip no." />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Payment Date</Label>
-                <Input {...register('paymentDate')} type="date" />
-              </div>
-            </div>
-
-            {/* 5. Year + Term */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Academic Year</Label>
-                <Select value={formAcademicYear || defaultYear} onValueChange={(v) => setValue('academicYear', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Term</Label>
-                <Select value={formTerm || defaultTerm} onValueChange={(v) => setValue('term', v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* 6. Notes */}
-            <div className="space-y-1.5">
-              <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Textarea {...register('notes')} placeholder="Any additional information…" rows={2} />
-            </div>
-
-            <DialogFooter className="gap-2 pt-1">
-              <Button type="button" variant="outline" onClick={handleCloseForm}>Cancel</Button>
-              <Button type="button" variant="outline" onClick={handlePreview} disabled={isPending}>
-                <Receipt className="h-4 w-4 mr-1" /> Preview Receipt
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Saving…' : 'Save Payment'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Receipt Preview Dialog */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-md max-h-[92vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Receipt Preview</DialogTitle></DialogHeader>
-          {previewData && <ReceiptPreview data={previewData} />}
-          {pendingPayload && (
-            <DialogFooter className="mt-2">
-              <Button variant="outline" onClick={() => setPreviewOpen(false)}>Back to Form</Button>
-              <Button onClick={() => createPayment(pendingPayload)} disabled={isPending}>
-                {isPending ? 'Saving…' : 'Save Payment'}
-              </Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Check Balance Dialog */}
-      <Dialog open={balanceOpen} onOpenChange={setBalanceOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Check Fee Balance</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>Student</Label>
-              <Select value={balanceStudentId} onValueChange={setBalanceStudentId}>
-                <SelectTrigger><SelectValue placeholder="Select student" /></SelectTrigger>
-                <SelectContent>
-                  {studentsData?.data?.map((s) => (
-                    <SelectItem key={s._id} value={s._id}>
-                      {s.firstName} {s.lastName} — {s.admissionNumber}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Year</Label>
-                <Select value={balanceYear} onValueChange={setBalanceYear}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Term</Label>
-                <Select value={balanceTerm} onValueChange={setBalanceTerm}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <Button
-              className="w-full"
-              disabled={!balanceStudentId || balanceFetching}
-              onClick={() => fetchBalance()}
-            >
-              {balanceFetching ? 'Loading…' : 'Fetch Balance'}
-            </Button>
-            {balanceData && (
-              <div className="rounded-lg border p-3 space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Expected fee</span>
-                  <span className="font-medium">{formatCurrency(balanceData.feeStructure?.totalAmount ?? 0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total paid</span>
-                  <span className="font-medium text-green-600">{formatCurrency(balanceData.totalPaid)}</span>
-                </div>
-                <div className="flex justify-between border-t pt-1.5">
-                  <span className="font-semibold">Outstanding</span>
-                  <span className={`font-bold ${balanceData.outstanding > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                    {balanceData.outstanding > 0 ? formatCurrency(balanceData.outstanding) : 'Fully paid'}
-                  </span>
-                </div>
-                {balanceData.overpaid > 0 && (
-                  <div className="flex justify-between text-blue-600">
-                    <span>Overpaid</span>
-                    <span className="font-medium">{formatCurrency(balanceData.overpaid)}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setBalanceOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Balance dialog */}
+      <BalanceDialog
+        open={balanceOpen}
+        onClose={() => setBalanceOpen(false)}
+        studentsData={studentsData}
+        settingsData={settingsData}
+      />
     </div>
   );
 }

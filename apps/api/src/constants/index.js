@@ -109,6 +109,7 @@ export const SMS_TRIGGER_TYPES = {
 export const PAYMENT_SOURCE = {
   MANUAL: 'manual',
   SMS_WEBHOOK: 'sms_webhook',
+  MPESA_C2B: 'mpesa_c2b',
 };
 
 export const PAYMENT_SMS_PROVIDERS = {

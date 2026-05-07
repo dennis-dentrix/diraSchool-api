@@ -10,7 +10,6 @@ import {
   ArrowRight, Mail, Calculator, Download, Loader2, Receipt, ExternalLink,
 } from 'lucide-react';
 import { schoolsApi, studentsApi, exportApi, downloadBlob, subscriptionsApi } from '@/lib/api';
-import { FEATURE_ADDONS, FEATURE_ADDON_PRICING } from '@/lib/constants';
 import { useAuthStore } from '@/store/auth.store';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,51 +24,46 @@ import { useSearchParams } from 'next/navigation';
 const BILLING_ROLES = ['school_admin', 'director', 'headteacher'];
 
 // ── Pricing constants ────────────────────────────────────────────────────────
-const BASE_FEE = 10000;
+const BASE_FEE = 12000;
 const PER_STUDENT = 40;
 const VAT = 0.16;
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 
-const ADD_ON_OPTIONS = [
-  { key: FEATURE_ADDONS.TRANSPORT, label: 'Transport', price: FEATURE_ADDON_PRICING[FEATURE_ADDONS.TRANSPORT] },
-  { key: FEATURE_ADDONS.SMS, label: 'Bulk SMS', price: FEATURE_ADDON_PRICING[FEATURE_ADDONS.SMS] },
-];
-
-function calcBill(students, option = 'per-term', addOns = {}) {
-  const addOnsPerTerm = ADD_ON_OPTIONS.reduce(
-    (sum, item) => sum + (addOns?.[item.key] ? item.price : 0),
-    0
-  );
-  const subtotal = BASE_FEE + students * PER_STUDENT + addOnsPerTerm;
+function calcBill(students, option = 'per-term') {
+  const subtotal = BASE_FEE + students * PER_STUDENT;
   const multiplier = option === 'annual' ? 2.55 : option === 'multi-year' ? 2.40 : 1;
   const base = subtotal * multiplier;
   const vat = Math.round(base * VAT);
-  return { subtotal, base, vat, total: base + vat, multiplier, addOnsPerTerm };
+  return { subtotal, base, vat, total: base + vat, multiplier };
 }
 
 // ── Status config ────────────────────────────────────────────────────────────
 const STATUS_CONFIG = {
   trial: {
     label: 'Trial',
-    color: 'bg-amber-50 text-amber-700 border-amber-200',
+    color: 'bg-warn/8 text-warn border-warn/30',
+    bar: 'bg-warn',
     icon: Clock,
     desc: 'You are on a free trial. All features enabled.',
   },
   active: {
     label: 'Active',
-    color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    color: 'bg-ok/8 text-ok border-ok/30',
+    bar: 'bg-ok',
     icon: CheckCircle2,
     desc: 'Subscription active. Full access enabled.',
   },
   suspended: {
     label: 'Suspended',
-    color: 'bg-red-50 text-red-700 border-red-200',
+    color: 'bg-bad/8 text-bad border-bad/30',
+    bar: 'bg-bad',
     icon: Ban,
     desc: 'Account suspended. Contact support to restore access.',
   },
   expired: {
     label: 'Expired',
-    color: 'bg-slate-100 text-slate-600 border-slate-200',
+    color: 'bg-muted text-muted-foreground border-border',
+    bar: 'bg-muted-foreground',
     icon: AlertTriangle,
     desc: 'Trial or subscription has expired.',
   },
@@ -87,19 +81,19 @@ function StatusBadge({ status }) {
 }
 
 // ── Mini Calculator ──────────────────────────────────────────────────────────
-function BillingCalculator({ currentStudents, addOns, setAddOns }) {
+function BillingCalculator({ currentStudents }) {
   const [students, setStudents] = useState(currentStudents || 100);
   const [option, setOption] = useState('per-term');
 
-  const p = calcBill(students, option, addOns);
-  const perTermTotal = calcBill(students, 'per-term', addOns).total;
+  const p = calcBill(students, option);
+  const perTermTotal = calcBill(students, 'per-term').total;
   const saving = option === 'annual' ? Math.round(perTermTotal * 3 - p.total) : null;
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <Calculator className="h-4 w-4 text-blue-600" />
+          <Calculator className="h-4 w-4 text-primary" />
           Estimate Your Next Invoice
         </CardTitle>
         <CardDescription>Adjust students or billing cycle to see what you'd pay</CardDescription>
@@ -114,14 +108,14 @@ function BillingCalculator({ currentStudents, addOns, setAddOns }) {
               <input
                 type="number" min={10} max={5000} value={students}
                 onChange={(e) => setStudents(Math.max(10, Math.min(5000, parseInt(e.target.value) || 10)))}
-                className="w-20 text-center border rounded-md text-sm font-bold h-8 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-20 text-center border rounded-md text-sm font-bold h-8 focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <button onClick={() => setStudents(Math.min(5000, students + 10))} className="w-6 h-6 rounded border text-sm flex items-center justify-center hover:bg-muted transition-colors">+</button>
             </div>
           </div>
           <input type="range" min={10} max={2000} step={10} value={Math.min(students, 2000)}
             onChange={(e) => setStudents(parseInt(e.target.value))}
-            className="w-full accent-blue-600 cursor-pointer"
+            className="w-full accent-primary cursor-pointer"
           />
         </div>
 
@@ -143,41 +137,14 @@ function BillingCalculator({ currentStudents, addOns, setAddOns }) {
           ))}
         </div>
 
-        {/* Add-ons */}
-        <div className="space-y-2">
-          <label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Optional Add-ons (per term)</label>
-          <div className="grid gap-2">
-            {ADD_ON_OPTIONS.map((addOn) => (
-              <label key={addOn.key} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                <span className="font-medium">{addOn.label}</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-muted-foreground">{fmt(addOn.price)}</span>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(addOns?.[addOn.key])}
-                    onChange={(e) => setAddOns((prev) => ({ ...prev, [addOn.key]: e.target.checked }))}
-                  />
-                </span>
-              </label>
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Bulk SMS billing is ready here; message delivery feature rollout can be activated later.
-          </p>
-        </div>
-
         {/* Breakdown */}
         <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
           <div className="flex justify-between text-muted-foreground">
-            <span>Base fee</span><span className="font-mono">KES 8,500</span>
+            <span>Base fee</span><span className="font-mono">KES 12,000</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
             <span>{students.toLocaleString()} × KES 40</span>
             <span className="font-mono">{fmt(students * PER_STUDENT)}</span>
-          </div>
-          <div className="flex justify-between text-muted-foreground">
-            <span>Add-ons total</span>
-            <span className="font-mono">{fmt(p.addOnsPerTerm)}</span>
           </div>
           <div className="flex justify-between text-muted-foreground text-xs pt-1 border-t">
             <span>Subtotal (ex-VAT)</span>
@@ -188,10 +155,10 @@ function BillingCalculator({ currentStudents, addOns, setAddOns }) {
           </div>
           <div className="flex justify-between font-bold text-base pt-2 border-t">
             <span>{option === 'per-term' ? 'Per term' : option === 'annual' ? 'Annual total' : '3-year annual'}</span>
-            <span className="font-mono text-blue-600">{fmt(p.total)}</span>
+            <span className="font-mono text-primary">{fmt(p.total)}</span>
           </div>
           {saving && (
-            <p className="text-xs text-emerald-600 font-medium text-right">You save {fmt(saving)} per year</p>
+            <p className="text-xs text-ok font-medium text-right">You save {fmt(saving)} per year</p>
           )}
         </div>
 
@@ -216,11 +183,11 @@ const INVOICE_SCHEDULE = [
 ];
 
 const PAYMENT_STATUS_CONFIG = {
-  pending: { label: 'Pending', color: 'bg-amber-50 text-amber-700 border-amber-200' },
-  processing: { label: 'Processing', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-  completed: { label: 'Paid', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  failed: { label: 'Failed', color: 'bg-red-50 text-red-700 border-red-200' },
-  cancelled: { label: 'Cancelled', color: 'bg-slate-100 text-slate-600 border-slate-200' },
+  pending: { label: 'Pending', color: 'bg-warn/8 text-warn border-warn/30' },
+  processing: { label: 'Processing', color: 'bg-primary/8 text-primary border-primary/30' },
+  completed: { label: 'Paid', color: 'bg-ok/8 text-ok border-ok/30' },
+  failed: { label: 'Failed', color: 'bg-bad/8 text-bad border-bad/30' },
+  cancelled: { label: 'Cancelled', color: 'bg-muted text-muted-foreground border-border' },
 };
 
 function PaymentHistory() {
@@ -242,7 +209,7 @@ function PaymentHistory() {
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <Receipt className="h-4 w-4 text-blue-600" />
+          <Receipt className="h-4 w-4 text-primary" />
           Payment History
         </CardTitle>
         <CardDescription>All subscription payments made for this school.</CardDescription>
@@ -301,7 +268,7 @@ function PaymentHistory() {
                     {p.status === 'completed' && (
                       <Link
                         href={`/billing/invoice/${p.merchantReference}`}
-                        className="shrink-0 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                        className="shrink-0 flex items-center gap-1 text-xs text-primary hover:text-primary font-medium"
                       >
                         Invoice <ExternalLink className="h-3 w-3" />
                       </Link>
@@ -323,10 +290,6 @@ export default function BillingPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [statusToastShown, setStatusToastShown] = useState(false);
-  const [addOns, setAddOns] = useState({
-    [FEATURE_ADDONS.TRANSPORT]: false,
-    [FEATURE_ADDONS.SMS]: false,
-  });
 
   if (!BILLING_ROLES.includes(user?.role)) {
     return (
@@ -356,7 +319,7 @@ export default function BillingPage() {
   const daysLeft = trialExpiry ? differenceInDays(trialExpiry, new Date()) : null;
   const planTier = school?.planTier ?? 'trial';
 
-  const bill = studentCount > 0 ? calcBill(studentCount, 'per-term', addOns) : null;
+  const bill = studentCount > 0 ? calcBill(studentCount, 'per-term') : null;
   const merchantReference = useMemo(
     () => searchParams.get('reference') || searchParams.get('merchantReference'),
     [searchParams]
@@ -368,7 +331,6 @@ export default function BillingPage() {
         billingCycle: 'per-term',
         studentCount: Math.max(studentCount || 0, 1),
         planTier: planTier === 'trial' ? 'standard' : planTier,
-        addOns,
       });
       return response.data?.checkout ?? response.data?.data?.checkout;
     },
@@ -412,7 +374,7 @@ export default function BillingPage() {
   if (schoolLoading) {
     return (
       <div>
-        <PageHeader title="Billing & Subscription" description="Manage your DiraSchool subscription" />
+        <PageHeader title="Billing & Subscription" description="Manage your DiraSchool subscription" overline="Billing" />
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 mt-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="rounded-xl border p-5 space-y-3">
@@ -431,93 +393,92 @@ export default function BillingPage() {
       <PageHeader
         title="Billing & Subscription"
         description="View your plan, estimate invoices, and manage your DiraSchool subscription"
+        overline={STATUS_CONFIG[status]?.label ?? 'Trial'}
       />
 
       {/* ── Status + expiry alert ─────────────────────────────────────────── */}
       {status === 'trial' && daysLeft !== null && daysLeft <= 14 && (
         <div className={cn(
           'flex items-start gap-3 rounded-xl px-4 py-3.5 border text-sm font-medium',
-          daysLeft <= 3 ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800',
+          daysLeft <= 3 ? 'bg-bad/8 border-bad/30 text-foreground' : 'bg-warn/5 border-warn/30 text-foreground',
         )}>
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <AlertTriangle className={cn('h-4 w-4 shrink-0 mt-0.5', daysLeft <= 3 ? 'text-bad' : 'text-warn')} />
           <div>
             <span className="font-bold">
               {daysLeft <= 0 ? 'Trial expired' : `Trial expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`}
             </span>
-            <span className="ml-1 font-normal opacity-80">— contact us to activate your subscription and avoid interruption.</span>
+            <span className="ml-1 font-normal text-muted-foreground">— contact us to activate your subscription and avoid interruption.</span>
           </div>
-          <Button asChild size="sm" variant="outline" className="ml-auto shrink-0 border-amber-300 hover:bg-amber-100">
+          <Button asChild size="sm" variant="outline" className="ml-auto shrink-0">
             <a href="mailto:contact@diraschool.com">Contact billing</a>
           </Button>
         </div>
       )}
 
       {/* ── Summary cards ─────────────────────────────────────────────────── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {/* Status */}
-        <Card>
-          <CardContent className="p-5 space-y-2">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Status</p>
-            <StatusBadge status={status} />
-            <p className="text-xs text-muted-foreground">{statusCfg.desc}</p>
-          </CardContent>
-        </Card>
+        <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
+          <div className={cn('absolute left-0 inset-y-0 w-[3px] rounded-l-lg', statusCfg.bar)} />
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Status</p>
+          <StatusBadge status={status} />
+          <p className="text-[11px] text-muted-foreground mt-1.5">{statusCfg.desc}</p>
+        </div>
 
         {/* Plan tier */}
-        <Card>
-          <CardContent className="p-5 space-y-2">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Plan</p>
-            <p className="text-2xl font-bold capitalize">{planTier === 'trial' ? 'Free Trial' : planTier}</p>
-            <p className="text-xs text-muted-foreground">Base + selected add-ons</p>
-          </CardContent>
-        </Card>
+        <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
+          <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-primary/40" />
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Plan</p>
+          <p className="font-mono text-2xl font-semibold tabular-nums leading-none capitalize">
+            {planTier === 'trial' ? 'Trial' : planTier}
+          </p>
+          <p className="text-[11px] text-muted-foreground mt-1">All features included</p>
+        </div>
 
         {/* Trial / next invoice */}
-        <Card>
-          <CardContent className="p-5 space-y-2">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">
-              {status === 'trial' ? 'Trial Expires' : 'Billing Cycle'}
-            </p>
-            {status === 'trial' && trialExpiry ? (
-              <>
-                <p className="text-2xl font-bold">{format(trialExpiry, 'dd MMM yyyy')}</p>
-                <p className="text-xs text-muted-foreground">{daysLeft > 0 ? `${daysLeft} days remaining` : 'Expired'}</p>
-              </>
-            ) : (
-              <>
-                <p className="text-2xl font-bold">Per-Term</p>
-                <p className="text-xs text-muted-foreground">3 invoices per year</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
+          <div className={cn('absolute left-0 inset-y-0 w-[3px] rounded-l-lg', status === 'trial' ? 'bg-warn' : 'bg-muted-foreground/30')} />
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">
+            {status === 'trial' ? 'Trial Expires' : 'Billing Cycle'}
+          </p>
+          {status === 'trial' && trialExpiry ? (
+            <>
+              <p className="font-mono text-2xl font-semibold tabular-nums leading-none">{format(trialExpiry, 'dd MMM yyyy')}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{daysLeft > 0 ? `${daysLeft} days remaining` : 'Expired'}</p>
+            </>
+          ) : (
+            <>
+              <p className="font-mono text-2xl font-semibold tabular-nums leading-none">Per-Term</p>
+              <p className="text-[11px] text-muted-foreground mt-1">3 invoices per year</p>
+            </>
+          )}
+        </div>
 
         {/* Estimated cost */}
-        <Card className="border-blue-200 bg-blue-50/30">
-          <CardContent className="p-5 space-y-2">
-            <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">Est. Per Term</p>
-            {bill ? (
-              <>
-                <p className="text-2xl font-bold text-blue-700">{fmt(bill.total)}</p>
-                <p className="text-xs text-blue-600/70">inc. VAT · {studentCount} students</p>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">Enroll students to see estimate</p>
-            )}
-          </CardContent>
-        </Card>
+        <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
+          <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-primary" />
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Est. Per Term</p>
+          {bill ? (
+            <>
+              <p className="font-mono text-2xl font-semibold tabular-nums leading-none text-primary">{fmt(bill.total)}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">inc. VAT · {studentCount} students</p>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground mt-1">Enroll students to see estimate</p>
+          )}
+        </div>
       </div>
 
       {/* ── Main content grid ─────────────────────────────────────────────── */}
       <div className="grid gap-5 lg:grid-cols-2">
-        <BillingCalculator currentStudents={studentCount || 100} addOns={addOns} setAddOns={setAddOns} />
+        <BillingCalculator currentStudents={studentCount || 100} />
 
         {/* Billing schedule + contact */}
         <div className="space-y-5">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <CalendarDays className="h-4 w-4 text-blue-600" />
+                <CalendarDays className="h-4 w-4 text-primary" />
                 Invoice Schedule
               </CardTitle>
               <CardDescription>Invoices are sent 2 weeks before each term starts</CardDescription>
@@ -546,21 +507,21 @@ export default function BillingPage() {
           <Card className="bg-gradient-to-br from-slate-900 to-slate-800 border-0 text-white">
             <CardContent className="p-6 space-y-3">
               <div className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-blue-400" />
+                <Mail className="h-5 w-5 text-primary/70" />
                 <p className="font-semibold">Need to upgrade or have questions?</p>
               </div>
               <p className="text-sm text-slate-400 leading-relaxed">
                 Contact our billing team to activate a subscription, discuss annual discounts, or request a custom enterprise quote.
               </p>
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                <Button asChild className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white border-0">
+                <Button asChild className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-white border-0">
                   <a href="mailto:contact@diraschool.com">Email billing team</a>
                 </Button>
                 <Button
                   type="button"
                   onClick={() => createCheckout.mutate()}
                   disabled={createCheckout.isPending || studentCount < 1}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white border-0"
+                  className="bg-ok hover:bg-ok/90 text-white border-0"
                 >
                   {createCheckout.isPending ? (
                     <>
@@ -585,18 +546,13 @@ export default function BillingPage() {
                   {!paymentStatusLoading && merchantReference && (
                     <Link
                       href={`/billing/invoice/${merchantReference}`}
-                      className="text-xs text-blue-300 underline underline-offset-2 hover:text-blue-200"
+                      className="text-xs text-primary/60 underline underline-offset-2 hover:text-primary/50"
                     >
                       View invoice →
                     </Link>
                   )}
                 </div>
               )}
-              <p className="text-xs text-slate-400">
-                Selected add-ons:
-                {' '}
-                {ADD_ON_OPTIONS.filter((item) => addOns?.[item.key]).map((item) => item.label).join(', ') || 'None'}
-              </p>
             </CardContent>
           </Card>
         </div>
@@ -606,7 +562,7 @@ export default function BillingPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <Download className="h-4 w-4 text-blue-600" />
+            <Download className="h-4 w-4 text-primary" />
             Export Your Data
           </CardTitle>
           <CardDescription>
@@ -646,11 +602,11 @@ export default function BillingPage() {
       <Card className="bg-muted/40">
         <CardContent className="p-5">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <TrendingUp className="h-5 w-5 text-blue-600 shrink-0" />
+            <TrendingUp className="h-5 w-5 text-primary shrink-0" />
             <div>
               <p className="text-sm font-semibold">How your bill is calculated</p>
               <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                ( KES 8,500 base + enrolled students × KES 40 + selected add-ons ) × 1.16 VAT = term cost
+                ( KES 12,000 base + enrolled students × KES 40 ) × 1.16 VAT = term cost
               </p>
             </div>
             <div className="sm:ml-auto flex gap-2 shrink-0">

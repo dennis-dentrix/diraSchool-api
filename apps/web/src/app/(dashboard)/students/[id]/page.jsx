@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, Pencil, UserPlus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, UserPlus, Trash2, Printer, TrendingUp } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -55,85 +56,131 @@ function StudentFeesTab({ studentId }) {
   const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
     queryKey: ['student-payments', studentId],
     queryFn: async () => {
-      const res = await feesApi.listPayments({ studentId, limit: 100 });
+      const res = await feesApi.listPayments({ studentId, limit: 200 });
       return res.data?.payments ?? res.data?.data ?? [];
     },
     enabled: !!studentId,
   });
 
-  const { data: balanceData, isLoading: balanceLoading } = useQuery({
-    queryKey: ['student-balance', studentId],
-    queryFn: async () => {
-      const res = await feesApi.getBalance({ studentId });
-      return res.data?.balance ?? res.data?.data ?? res.data;
-    },
-    enabled: !!studentId,
-  });
-
   const payments = paymentsData ?? [];
-  const totalPaid = payments.filter((p) => p.status === 'completed').reduce((s, p) => s + (p.amount ?? 0), 0);
+  const completed = payments.filter((p) => p.status === 'completed');
+  const totalPaid = completed.reduce((s, p) => s + (p.amount ?? 0), 0);
+  const paymentCount = completed.length;
 
-  if (paymentsLoading) return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>;
+  // Group by term+year for the per-term summary
+  const byTerm = completed.reduce((acc, p) => {
+    const key = `${p.academicYear ?? '—'} ${p.term ?? '—'}`;
+    acc[key] = (acc[key] ?? 0) + p.amount;
+    return acc;
+  }, {});
+
+  if (paymentsLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
+      {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-muted-foreground font-medium">Total Paid</p>
-            <p className="text-xl font-bold text-green-600 mt-0.5">{formatCurrency(totalPaid)}</p>
-          </CardContent>
-        </Card>
-        {balanceData !== undefined && !balanceLoading && (
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <p className="text-xs text-muted-foreground font-medium">Outstanding Balance</p>
-              <p className={`text-xl font-bold mt-0.5 ${(balanceData?.outstanding ?? 0) > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                {formatCurrency(balanceData?.outstanding ?? 0)}
-              </p>
-            </CardContent>
-          </Card>
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 flex items-center gap-1.5">
+            <TrendingUp className="h-3 w-3" />
+            Total Paid
+          </p>
+          <p className="font-mono text-xl font-semibold tabular-nums text-ok">{formatCurrency(totalPaid)}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">across all terms</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Transactions</p>
+          <p className="font-mono text-xl font-semibold tabular-nums text-foreground">{paymentCount}</p>
+          <p className="text-[11px] text-muted-foreground mt-1">completed receipts</p>
+        </div>
+        {Object.keys(byTerm).length > 0 && (
+          <div className="rounded-lg border border-border bg-card px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Terms Paid</p>
+            <p className="font-mono text-xl font-semibold tabular-nums text-foreground">{Object.keys(byTerm).length}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">active billing periods</p>
+          </div>
         )}
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-muted-foreground font-medium">Payments</p>
-            <p className="text-xl font-bold mt-0.5">{payments.length}</p>
-          </CardContent>
-        </Card>
       </div>
 
-      {payments.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <p className="text-sm">No payments recorded for this student.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-base">Payment History</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {payments.map((p) => (
-                <div key={p._id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium">{p.term} {p.academicYear}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(p.paymentDate ?? p.createdAt)} · {capitalize(p.method ?? '—')}
-                      {p.receiptNumber ? ` · ${p.receiptNumber}` : ''}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className={`text-sm font-semibold ${p.status === 'completed' ? 'text-green-600' : p.status === 'reversed' ? 'text-destructive line-through' : 'text-muted-foreground'}`}>
-                      {formatCurrency(p.amount ?? 0)}
-                    </p>
-                    <p className="text-xs text-muted-foreground capitalize">{p.status}</p>
-                  </div>
+      {/* Per-term breakdown */}
+      {Object.keys(byTerm).length > 0 && (
+        <div className="rounded-lg border border-border bg-card">
+          <div className="px-4 py-3 border-b border-border">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Fee Summary by Term</p>
+          </div>
+          <div className="divide-y divide-border">
+            {Object.entries(byTerm)
+              .sort((a, b) => b[0].localeCompare(a[0]))
+              .map(([term, amount]) => (
+                <div key={term} className="flex items-center justify-between px-4 py-2.5">
+                  <span className="text-sm text-foreground">{term}</span>
+                  <span className="font-mono text-sm tabular-nums font-medium text-ok">{formatCurrency(amount)}</span>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
+
+      {/* Full payment history */}
+      <div className="rounded-lg border border-border bg-card">
+        <div className="px-4 py-3 border-b border-border">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Payment History</p>
+        </div>
+        {payments.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">No payments recorded for this student.</div>
+        ) : (
+          <div className="divide-y divide-border">
+            {[...payments]
+              .sort((a, b) => new Date(b.paymentDate ?? b.createdAt) - new Date(a.paymentDate ?? a.createdAt))
+              .map((p) => {
+                const isCompleted = p.status === 'completed';
+                const isReversed  = p.status === 'reversed';
+                return (
+                  <div key={p._id} className="flex items-center gap-4 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground">{p.term} {p.academicYear}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {formatDate(p.paymentDate ?? p.createdAt)}
+                        {p.method ? ` · ${capitalize(p.method)}` : ''}
+                        {p.receiptNumber ? (
+                          <span className="ml-1 font-mono text-[11px]">· {p.receiptNumber}</span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <p className={cn(
+                          'font-mono text-sm tabular-nums font-semibold',
+                          isCompleted ? 'text-ok' : isReversed ? 'text-bad line-through' : 'text-muted-foreground',
+                        )}>
+                          {formatCurrency(p.amount ?? 0)}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground capitalize">{p.status}</p>
+                      </div>
+                      {isCompleted && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => window.open(`/fees/payments/${p._id}/print`, '_blank')}
+                          title="Print receipt"
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

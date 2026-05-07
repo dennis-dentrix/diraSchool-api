@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, MoreHorizontal, ClipboardList, ExternalLink, FileText } from 'lucide-react';
+import { Plus, ChevronRight, FileText } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,15 +13,13 @@ import { capitalize, formatDate } from '@/lib/utils';
 import { EXAM_TYPES, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { useSchoolTermDefaults } from '@/hooks/use-school-term-defaults';
 import { PageHeader } from '@/components/shared/page-header';
-import { DataTable } from '@/components/shared/data-table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const TYPE_LABELS = { opener: 'Opener', midterm: 'Mid Term', endterm: 'End Term', sba: 'SBA' };
 const TYPE_COLORS = {
@@ -30,6 +28,9 @@ const TYPE_COLORS = {
   endterm: 'bg-green-50 text-green-700 border-green-200',
   sba:     'bg-purple-50 text-purple-700 border-purple-200',
 };
+
+const TERM_ORDER  = ['Term 1', 'Term 2', 'Term 3'];
+const TYPE_ORDER  = ['opener', 'midterm', 'endterm', 'sba'];
 
 const schema = z.object({
   name:         z.string().min(1, 'Required'),
@@ -42,105 +43,14 @@ const schema = z.object({
   examPaperUrl: z.string().url('Enter a valid URL').optional().or(z.literal('')),
 });
 
-function buildColumns(onDelete, onEnterResults) {
-  return [
-    {
-      accessorKey: 'name',
-      header: 'Exam',
-      cell: ({ row }) => (
-        <div>
-          <p className="font-medium text-sm">{row.original.name}</p>
-          <p className="text-xs text-muted-foreground">
-            {typeof row.original.subjectId === 'object' ? row.original.subjectId.name : '—'}
-          </p>
-        </div>
-      ),
-    },
-    {
-      accessorKey: 'classId',
-      header: 'Class',
-      cell: ({ row }) => {
-        const c = row.original.classId;
-        return (
-          <span className="text-sm">
-            {typeof c === 'object' ? `${c.name}${c.stream ? ` ${c.stream}` : ''}` : '—'}
-          </span>
-        );
-      },
-    },
-    {
-      accessorKey: 'type',
-      header: 'Type',
-      cell: ({ row }) => {
-        const t = row.original.type;
-        return (
-          <Badge variant="outline" className={`text-xs ${TYPE_COLORS[t] ?? ''}`}>
-            {TYPE_LABELS[t] ?? capitalize(t)}
-          </Badge>
-        );
-      },
-    },
-    {
-      accessorKey: 'term',
-      header: 'Term / Year',
-      cell: ({ row }) => (
-        <span className="text-xs text-muted-foreground">
-          {row.original.term} · {row.original.academicYear}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'totalMarks',
-      header: 'Marks',
-      cell: ({ row }) => <span className="text-sm tabular-nums">/{row.original.totalMarks}</span>,
-    },
-    {
-      id: 'paper',
-      header: 'Paper',
-      cell: ({ row }) =>
-        row.original.examPaperUrl ? (
-          <a href={row.original.examPaperUrl} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <FileText className="h-3.5 w-3.5" /> View
-          </a>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        ),
-    },
-    {
-      id: 'actions',
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEnterResults(row.original._id)}>
-              <ClipboardList className="h-4 w-4 mr-2" /> Enter Results
-            </DropdownMenuItem>
-            {row.original.examPaperUrl && (
-              <DropdownMenuItem asChild>
-                <a href={row.original.examPaperUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4 mr-2" /> View Exam Paper
-                </a>
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => { if (confirm('Delete this exam and all its results?')) onDelete(row.original._id); }}
-            >
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
-  ];
+// ── Status pill (using type as proxy) ─────────────────────────────────────────
+function TypePill({ type }) {
+  const colors = TYPE_COLORS[type] ?? 'bg-slate-50 text-slate-700 border-slate-200';
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0 text-[10px] font-medium ${colors}`}>
+      {TYPE_LABELS[type] ?? capitalize(type)}
+    </span>
+  );
 }
 
 export default function ExamsPage() {
@@ -150,7 +60,6 @@ export default function ExamsPage() {
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
 
-  // Filters
   const [filterClass, setFilterClass] = useState('');
   const [filterType,  setFilterType]  = useState('');
   const [filterTerm,  setFilterTerm]  = useState('');
@@ -160,16 +69,11 @@ export default function ExamsPage() {
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
-    defaultValues: {
-      academicYear: defaultAcademicYear,
-      term: defaultTerm,
-      totalMarks: 100,
-      examPaperUrl: '',
-    },
+    defaultValues: { academicYear: defaultAcademicYear, term: defaultTerm, totalMarks: 100, examPaperUrl: '' },
   });
-  const classId = watch('classId');
+  const classId         = watch('classId');
   const formAcademicYear = watch('academicYear');
-  const formTerm = watch('term');
+  const formTerm         = watch('term');
 
   useEffect(() => {
     setValue('academicYear', defaultAcademicYear);
@@ -180,8 +84,7 @@ export default function ExamsPage() {
     queryKey: ['exams', page, filterClass, filterType, filterTerm, filterYear],
     queryFn: async () => {
       const res = await examsApi.list({
-        page,
-        limit: 20,
+        page, limit: 100,
         classId:      filterClass || undefined,
         type:         filterType  || undefined,
         term:         filterTerm  || undefined,
@@ -203,20 +106,12 @@ export default function ExamsPage() {
   });
 
   const { mutate: createExam, isPending } = useMutation({
-    mutationFn: (data) => examsApi.create({
-      ...data,
-      examPaperUrl: data.examPaperUrl || undefined,
-    }),
+    mutationFn: (d) => examsApi.create({ ...d, examPaperUrl: d.examPaperUrl || undefined }),
     onSuccess: () => {
       toast.success('Exam created');
       queryClient.invalidateQueries({ queryKey: ['exams'] });
       setOpen(false);
-      reset({
-        academicYear: defaultAcademicYear,
-        term: defaultTerm,
-        totalMarks: 100,
-        examPaperUrl: '',
-      });
+      reset({ academicYear: defaultAcademicYear, term: defaultTerm, totalMarks: 100, examPaperUrl: '' });
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -228,6 +123,22 @@ export default function ExamsPage() {
   });
 
   const classes = classesData?.data ?? classesData?.classes ?? [];
+  const allExams = data?.data ?? data?.exams ?? [];
+
+  // Group by term → type
+  const grouped = useMemo(() => {
+    const map = new Map();
+    for (const exam of allExams) {
+      const t = exam.term ?? 'Unknown';
+      const key = `${t}::${exam.type ?? 'other'}`;
+      if (!map.has(key)) map.set(key, { term: t, type: exam.type ?? 'other', items: [] });
+      map.get(key).items.push(exam);
+    }
+    return [...map.values()].sort((a, b) => {
+      const ti = TERM_ORDER.indexOf(a.term) - TERM_ORDER.indexOf(b.term);
+      return ti !== 0 ? ti : TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type);
+    });
+  }, [allExams]);
 
   return (
     <div className="space-y-4">
@@ -276,44 +187,109 @@ export default function ExamsPage() {
         </Select>
 
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="h-9" onClick={() => { setFilterClass(''); setFilterType(''); setFilterTerm(''); setFilterYear(''); setPage(1); }}>
+          <Button variant="ghost" size="sm" className="h-9"
+            onClick={() => { setFilterClass(''); setFilterType(''); setFilterTerm(''); setFilterYear(''); setPage(1); }}>
             Clear
           </Button>
         )}
       </div>
 
-      <DataTable
-        columns={buildColumns(deleteExam, (id) => router.push(`/exams/${id}`))}
-        data={data?.data}
-        loading={isLoading}
-        pageCount={data?.pagination?.totalPages}
-        currentPage={page}
-        onPageChange={setPage}
-      />
+      {/* Grouped list */}
+      {isLoading ? (
+        <div className="space-y-6">
+          {[1, 2].map((i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-32 w-full rounded-lg" />
+            </div>
+          ))}
+        </div>
+      ) : grouped.length === 0 ? (
+        <div className="rounded-lg border bg-card py-16 text-center text-muted-foreground text-sm">
+          No exams found. Create your first exam to get started.
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {grouped.map(({ term, type, items }) => (
+            <div key={`${term}-${type}`}>
+              {/* Group header */}
+              <div className="flex items-center gap-2.5 mb-2">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{term}</span>
+                <TypePill type={type} />
+                <span className="text-[10px] text-muted-foreground">{items.length}</span>
+              </div>
+
+              {/* Hairline list */}
+              <div className="rounded-lg border overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/30">
+                      <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Exam</th>
+                      <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Class</th>
+                      <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Subject</th>
+                      <th className="text-right py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Marks</th>
+                      <th className="text-right py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Year</th>
+                      <th className="py-2.5 px-3 w-8" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {items.map((exam) => {
+                      const cls  = typeof exam.classId   === 'object' ? exam.classId  : null;
+                      const subj = typeof exam.subjectId === 'object' ? exam.subjectId : null;
+                      return (
+                        <tr
+                          key={exam._id}
+                          className="hover:bg-muted/20 cursor-pointer transition-colors"
+                          onClick={() => router.push(`/exams/${exam._id}`)}
+                        >
+                          <td className="py-3 px-4">
+                            <p className="font-display font-semibold leading-tight">{exam.name}</p>
+                            {exam.examPaperUrl && (
+                              <span className="text-[10px] text-blue-600 flex items-center gap-1 mt-0.5">
+                                <FileText className="h-2.5 w-2.5" /> Paper attached
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">
+                            {cls ? `${cls.name}${cls.stream ? ` ${cls.stream}` : ''}` : '—'}
+                          </td>
+                          <td className="py-3 px-3 text-muted-foreground hidden md:table-cell">
+                            {subj?.name ?? '—'}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-[11px] text-muted-foreground">
+                            /{exam.totalMarks}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono text-[11px] text-muted-foreground hidden sm:table-cell">
+                            {exam.academicYear}
+                          </td>
+                          <td className="py-3 px-3">
+                            <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto" />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Create dialog */}
       <Dialog open={open} onOpenChange={(v) => {
         setOpen(v);
-        if (!v) {
-          reset({
-            academicYear: defaultAcademicYear,
-            term: defaultTerm,
-            totalMarks: 100,
-            examPaperUrl: '',
-          });
-        }
+        if (!v) reset({ academicYear: defaultAcademicYear, term: defaultTerm, totalMarks: 100, examPaperUrl: '' });
       }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Create Exam</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit(createExam)} className="space-y-4">
-            {/* Name */}
             <div className="space-y-1.5">
               <Label>Exam Name <span className="text-destructive">*</span></Label>
               <Input {...register('name')} placeholder="e.g. End Term Mathematics" />
               {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
 
-            {/* Class + Subject */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Class <span className="text-destructive">*</span></Label>
@@ -341,7 +317,6 @@ export default function ExamsPage() {
               </div>
             </div>
 
-            {/* Type + Total marks */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Exam Type <span className="text-destructive">*</span></Label>
@@ -362,7 +337,6 @@ export default function ExamsPage() {
               </div>
             </div>
 
-            {/* Term + Year */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Term</Label>
@@ -382,33 +356,20 @@ export default function ExamsPage() {
 
             <Separator />
 
-            {/* Exam paper URL */}
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
                 <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                 Exam Paper URL
-                <span className="text-muted-foreground font-normal text-xs">(optional — Google Drive, Dropbox, etc.)</span>
+                <span className="text-muted-foreground font-normal text-xs">(optional)</span>
               </Label>
-              <Input
-                {...register('examPaperUrl')}
-                placeholder="https://drive.google.com/..."
-                type="url"
-              />
+              <Input {...register('examPaperUrl')} placeholder="https://drive.google.com/..." type="url" />
               {errors.examPaperUrl && <p className="text-xs text-destructive">{errors.examPaperUrl.message}</p>}
-              <p className="text-xs text-muted-foreground">
-                Upload the exam paper to Google Drive or Dropbox and paste the sharing link here.
-              </p>
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => {
                 setOpen(false);
-                reset({
-                  academicYear: defaultAcademicYear,
-                  term: defaultTerm,
-                  totalMarks: 100,
-                  examPaperUrl: '',
-                });
+                reset({ academicYear: defaultAcademicYear, term: defaultTerm, totalMarks: 100, examPaperUrl: '' });
               }}>Cancel</Button>
               <Button type="submit" disabled={isPending}>{isPending ? 'Creating…' : 'Create Exam'}</Button>
             </DialogFooter>

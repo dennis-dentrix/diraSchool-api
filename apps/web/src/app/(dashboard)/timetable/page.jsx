@@ -42,6 +42,7 @@ const DAY_HEADER = {
 };
 
 const BREAK_MARKER = '__BREAK__';
+const initials = (t) => t ? `${t.firstName?.[0] ?? ''}${t.lastName?.[0] ?? ''}`.toUpperCase() : '';
 const SLOT_INIT = { day: 'monday', period: 1, startTime: '08:00', endTime: '08:40', subjectId: '', teacherId: '', room: '', isBreak: false };
 const TIMETABLE_WRITE_ROLES = ['school_admin', 'headteacher', 'deputy_headteacher'];
 const DEFAULT_PERIOD_PLAN = [
@@ -156,7 +157,7 @@ function SlotCard({ slot, onEdit, onDelete, canEdit, showTeacher = true, showCla
 
   if (isBreak) {
     return (
-      <div className="rounded border bg-amber-50 border-amber-200 px-2 py-1.5 text-xs text-center text-amber-700 font-medium relative group">
+      <div className="rounded border bg-warn/8 border-warn/30 px-2 py-1.5 text-xs text-center text-warn font-medium relative group">
         ☕ Break
         {canEdit && (
           <div className="absolute top-0.5 right-0.5 hidden group-hover:flex">
@@ -175,7 +176,9 @@ function SlotCard({ slot, onEdit, onDelete, canEdit, showTeacher = true, showCla
         {subject?.name ?? <span className="text-muted-foreground italic text-xs">No subject</span>}
       </p>
       {showClass && slot.className && <p className="text-muted-foreground font-medium">{slot.className}</p>}
-      {showTeacher && teacher && <p className="text-muted-foreground">{teacher.firstName} {teacher.lastName}</p>}
+      {showTeacher && teacher && (
+        <p className="font-mono text-[10px] text-muted-foreground tracking-widest">{initials(teacher)}</p>
+      )}
       {slot.room && slot.room !== BREAK_MARKER && <p className="text-muted-foreground text-[10px]">📍 {slot.room}</p>}
       {canEdit && (
         <div className="absolute top-1 right-1 hidden group-hover:flex gap-0.5">
@@ -218,12 +221,12 @@ function PeriodPlanEditor({ periodPlan, onChange }) {
   };
 
   return (
-    <Card className="border-cyan-200 bg-cyan-50/30">
-      <CardHeader className="py-3 px-4 border-b border-cyan-100">
+    <Card className="border-primary/20 bg-primary/5">
+      <CardHeader className="py-3 px-4 border-b border-primary/10">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-sm flex items-center gap-2">
-              <Clock className="h-4 w-4 text-cyan-700" /> School Day Pattern
+              <Clock className="h-4 w-4 text-primary" /> School Day Pattern
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
               Set lesson and break times once, then fill subjects directly in the grid below.
@@ -383,7 +386,7 @@ function TimetableGrid({
                   <div key={`${day}-${period}`} className="flex gap-3 p-3">
                     <div className="w-16 shrink-0 text-xs text-muted-foreground">
                       {isBreak ? (
-                        <span className="font-semibold text-amber-700">Break</span>
+                        <span className="font-semibold text-warn">Break</span>
                       ) : (
                         <>
                           <span className="block font-semibold text-foreground">P{period}</span>
@@ -394,7 +397,7 @@ function TimetableGrid({
                     </div>
                     <div className="min-w-0 flex-1">
                       {isBreak ? (
-                        <div className="rounded border bg-amber-50 border-amber-200 px-2 py-2 text-xs text-center text-amber-700 font-medium">
+                        <div className="rounded border bg-warn/8 border-warn/30 px-2 py-2 text-xs text-center text-warn font-medium">
                           Break
                         </div>
                       ) : slot ? (
@@ -443,71 +446,71 @@ function TimetableGrid({
       </div>
 
       <div className="hidden overflow-x-auto rounded-lg border md:block">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="bg-muted/40">
-            <th className="border-r border-b px-3 py-2 text-left text-[11px] font-medium text-muted-foreground w-28 whitespace-nowrap">
-              Period / Time
-            </th>
-            {DAYS.map((day) => (
-              <th key={day} className={`border-r border-b px-3 py-2 text-center text-xs font-semibold ${DAY_HEADER[day]} min-w-[140px]`}>
-                {dayLabel(day)}
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="bg-muted/40">
+              <th className="border-r border-b px-3 py-2 text-left text-[11px] font-medium text-muted-foreground w-28 whitespace-nowrap">
+                Period / Time
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {periods.map(({ period, startTime, endTime, isBreak }) => {
-            const isBreakRow = !!isBreak;
-            return (
-              <tr key={period} className={isBreakRow ? 'bg-amber-50/40' : 'hover:bg-muted/10'}>
-                <td className="border-r border-b px-3 py-2 align-top text-[11px] text-muted-foreground whitespace-nowrap">
-                  {isBreakRow ? (
-                    <span className="text-amber-700 font-semibold">Break</span>
-                  ) : (
-                    <>
-                      <span className="font-semibold text-foreground block">P{period}</span>
-                      <span className="tabular-nums">{startTime}</span>
-                      <span className="text-[10px] block">→ {endTime}</span>
-                    </>
-                  )}
-                </td>
-                {DAYS.map((day) => {
-                  const slot = lookup[day]?.[period];
-                  return (
-                    <td key={day} className="border-r border-b px-1.5 py-1.5 align-top">
-                      {isBreakRow ? (
-                        <div className="min-h-[36px] rounded border bg-amber-50 border-amber-200 px-2 py-2 text-xs text-center text-amber-700 font-medium">
-                          Break
-                        </div>
-                      ) : slot ? (
-                        <SlotCard
-                          slot={slot}
-                          onEdit={onEdit}
-                          onDelete={onDelete}
-                          canEdit={canEdit}
-                          showTeacher={showTeacher}
-                          showClass={showClass}
-                        />
-                      ) : canEdit ? (
-                        <button
-                          type="button"
-                          onClick={() => onAddCell?.({ day, period, startTime, endTime })}
-                          className="min-h-[36px] w-full rounded border border-dashed border-slate-300 text-xs text-muted-foreground transition hover:border-cyan-500 hover:bg-cyan-50 hover:text-cyan-700"
-                        >
-                          + Add
-                        </button>
-                      ) : (
-                        <div className="min-h-[36px]" />
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+              {DAYS.map((day) => (
+                <th key={day} className={`border-r border-b px-3 py-2 text-center text-xs font-semibold ${DAY_HEADER[day]} min-w-[140px]`}>
+                  {dayLabel(day)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {periods.map(({ period, startTime, endTime, isBreak }) => {
+              const isBreakRow = !!isBreak;
+              return (
+                <tr key={period} className={isBreakRow ? 'bg-warn/5' : 'hover:bg-muted/10'}>
+                  <td className="border-r border-b px-3 py-2 align-top text-[11px] text-muted-foreground whitespace-nowrap">
+                    {isBreakRow ? (
+                      <span className="text-warn font-semibold">Break</span>
+                    ) : (
+                      <>
+                        <span className="font-semibold text-foreground block">P{period}</span>
+                        <span className="tabular-nums">{startTime}</span>
+                        <span className="text-[10px] block">→ {endTime}</span>
+                      </>
+                    )}
+                  </td>
+                  {DAYS.map((day) => {
+                    const slot = lookup[day]?.[period];
+                    return (
+                      <td key={day} className="border-r border-b px-1.5 py-1.5 align-top">
+                        {isBreakRow ? (
+                          <div className="min-h-[36px] rounded border bg-warn/8 border-warn/30 px-2 py-2 text-xs text-center text-warn font-medium">
+                            Break
+                          </div>
+                        ) : slot ? (
+                          <SlotCard
+                            slot={slot}
+                            onEdit={onEdit}
+                            onDelete={onDelete}
+                            canEdit={canEdit}
+                            showTeacher={showTeacher}
+                            showClass={showClass}
+                          />
+                        ) : canEdit ? (
+                          <button
+                            type="button"
+                            onClick={() => onAddCell?.({ day, period, startTime, endTime })}
+                            className="min-h-[36px] w-full rounded border border-dashed border-border text-xs text-muted-foreground transition hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                          >
+                            + Add
+                          </button>
+                        ) : (
+                          <div className="min-h-[36px]" />
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -642,7 +645,7 @@ function SlotDialog({ open, onClose, initial, subjects, teachers, onSave, teache
                   </SelectContent>
                 </Select>
                 {teacherConflict && (
-                  <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 rounded px-2 py-1.5 border border-amber-200">
+                  <div className="flex items-center gap-1.5 text-xs text-warn bg-warn/8 rounded px-2 py-1.5 border border-warn/30">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                     <span><strong>{teacherConflict}</strong> is already teaching another class at this time.</span>
                   </div>
@@ -766,6 +769,20 @@ function ClassTimetableTab({ canWrite }) {
     }
     return busy;
   }, [allTimetables, timetable?._id]);
+
+  // Count teacher conflicts in the current timetable's slots
+  const conflictsCount = useMemo(() => {
+    if (!timetable?.slots || !Object.keys(teacherBusy).length) return 0;
+    let count = 0;
+    for (const slot of timetable.slots) {
+      if (slot.room === BREAK_MARKER) continue;
+      const tid = typeof slot.teacherId === 'object' ? slot.teacherId?._id : slot.teacherId;
+      if (!tid) continue;
+      const day = normalizeDay(slot.day);
+      if (teacherBusy[tid]?.[day]?.has(slot.period)) count++;
+    }
+    return count;
+  }, [timetable, teacherBusy]);
 
   const { mutate: createTimetable, isPending: creating } = useMutation({
     mutationFn: () => timetableApi.create({ classId: selectedClass, term: selectedTerm, academicYear: selectedYear, slots: [] }),
@@ -963,15 +980,26 @@ function ClassTimetableTab({ canWrite }) {
           )}
         </div>
       ) : (
-        <TimetableGrid
-          slots={displaySlots}
-          canEdit={editMode}
-          canCreateTimetable={canWrite}
-          periodPlan={editMode ? periodPlan : undefined}
-          onAddCell={openAddCell}
-          onEdit={openEditSlot}
-          onDelete={deleteSlot}
-        />
+        <div className="space-y-3">
+          {conflictsCount > 0 && (
+            <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs text-foreground">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warn" />
+              <span>
+                <strong>{conflictsCount} scheduling conflict{conflictsCount !== 1 ? 's' : ''}</strong>
+                {' '}— one or more teachers are assigned to multiple classes at the same period.
+              </span>
+            </div>
+          )}
+          <TimetableGrid
+            slots={displaySlots}
+            canEdit={editMode}
+            canCreateTimetable={canWrite}
+            periodPlan={editMode ? periodPlan : undefined}
+            onAddCell={openAddCell}
+            onEdit={openEditSlot}
+            onDelete={deleteSlot}
+          />
+        </div>
       )}
 
       <SlotDialog
@@ -1178,6 +1206,7 @@ export default function TimetablePage() {
   return (
     <div className="space-y-5">
       <PageHeader
+        overline="Timetable"
         title="Timetable"
         description={isTeacher ? 'Your teaching schedule and school calendar' : 'Class schedules and school calendar'}
       />

@@ -8,38 +8,36 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Eye, EyeOff, Loader2, MailCheck } from 'lucide-react';
+import { Eye, EyeOff, MailCheck } from 'lucide-react';
 import { authApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 const schema = z.object({
-  email: z.string().email('Enter a valid email'),
+  email:    z.string().email('Enter a valid email'),
   password: z.string().min(1, 'Password is required'),
 });
 
 export default function LoginPage() {
-  const router = useRouter();
+  const router       = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get('next') || '/dashboard';
-  const { setUser } = useAuthStore();
-  const queryClient = useQueryClient();
-  const [showPassword, setShowPassword] = useState(false);
+  const nextPath     = searchParams.get('next') || '/dashboard';
+  const { setUser }  = useAuthStore();
+  const queryClient  = useQueryClient();
+  const [showPassword,    setShowPassword]    = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
+    const url         = new URL(window.location.href);
     const allowedNext = url.searchParams.get('next');
-    const unsafeParams = [...url.searchParams.keys()].some((key) => key !== 'next');
+    const unsafeParams = [...url.searchParams.keys()].some((k) => k !== 'next');
     if (!unsafeParams) return;
-
-    const cleanUrl = new URL('/login', window.location.origin);
-    if (allowedNext) cleanUrl.searchParams.set('next', allowedNext);
-    window.history.replaceState(null, '', cleanUrl.toString());
+    const clean = new URL('/login', window.location.origin);
+    if (allowedNext) clean.searchParams.set('next', allowedNext);
+    window.history.replaceState(null, '', clean.toString());
   }, []);
 
   const { register, handleSubmit, getValues, formState: { errors } } = useForm({
@@ -57,7 +55,7 @@ export default function LoginPage() {
       else router.push(nextPath);
     },
     onError: (err) => {
-      const status = err.response?.status;
+      const status  = err.response?.status;
       const message = getErrorMessage(err);
       if (status === 403 && message.toLowerCase().includes('verify')) {
         setUnverifiedEmail(getValues('email'));
@@ -69,62 +67,63 @@ export default function LoginPage() {
 
   if (unverifiedEmail) {
     return (
-      <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur">
-        <CardContent className="pt-10 pb-8 text-center space-y-5">
-          <div className="flex justify-center">
-            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-blue-50">
-              <MailCheck className="h-7 w-7 text-blue-600" />
-            </div>
+      <div className="space-y-6 text-center">
+        <div className="flex justify-center">
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-muted">
+            <MailCheck className="h-6 w-6 text-foreground" />
           </div>
-          <div className="space-y-1.5">
-            <h2 className="text-xl font-bold">Verify your email first</h2>
-            <p className="text-sm text-muted-foreground">
-              We sent a 6-digit code to<br />
-              <span className="font-medium text-foreground">{unverifiedEmail}</span>
-            </p>
-          </div>
-          <Button
-            className="w-full"
-            onClick={() => router.push(`/verify-email?email=${encodeURIComponent(unverifiedEmail)}`)}
-          >
-            Enter verification code
-          </Button>
-          <button
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
-            onClick={() => setUnverifiedEmail(null)}
-          >
-            Back to sign in
-          </button>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="space-y-1">
+          <h2 className="font-display text-2xl font-bold tracking-tight">Verify your email first</h2>
+          <p className="text-sm text-muted-foreground">
+            We sent a 6-digit code to{' '}
+            <span className="font-medium text-foreground">{unverifiedEmail}</span>
+          </p>
+        </div>
+        <Button
+          className="w-full h-10 bg-foreground text-background hover:bg-foreground/90"
+          onClick={() => router.push(`/verify-email?email=${encodeURIComponent(unverifiedEmail)}`)}
+        >
+          Enter verification code
+        </Button>
+        <button
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+          onClick={() => setUnverifiedEmail(null)}
+        >
+          Back to sign in
+        </button>
+      </div>
     );
   }
 
   return (
-    <Card className="border border-white/10 shadow-2xl bg-white/[0.07] backdrop-blur-xl text-white">
-      <CardHeader className="space-y-1 pb-5">
-        <CardTitle className="text-2xl font-bold text-white">Welcome back</CardTitle>
-        <CardDescription className="text-slate-400">Sign in to access your school dashboard</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <>
+      {isPending && <div className="fixed inset-x-0 top-0 z-50 h-px bg-foreground" />}
+
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="font-display text-[32px] font-bold tracking-tight leading-none">Welcome back</h1>
+          <p className="text-muted-foreground text-sm">Sign in to access your school dashboard</p>
+        </div>
+
         <form onSubmit={handleSubmit(mutate)} className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-slate-300 text-xs font-medium uppercase tracking-wide">Email address</Label>
+            <Label htmlFor="email">Email address</Label>
             <Input
               id="email"
               type="email"
               autoComplete="email"
               placeholder="you@school.ac.ke"
-              className="bg-white/10 border-white/15 text-white placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/60 h-11"
+              className="h-10"
               {...register('email')}
             />
-            {errors.email && <p className="text-xs text-red-400">{errors.email.message}</p>}
+            {errors.email && <p className="text-xs text-bad">{errors.email.message}</p>}
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password" className="text-slate-300 text-xs font-medium uppercase tracking-wide">Password</Label>
-              <Link href="/forgot-password" className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+              <Label htmlFor="password">Password</Label>
+              <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
                 Forgot password?
               </Link>
             </div>
@@ -134,35 +133,36 @@ export default function LoginPage() {
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="bg-white/10 border-white/15 text-white placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/60 h-11 pr-10"
+                className="h-10 pr-10"
                 {...register('password')}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {errors.password && <p className="text-xs text-red-400">{errors.password.message}</p>}
+            {errors.password && <p className="text-xs text-bad">{errors.password.message}</p>}
           </div>
 
           <Button
             type="submit"
-            className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-blue-500/25 transition-all duration-200 border-0 mt-2"
+            className="w-full h-10 bg-foreground text-background hover:bg-foreground/90 mt-2"
             disabled={isPending}
           >
-            {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Sign in
           </Button>
         </form>
 
-        <div className="mt-5 text-center text-sm text-slate-500">
+        <p className="text-center text-sm text-muted-foreground">
           New school?{' '}
-          <Link href="/register" className="text-blue-400 hover:text-blue-300 transition-colors font-medium">Register here</Link>
-        </div>
-      </CardContent>
-    </Card>
+          <Link href="/register" className="font-medium text-foreground hover:underline underline-offset-2">
+            Register here
+          </Link>
+        </p>
+      </div>
+    </>
   );
 }

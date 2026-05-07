@@ -228,6 +228,20 @@ export const feesApi = {
   listPaymentNotifications: (params) => api.get('/fees/payment-notifications', { params }),
   getBalance: (params) => api.get('/fees/balance', { params }),
   dashboardSummary: (params) => api.get('/fees/dashboard-summary', { params }),
+  bulkFeeStats: (params) => api.get('/fees/bulk-stats', { params }),
+};
+
+// ─── M-Pesa Daraja C2B ───────────────────────────────────────────────────────
+export const mpesaApi = {
+  settings: () => api.get('/mpesa/settings'),
+  updateSettings: (data) => api.put('/mpesa/settings', data),
+  registerC2B: (schoolId) => api.post(`/mpesa/register-c2b/${schoolId}`),
+  listPayments: (params) => api.get('/mpesa/payments', { params }),
+  listStudentPayments: (studentId) => api.get(`/mpesa/payments/student/${studentId}`),
+  listUnallocated: (params) => api.get('/mpesa/payments/unallocated', { params }),
+  summary: () => api.get('/mpesa/payments/summary'),
+  manualPayment: (data) => api.post('/mpesa/payments/manual', data),
+  allocatePayment: (data) => api.post('/mpesa/payments/allocate', data),
 };
 
 // ─── Report Cards ─────────────────────────────────────────────────────────────

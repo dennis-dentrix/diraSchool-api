@@ -4,23 +4,21 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2, ShieldCheck, RefreshCw } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { authApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function VerifyEmailPage() {
-  const router = useRouter();
+  const router       = useRouter();
   const searchParams = useSearchParams();
-  const email = searchParams.get('email') || '';
-  const { setUser } = useAuthStore();
+  const email        = searchParams.get('email') || '';
+  const { setUser }  = useAuthStore();
 
-  const [digits, setDigits] = useState(['', '', '', '', '', '']);
+  const [digits,          setDigits]          = useState(['', '', '', '', '', '']);
+  const [resendCooldown,  setResendCooldown]  = useState(0);
   const refs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
-  const [resendCooldown, setResendCooldown] = useState(0);
 
-  // countdown timer for resend button
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
@@ -33,7 +31,7 @@ export default function VerifyEmailPage() {
       const user = res.data.data?.user ?? res.data.user;
       setUser(user);
       toast.success('Email verified! Welcome to Diraschool.');
-      if (user?.role === 'parent') router.push('/portal');
+      if (user?.role === 'parent')     router.push('/portal');
       else if (user?.role === 'superadmin') router.push('/superadmin');
       else router.push('/dashboard');
     },
@@ -52,7 +50,6 @@ export default function VerifyEmailPage() {
   });
 
   function handleDigit(index, value) {
-    // allow paste of full code
     if (value.length === 6 && /^\d{6}$/.test(value)) {
       const arr = value.split('');
       setDigits(arr);
@@ -60,47 +57,41 @@ export default function VerifyEmailPage() {
       verify(value);
       return;
     }
-
     const char = value.replace(/\D/g, '').slice(-1);
     const next = [...digits];
     next[index] = char;
     setDigits(next);
-
     if (char && index < 5) refs[index + 1].current?.focus();
-
-    // auto-submit when all filled
-    if (next.every((d) => d !== '') && next.join('').length === 6) {
-      verify(next.join(''));
-    }
+    if (next.every((d) => d !== '') && next.join('').length === 6) verify(next.join(''));
   }
 
   function handleKeyDown(index, e) {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      refs[index - 1].current?.focus();
-    }
+    if (e.key === 'Backspace' && !digits[index] && index > 0) refs[index - 1].current?.focus();
   }
 
-  const code = digits.join('');
+  const code   = digits.join('');
   const masked = email.replace(/(.{2}).+(@.+)/, '$1…$2');
 
   return (
-    <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur">
-      <CardHeader className="space-y-1 text-center pb-2">
-        <div className="flex justify-center mb-2">
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-blue-50">
-            <ShieldCheck className="h-6 w-6 text-blue-600" />
+    <>
+      {isPending && <div className="fixed inset-x-0 top-0 z-50 h-px bg-foreground" />}
+
+      <div className="space-y-6">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="flex items-center justify-center w-11 h-11 rounded-full bg-muted">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <div className="space-y-1">
+            <h1 className="font-display text-[32px] font-bold tracking-tight leading-none">Check your email</h1>
+            <p className="text-sm text-muted-foreground">
+              We sent a 6-digit code to{' '}
+              <span className="font-medium text-foreground">{masked || 'your email'}</span>
+            </p>
           </div>
         </div>
-        <CardTitle className="text-2xl font-bold">Check your email</CardTitle>
-        <CardDescription>
-          We sent a 6-digit code to{' '}
-          <span className="font-medium text-foreground">{masked || 'your email'}</span>
-        </CardDescription>
-      </CardHeader>
 
-      <CardContent className="space-y-6 pt-4">
         {/* OTP boxes */}
-        <div className="flex justify-center gap-2.5">
+        <div className="flex justify-center gap-2">
           {digits.map((digit, i) => (
             <input
               key={i}
@@ -113,49 +104,45 @@ export default function VerifyEmailPage() {
               onChange={(e) => handleDigit(i, e.target.value)}
               onKeyDown={(e) => handleKeyDown(i, e)}
               className={`
-                w-11 h-14 text-center text-xl font-bold rounded-lg border-2 outline-none transition-all
-                ${digit ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-input bg-background text-foreground'}
-                focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
+                w-11 h-12 text-center text-xl font-bold font-mono rounded-md border-2 outline-none transition-all
+                ${digit ? 'border-foreground bg-muted/30' : 'border-input bg-background'}
+                focus:border-foreground focus:ring-2 focus:ring-foreground/10
               `}
             />
           ))}
         </div>
 
         <Button
-          className="w-full"
+          className="w-full h-10 bg-foreground text-background hover:bg-foreground/90"
           onClick={() => code.length === 6 && verify(code)}
           disabled={isPending || code.length < 6}
         >
-          {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
           Verify email
         </Button>
 
-        <div className="text-center text-sm text-muted-foreground">
-          Didn't receive the code?{' '}
-          {resendCooldown > 0 ? (
-            <span className="text-muted-foreground">Resend in {resendCooldown}s</span>
-          ) : (
-            <button
-              onClick={() => resend()}
-              disabled={resending}
-              className="text-blue-600 hover:underline font-medium inline-flex items-center gap-1 disabled:opacity-50"
-            >
-              {resending && <Loader2 className="h-3 w-3 animate-spin" />}
-              Resend code
+        <div className="text-center text-sm text-muted-foreground space-y-2">
+          <p>
+            Didn't receive the code?{' '}
+            {resendCooldown > 0 ? (
+              <span>Resend in {resendCooldown}s</span>
+            ) : (
+              <button
+                onClick={() => resend()}
+                disabled={resending}
+                className="font-medium text-foreground hover:underline underline-offset-2 disabled:opacity-50"
+              >
+                Resend code
+              </button>
+            )}
+          </p>
+          <p className="text-xs">
+            Code expires in 30 minutes.{' '}
+            <button onClick={() => router.push('/login')} className="hover:underline">
+              Back to sign in
             </button>
-          )}
+          </p>
         </div>
-
-        <p className="text-xs text-center text-muted-foreground">
-          The code expires in 30 minutes.{' '}
-          <button
-            onClick={() => router.push('/login')}
-            className="hover:underline"
-          >
-            Back to sign in
-          </button>
-        </p>
-      </CardContent>
-    </Card>
+      </div>
+    </>
   );
 }

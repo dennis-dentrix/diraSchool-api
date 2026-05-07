@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import FeeStructure from './FeeStructure.model.js';
 import Payment from './Payment.model.js';
 import PaymentNotification from './PaymentNotification.model.js';
@@ -482,6 +483,61 @@ export const getStudentBalance = asyncHandler(async (req, res) => {
     overpaid,
     isPaidUp: outstanding === 0,
   });
+});
+
+/**
+ * GET /api/v1/fees/bulk-stats?studentIds=id1,id2,...&academicYear=&term=
+ * Returns fee payment stats for a batch of students (max 50).
+ * academicYear and term are optional — omit to aggregate across all time.
+ */
+export const getBulkFeeStats = asyncHandler(async (req, res) => {
+  const { studentIds, academicYear, term } = req.query;
+  if (!studentIds) return sendSuccess(res, { stats: {} });
+
+  const ids = studentIds.split(',').filter(Boolean).slice(0, 50);
+  const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
+
+  const paymentMatch = {
+    schoolId: req.user.schoolId,
+    studentId: { $in: objectIds },
+    status: PAYMENT_STATUSES.COMPLETED,
+  };
+  if (academicYear) paymentMatch.academicYear = academicYear;
+  if (term) paymentMatch.term = term;
+
+  const [payments, students] = await Promise.all([
+    Payment.aggregate([
+      { $match: paymentMatch },
+      { $group: { _id: '$studentId', totalPaid: { $sum: '$amount' } } },
+    ]),
+    Student.find({ _id: { $in: objectIds }, schoolId: req.user.schoolId })
+      .select('classId')
+      .lean(),
+  ]);
+
+  const classIds = [...new Set(students.map((s) => s.classId?.toString()).filter(Boolean))];
+  const structureMatch = { schoolId: req.user.schoolId, classId: { $in: classIds } };
+  if (academicYear) structureMatch.academicYear = academicYear;
+  if (term) structureMatch.term = term;
+
+  const structures = await FeeStructure.find(structureMatch).select('classId totalAmount').lean();
+  const structureByClass = Object.fromEntries(structures.map((s) => [s.classId.toString(), s.totalAmount]));
+  const paidByStudent = Object.fromEntries(payments.map((p) => [p._id.toString(), p.totalPaid]));
+  const classIdByStudent = Object.fromEntries(students.map((s) => [s._id.toString(), s.classId?.toString()]));
+
+  const stats = {};
+  for (const id of ids) {
+    const classId = classIdByStudent[id];
+    const totalAmount = classId ? (structureByClass[classId] ?? 0) : 0;
+    const totalPaid = paidByStudent[id] ?? 0;
+    stats[id] = {
+      totalPaid,
+      totalAmount,
+      percentage: totalAmount > 0 ? Math.min(100, Math.round((totalPaid / totalAmount) * 100)) : null,
+    };
+  }
+
+  return sendSuccess(res, { stats });
 });
 
 /**

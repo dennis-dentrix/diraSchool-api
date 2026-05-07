@@ -41,6 +41,11 @@ const subjectSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    tier: {
+      type: String,
+      enum: ['core', 'optional', 'kcse'],
+      trim: true,
+    },
     isActive: {
       type: Boolean,
       default: true,

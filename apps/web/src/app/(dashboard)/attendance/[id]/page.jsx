@@ -15,11 +15,11 @@ import { cn } from '@/lib/utils';
 
 // P / A / L / H / E pill button
 const STATUS_CONFIG = {
-  present:  { label: 'P', long: 'Present',  color: 'bg-green-500 text-white ring-green-500' },
-  absent:   { label: 'A', long: 'Absent',   color: 'bg-red-500 text-white ring-red-500' },
-  late:     { label: 'L', long: 'Late',     color: 'bg-amber-500 text-white ring-amber-500' },
-  half_day: { label: 'H', long: 'Half Day', color: 'bg-purple-500 text-white ring-purple-500' },
-  excused:  { label: 'E', long: 'Excused',  color: 'bg-blue-500 text-white ring-blue-500' },
+  present:  { label: 'P', long: 'Present',  color: 'bg-ok text-white ring-ok' },
+  absent:   { label: 'A', long: 'Absent',   color: 'bg-bad text-white ring-bad' },
+  late:     { label: 'L', long: 'Late',     color: 'bg-warn text-white ring-warn' },
+  half_day: { label: 'H', long: 'Half Day', color: 'bg-muted-foreground text-white ring-muted-foreground' },
+  excused:  { label: 'E', long: 'Excused',  color: 'bg-primary text-white ring-primary' },
 };
 
 const STATUSES = Object.keys(STATUS_CONFIG);
@@ -35,9 +35,10 @@ function StatusButton({ status, active, disabled, onClick }) {
         'w-10 h-10 rounded-full text-sm font-bold transition-all',
         active
           ? `${cfg.color} ring-2 ring-offset-1 scale-105 shadow`
-          : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+          : 'bg-muted/50 text-muted-foreground hover:bg-muted',
         disabled && 'opacity-40 cursor-not-allowed'
       )}
+      title={cfg.long}
     >
       {cfg.label}
     </button>
@@ -89,7 +90,14 @@ export default function AttendanceRegisterPage() {
   });
 
   const { mutate: submitRegister, isPending: submitting } = useMutation({
-    mutationFn: () => attendanceApi.submitRegister(id),
+    // Always save current entries before locking so teachers don't need to
+    // manually hit "Save Draft" first — one click does both.
+    mutationFn: async () => {
+      await attendanceApi.updateRegister(id, {
+        entries: entries.map(({ studentId, status }) => ({ studentId, status })),
+      });
+      return attendanceApi.submitRegister(id);
+    },
     onSuccess: () => {
       toast.success('Register submitted and locked');
       queryClient.invalidateQueries({ queryKey: ['attendance-register', id] });
@@ -151,11 +159,11 @@ export default function AttendanceRegisterPage() {
           </p>
         </div>
         {isLocked ? (
-          <div className="flex items-center gap-1.5 bg-green-50 text-green-700 border border-green-200 text-xs font-medium px-3 py-1.5 rounded-full shrink-0">
+          <div className="flex items-center gap-1.5 bg-ok/8 text-ok border border-ok/30 text-xs font-medium px-3 py-1.5 rounded-full shrink-0">
             <Lock className="h-3 w-3" /> Submitted
           </div>
         ) : (
-          <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 shrink-0">
+          <Badge variant="outline" className="text-warn border-warn/30 bg-warn/5 shrink-0">
             Draft
           </Badge>
         )}
@@ -179,13 +187,13 @@ export default function AttendanceRegisterPage() {
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
             <span className="flex items-center gap-1"><Users className="h-3 w-3" />{marked}/{total} recorded</span>
-            <span className={`font-semibold ${pct >= 80 ? 'text-green-700' : pct >= 60 ? 'text-amber-700' : 'text-red-700'}`}>
+            <span className={`font-semibold ${pct >= 80 ? 'text-ok' : pct >= 60 ? 'text-warn' : 'text-bad'}`}>
               {pct}% attendance rate
             </span>
           </div>
-          <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className={`h-full transition-all duration-300 ${pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+              className={`h-full transition-all duration-300 ${pct >= 80 ? 'bg-ok' : pct >= 60 ? 'bg-warn' : 'bg-bad'}`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -202,10 +210,10 @@ export default function AttendanceRegisterPage() {
               onClick={() => markAll(s)}
               className={cn(
                 'text-xs px-3 py-1 rounded-full font-medium border transition-colors',
-                s === 'present' && 'border-green-200 text-green-700 hover:bg-green-50',
-                s === 'absent'  && 'border-red-200 text-red-700 hover:bg-red-50',
-                s === 'late'    && 'border-amber-200 text-amber-700 hover:bg-amber-50',
-                s === 'excused' && 'border-blue-200 text-blue-700 hover:bg-blue-50',
+                s === 'present' && 'border-ok/30 text-ok hover:bg-ok/8',
+                s === 'absent'  && 'border-bad/30 text-bad hover:bg-bad/8',
+                s === 'late'    && 'border-warn/30 text-warn hover:bg-warn/8',
+                s === 'excused' && 'border-primary/30 text-primary hover:bg-primary/8',
               )}
             >
               All {STATUS_CONFIG[s].long}

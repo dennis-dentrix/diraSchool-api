@@ -59,6 +59,20 @@ const paymentSchema = new mongoose.Schema(
       enum: Object.values(PAYMENT_SOURCE),
       default: PAYMENT_SOURCE.MANUAL,
     },
+    payerPhone: {
+      type: String,
+      trim: true,
+    },
+    payerName: {
+      type: String,
+      trim: true,
+    },
+    accountReference: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      index: true,
+    },
     // Staff member who recorded the payment (null for sms_webhook payments)
     recordedByUserId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -113,6 +127,19 @@ const paymentSchema = new mongoose.Schema(
 paymentSchema.index({ schoolId: 1, studentId: 1, academicYear: 1, term: 1 });
 // Dashboard aggregations: filter by schoolId+status, range/sort on createdAt
 paymentSchema.index({ schoolId: 1, status: 1, createdAt: -1 });
+paymentSchema.index({ schoolId: 1, paymentDate: -1 });
+paymentSchema.index({ schoolId: 1, classId: 1, paymentDate: -1 });
+paymentSchema.index({ schoolId: 1, method: 1, status: 1 });
+paymentSchema.index(
+  { source: 1, reference: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      source: PAYMENT_SOURCE.MPESA_C2B,
+      reference: { $type: 'string' },
+    },
+  }
+);
 
 // Auto-assign a sequential receipt number before first save.
 // Uses a Redis atomic INCR per school-year to eliminate race conditions.

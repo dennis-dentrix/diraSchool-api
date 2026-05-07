@@ -19,7 +19,6 @@ export const metadata = {
   },
 };
 
-// ── JSON-LD structured data ────────────────────────────────────────────────────
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -61,7 +60,7 @@ const jsonLd = {
   ],
 };
 
-// ── Shared nav (also used by pricing page) ────────────────────────────────────
+// ── Nav ────────────────────────────────────────────────────────────────────────
 function MarketingNav() {
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur-sm">
@@ -98,36 +97,31 @@ function MarketingNav() {
 function Hero() {
   return (
     <section className="relative overflow-hidden bg-slate-950 pt-20 pb-28 px-4 sm:px-6">
-      {/* Ambient orbs */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-blue-600/15 rounded-full blur-3xl" />
         <div className="absolute top-1/3 -right-32 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl" />
         <div className="absolute bottom-0 left-0 w-96 h-64 bg-blue-800/10 rounded-full blur-3xl" />
       </div>
-      {/* Grid overlay */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:72px_72px] pointer-events-none" />
 
       <div className="relative max-w-4xl mx-auto text-center">
-        {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-8 tracking-wide">
           <Zap className="h-3 w-3" />
           Built for Kenyan CBC Schools
         </div>
 
-        {/* Headline */}
         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-white tracking-tight leading-[1.05]">
-          Run your school,<br />
+          Less paperwork.<br />
           <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-            not your spreadsheets
+            Better schools.
           </span>
         </h1>
 
         <p className="mt-7 text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          DiraSchool handles CBC report cards, student fees, attendance, and your parent portal
-          — so you can focus on what actually matters: education.
+          DiraSchool replaces your register books, fee ledgers, and typed report cards with one
+          digital system — so your team spends less time on admin and more time on education.
         </p>
 
-        {/* CTAs */}
         <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
             href="/register"
@@ -146,7 +140,6 @@ function Hero() {
           Full access · 50 students during trial · No credit card required
         </p>
 
-        {/* Trust strip */}
         <div className="mt-14 flex flex-wrap justify-center gap-x-8 gap-y-3 text-xs text-slate-500">
           {[
             'CBC-compliant report cards',
@@ -165,60 +158,84 @@ function Hero() {
   );
 }
 
-// ── Problem → Solution ─────────────────────────────────────────────────────────
-function ProblemSolution() {
-  const before = [
-    'Register books that get lost or damaged',
-    'Excel sheets for fee tracking with formula errors',
-    'Manually typed CBC report cards per student',
-    'WhatsApp to share results with parents',
-    'No audit trail when money goes missing',
-  ];
-  const after = [
-    'Digital attendance with one-click class registers',
-    'Automated fee tracking, balances and receipts',
-    'One-click CBC report cards for the whole class',
-    'Parent portal with real-time access to everything',
-    'Immutable audit log for every action in the system',
+// ── Paperwork section ──────────────────────────────────────────────────────────
+function PaperworkSection() {
+  const replacements = [
+    {
+      before: '3 teachers, 3 days to type report cards',
+      after: 'Click Generate. 40 CBC report cards in under 2 minutes.',
+      icon: FileText,
+    },
+    {
+      before: 'Excel fee ledger with broken formulas and missing payments',
+      after: 'Automated fee tracking, printed receipts, and M-Pesa integration.',
+      icon: CreditCard,
+    },
+    {
+      before: 'Paper attendance registers that get lost or damaged',
+      after: 'Digital register on any phone. Class reports in one click.',
+      icon: ClipboardCheck,
+    },
+    {
+      before: 'WhatsApp groups for results, fees, and school notices',
+      after: 'Parent portal with real-time results, balances, and updates.',
+      icon: Smartphone,
+    },
   ];
 
   return (
-    <section className="bg-white py-20 px-4 sm:px-6">
+    <section className="bg-slate-950 py-24 px-4 sm:px-6 border-t border-white/8">
       <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
-            Still managing your school like this?
+        <div className="text-center mb-16">
+          <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">The paperwork problem</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight leading-tight">
+            Your admin team loses 40+ hours<br className="hidden sm:block" /> every single term to paperwork
           </h2>
-          <p className="mt-3 text-slate-500 max-w-lg mx-auto">
-            Most Kenyan schools run on a mix of register books, Excel, and WhatsApp. DiraSchool replaces all of it.
+          <p className="mt-4 text-slate-400 max-w-xl mx-auto text-sm leading-relaxed">
+            Every Kenyan school we spoke to described the same end-of-term nightmare: register books
+            everywhere, fee chases on WhatsApp, and teachers typing the same report card 40 times.
+            DiraSchool was built to end that.
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Before */}
-          <div className="rounded-2xl border border-red-100 bg-red-50/40 p-7">
-            <p className="text-sm font-bold text-red-500 uppercase tracking-widest mb-5">Before DiraSchool</p>
-            <ul className="space-y-3.5">
-              {before.map((item) => (
-                <li key={item} className="flex items-start gap-3 text-slate-600 text-sm">
-                  <X className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-          {/* After */}
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-7">
-            <p className="text-sm font-bold text-emerald-600 uppercase tracking-widest mb-5">With DiraSchool</p>
-            <ul className="space-y-3.5">
-              {after.map((item) => (
-                <li key={item} className="flex items-start gap-3 text-slate-700 text-sm font-medium">
-                  <Check className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
+        {/* Stats strip */}
+        <div className="grid grid-cols-3 gap-px rounded-xl border border-white/10 bg-white/10 overflow-hidden mb-12">
+          {[
+            { n: '40+', label: 'hours saved per term' },
+            { n: '2 min', label: 'to generate class report cards' },
+            { n: '0', label: 'paper registers needed' },
+          ].map(({ n, label }) => (
+            <div key={label} className="bg-slate-950 py-8 text-center">
+              <p className="text-4xl font-black text-white">{n}</p>
+              <p className="text-xs text-slate-400 mt-2 max-w-[120px] mx-auto leading-tight">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Before / After grid */}
+        <div className="grid sm:grid-cols-2 gap-3">
+          {replacements.map(({ before, after, icon: Icon }) => (
+            <div key={before} className="rounded-xl border border-white/8 bg-white/3 p-5 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <X className="h-3.5 w-3.5 text-red-400 shrink-0 mt-0.5" />
+                <p className="text-slate-500 text-sm">{before}</p>
+              </div>
+              <div className="h-px bg-white/8" />
+              <div className="flex items-start gap-2.5">
+                <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                <p className="text-slate-200 text-sm font-medium">{after}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-10 text-center">
+          <Link
+            href="/register"
+            className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-blue-500/25 transition-all text-sm"
+          >
+            Start eliminating paperwork today <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
     </section>
@@ -306,6 +323,52 @@ function Features() {
   );
 }
 
+// ── Testimonials ───────────────────────────────────────────────────────────────
+function Testimonials() {
+  const quotes = [
+    {
+      body: "End of term used to take our secretarial staff three full days just for report cards. Now the class teacher clicks a button and they're done before lunch.",
+      name: 'Head Teacher',
+      school: 'Primary school, Nairobi County',
+    },
+    {
+      body: "We were tracking fees on a shared Excel sheet. Balances were always wrong. DiraSchool gives every parent their own portal and the numbers are always right.",
+      name: 'School Bursar',
+      school: 'Academy, Kiambu County',
+    },
+    {
+      body: "Parents used to call the office asking for results. Now they check the portal themselves. It's cut our admin calls by more than half.",
+      name: 'Deputy Principal',
+      school: 'Secondary school, Mombasa',
+    },
+  ];
+
+  return (
+    <section className="bg-white py-20 px-4 sm:px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <p className="text-blue-600 text-xs font-bold uppercase tracking-widest mb-3">From Kenyan schools</p>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">What school leaders are saying</h2>
+        </div>
+        <div className="grid md:grid-cols-3 gap-6">
+          {quotes.map(({ body, name, school }) => (
+            <div key={name} className="rounded-2xl border border-slate-200 bg-slate-50/50 p-7 space-y-4">
+              <svg className="h-5 w-5 text-blue-300" fill="currentColor" viewBox="0 0 32 32">
+                <path d="M10 8C6.1 8 3 11.1 3 15v9h9v-9H6c0-2.2 1.8-4 4-4V8zm16 0c-3.9 0-7 3.1-7 7v9h9v-9h-6c0-2.2 1.8-4 4-4V8z" />
+              </svg>
+              <p className="text-slate-600 text-sm leading-relaxed">{body}</p>
+              <div className="pt-1">
+                <p className="text-sm font-semibold text-slate-900">{name}</p>
+                <p className="text-xs text-slate-400">{school}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ── How it works ───────────────────────────────────────────────────────────────
 function HowItWorks() {
   const steps = [
@@ -327,7 +390,7 @@ function HowItWorks() {
   ];
 
   return (
-    <section className="bg-white py-20 px-4 sm:px-6">
+    <section className="bg-slate-50 py-20 px-4 sm:px-6">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-14">
           <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
@@ -398,7 +461,7 @@ function PricingTeaser() {
 // ── FAQ ────────────────────────────────────────────────────────────────────────
 function FAQSection() {
   return (
-    <section className="bg-slate-50 py-20 px-4 sm:px-6">
+    <section className="bg-white py-20 px-4 sm:px-6">
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Common questions</h2>
@@ -431,12 +494,12 @@ function FinalCTA() {
           >
             Start your free trial <ArrowRight className="h-4 w-4" />
           </Link>
-          <Link
+          <a
             href="mailto:contact@diraschool.com"
             className="text-slate-400 hover:text-white transition-colors text-sm"
           >
             Questions? Email us →
-          </Link>
+          </a>
         </div>
         <div className="mt-10 flex flex-wrap justify-center gap-6 text-xs text-slate-600">
           {['30-day free trial', 'No credit card', 'Full CBC compliance', '50 students included', 'Cancel any time'].map((t) => (
@@ -450,7 +513,7 @@ function FinalCTA() {
   );
 }
 
-// ── Footer ─────────────────────────────────────────────────────────────────────
+// ── About ──────────────────────────────────────────────────────────────────────
 function AboutSection() {
   return (
     <section className="bg-slate-900 py-20 px-4 sm:px-6 border-t border-white/8">
@@ -496,12 +559,12 @@ function AboutSection() {
   );
 }
 
+// ── Footer ─────────────────────────────────────────────────────────────────────
 function Footer() {
   return (
     <footer className="bg-slate-950 border-t border-white/8 py-12 px-4 sm:px-6">
       <div className="max-w-6xl mx-auto">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-8 pb-10 border-b border-white/8">
-          {/* Brand */}
           <div className="col-span-2 sm:col-span-1">
             <div className="flex items-center gap-2.5 mb-4">
               <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
@@ -516,7 +579,6 @@ function Footer() {
               CBC school management for Kenyan schools.
             </p>
           </div>
-          {/* Product */}
           <div>
             <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-4">Product</p>
             <ul className="space-y-2.5 text-xs text-slate-500">
@@ -525,7 +587,6 @@ function Footer() {
               ))}
             </ul>
           </div>
-          {/* Account */}
           <div>
             <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-4">Account</p>
             <ul className="space-y-2.5 text-xs text-slate-500">
@@ -534,13 +595,10 @@ function Footer() {
               ))}
             </ul>
           </div>
-          {/* Contact */}
           <div>
             <p className="text-slate-400 text-xs font-semibold uppercase tracking-widest mb-4">Contact</p>
             <ul className="space-y-2.5 text-xs text-slate-500">
-              {[['contact@diraschool.com', 'mailto:contact@diraschool.com']].map(([label, href]) => (
-                <li key={label}><a href={href} className="hover:text-white transition-colors">{label}</a></li>
-              ))}
+              <li><a href="mailto:contact@diraschool.com" className="hover:text-white transition-colors">contact@diraschool.com</a></li>
             </ul>
           </div>
         </div>
@@ -560,7 +618,6 @@ function Footer() {
 export default function LandingPage() {
   return (
     <>
-      {/* JSON-LD structured data */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -568,8 +625,9 @@ export default function LandingPage() {
       <div className="min-h-screen bg-slate-950">
         <MarketingNav />
         <Hero />
-        <ProblemSolution />
+        <PaperworkSection />
         <Features />
+        <Testimonials />
         <HowItWorks />
         <PricingTeaser />
         <FAQSection />

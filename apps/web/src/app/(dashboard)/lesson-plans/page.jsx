@@ -4,16 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Upload, Trash2, Share2, X, Image as ImageIcon, FileText, Eye, UserCheck,
-  Download, ChevronLeft, ChevronRight, Camera,
+  Download, ChevronLeft, ChevronRight, Camera, BookOpen, Plus,
 } from 'lucide-react';
 import { lessonPlansApi, usersApi, classesApi, subjectsApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 import { TERMS, ACADEMIC_YEARS } from '@/lib/constants';
 import { useSchoolTermDefaults } from '@/hooks/use-school-term-defaults';
 import { formatDate } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/shared/page-header';
 import { Button }   from '@/components/ui/button';
 import { Badge }    from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input }    from '@/components/ui/input';
 import { Label }    from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,7 +30,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast }    from 'sonner';
 
 const ADMIN_ROLES = ['school_admin', 'director', 'headteacher', 'deputy_headteacher'];
-
 function isAdmin(role) { return ADMIN_ROLES.includes(role); }
 
 // ── Upload dialog ─────────────────────────────────────────────────────────────
@@ -39,18 +40,14 @@ function UploadDialog({ open, onClose }) {
     academicYear: defaultAcademicYear, term: defaultTerm, weekNumber: '',
     classId: '', subjectId: '',
   });
-  const [files, setFiles]       = useState([]);   // File objects
-  const [previews, setPreviews] = useState([]);   // object URLs
-  const fileRef = useRef();
+  const [files, setFiles]       = useState([]);
+  const [previews, setPreviews] = useState([]);
+  const fileRef   = useRef();
   const cameraRef = useRef();
   const qc = useQueryClient();
 
   useEffect(() => {
-    setForm((prev) => ({
-      ...prev,
-      academicYear: defaultAcademicYear,
-      term: defaultTerm,
-    }));
+    setForm((prev) => ({ ...prev, academicYear: defaultAcademicYear, term: defaultTerm }));
   }, [defaultAcademicYear, defaultTerm]);
 
   const { data: classesData } = useQuery({
@@ -58,13 +55,12 @@ function UploadDialog({ open, onClose }) {
     queryFn: () => classesApi.list().then((r) => r.data?.classes ?? []),
     staleTime: 60_000,
   });
-  const classes = classesData ?? [];
-
   const { data: subjectsData } = useQuery({
     queryKey: ['subjects-list'],
     queryFn: () => subjectsApi.list().then((r) => r.data?.subjects ?? []),
     staleTime: 60_000,
   });
+  const classes  = classesData ?? [];
   const subjects = subjectsData ?? [];
 
   const { mutate, isPending } = useMutation({
@@ -145,11 +141,8 @@ function UploadDialog({ open, onClose }) {
             </div>
             <div className="space-y-1.5">
               <Label>Week No. (optional)</Label>
-              <Input
-                type="number" min={1} max={52} placeholder="e.g. 3"
-                value={form.weekNumber}
-                onChange={(e) => set('weekNumber')(e.target.value)}
-              />
+              <Input type="number" min={1} max={52} placeholder="e.g. 3" value={form.weekNumber}
+                onChange={(e) => set('weekNumber')(e.target.value)} />
             </div>
           </div>
 
@@ -174,9 +167,7 @@ function UploadDialog({ open, onClose }) {
                 <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— None —</SelectItem>
-                  {subjects.map((s) => (
-                    <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>
-                  ))}
+                  {subjects.map((s) => <SelectItem key={s._id} value={s._id}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -184,41 +175,29 @@ function UploadDialog({ open, onClose }) {
 
           <div className="space-y-1.5">
             <Label>Title <span className="text-destructive">*</span></Label>
-            <Input
-              placeholder="e.g. Week 3 Lesson Plan — Mathematics"
-              value={form.title}
-              onChange={(e) => set('title')(e.target.value)}
-            />
+            <Input placeholder="e.g. Week 3 Lesson Plan — Mathematics" value={form.title}
+              onChange={(e) => set('title')(e.target.value)} />
           </div>
 
           <div className="space-y-1.5">
             <Label>Description (optional)</Label>
-            <Textarea
-              placeholder="Brief notes about this plan…"
-              rows={2}
-              value={form.description}
-              onChange={(e) => set('description')(e.target.value)}
-            />
+            <Textarea placeholder="Brief notes about this plan…" rows={2} value={form.description}
+              onChange={(e) => set('description')(e.target.value)} />
           </div>
 
-          {/* Multi-image picker */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>Photos of plan pages</Label>
               <span className="text-xs text-muted-foreground">{files.length}/20 images</span>
             </div>
 
-            {/* Preview grid */}
             {previews.length > 0 && (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {previews.map((src, idx) => (
-                  <div key={idx} className="relative rounded-lg overflow-hidden border border-slate-200 aspect-[3/4]">
+                  <div key={idx} className="relative rounded-lg overflow-hidden border aspect-[3/4]">
                     <img src={src} alt={`page ${idx + 1}`} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(idx)}
-                      className="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 hover:bg-black/80"
-                    >
+                    <button type="button" onClick={() => removeImage(idx)}
+                      className="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 hover:bg-black/80">
                       <X className="h-3 w-3 text-white" />
                     </button>
                     <span className="absolute bottom-1 left-1 text-[10px] bg-black/50 text-white rounded px-1">{idx + 1}</span>
@@ -227,26 +206,17 @@ function UploadDialog({ open, onClose }) {
               </div>
             )}
 
-            {/* Add more buttons */}
             {files.length < 20 && (
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => cameraRef.current?.click()}
-                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-cyan-200 bg-cyan-50/50 px-3 py-3 text-cyan-700 transition-colors hover:border-cyan-400 hover:bg-cyan-50"
-                >
+                <button type="button" onClick={() => cameraRef.current?.click()}
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 px-3 py-3 text-primary transition-colors hover:border-primary/50 hover:bg-primary/8">
                   <Camera className="h-5 w-5" />
                   <span className="text-sm font-medium">Take photo</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 px-3 py-3 text-slate-500 transition-colors hover:border-cyan-400 hover:text-cyan-600"
-                >
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border px-3 py-3 text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary">
                   <ImageIcon className="h-5 w-5" />
-                  <span className="text-sm">
-                    {files.length === 0 ? 'Choose images' : 'Add more pages'}
-                  </span>
+                  <span className="text-sm">{files.length === 0 ? 'Choose images' : 'Add more pages'}</span>
                 </button>
               </div>
             )}
@@ -264,11 +234,7 @@ function UploadDialog({ open, onClose }) {
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>Cancel</Button>
-          <Button
-            onClick={() => mutate()}
-            disabled={isPending || !form.title}
-            className="bg-cyan-700 hover:bg-cyan-800"
-          >
+          <Button onClick={() => mutate()} disabled={isPending || !form.title}>
             {isPending ? 'Uploading…' : <><Upload className="h-4 w-4 mr-1.5" />Upload</>}
           </Button>
         </DialogFooter>
@@ -313,32 +279,23 @@ function ShareDialog({ plan, open, onClose }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Share Lesson Plan</DialogTitle>
-        </DialogHeader>
-
+        <DialogHeader><DialogTitle>Share Lesson Plan</DialogTitle></DialogHeader>
         <div className="space-y-3 py-2">
           <p className="text-sm text-muted-foreground">
             Grant access to another teacher — e.g. a replacement teacher taking over this class.
           </p>
 
-          {/* Currently shared */}
           {plan.sharedWith?.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Currently shared with</p>
               {plan.sharedWith.map((u) => (
                 <div key={u._id ?? u} className="flex items-center justify-between rounded-lg border px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <UserCheck className="h-4 w-4 text-emerald-600" />
+                    <UserCheck className="h-4 w-4 text-ok" />
                     <span className="text-sm font-medium">{u.firstName} {u.lastName}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => unshare(String(u._id ?? u))}
-                    className="text-xs text-destructive hover:underline"
-                  >
-                    Remove
-                  </button>
+                  <button type="button" onClick={() => unshare(String(u._id ?? u))}
+                    className="text-xs text-destructive hover:underline">Remove</button>
                 </div>
               ))}
             </div>
@@ -368,7 +325,6 @@ function ShareDialog({ plan, open, onClose }) {
             </div>
           </div>
         </div>
-
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Close</Button>
         </DialogFooter>
@@ -385,25 +341,16 @@ function ImageCarousel({ images, title, open, onClose, startIndex = 0 }) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl p-2 bg-black/95">
         <div className="relative">
-          <img
-            src={images[current]?.url}
-            alt={`${title} — page ${current + 1}`}
-            className="w-full max-h-[80vh] object-contain rounded"
-          />
+          <img src={images[current]?.url} alt={`${title} — page ${current + 1}`}
+            className="w-full max-h-[80vh] object-contain rounded" />
           {total > 1 && (
             <>
-              <button
-                type="button"
-                onClick={() => setCurrent((c) => (c - 1 + total) % total)}
-                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 hover:bg-black/80"
-              >
+              <button type="button" onClick={() => setCurrent((c) => (c - 1 + total) % total)}
+                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 hover:bg-black/80">
                 <ChevronLeft className="h-5 w-5 text-white" />
               </button>
-              <button
-                type="button"
-                onClick={() => setCurrent((c) => (c + 1) % total)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 hover:bg-black/80"
-              >
+              <button type="button" onClick={() => setCurrent((c) => (c + 1) % total)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 hover:bg-black/80">
                 <ChevronRight className="h-5 w-5 text-white" />
               </button>
               <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white/80 bg-black/50 px-2 py-0.5 rounded-full">
@@ -417,130 +364,164 @@ function ImageCarousel({ images, title, open, onClose, startIndex = 0 }) {
   );
 }
 
-// ── Plan card ─────────────────────────────────────────────────────────────────
-function PlanCard({ plan, currentUser, onShare, onDelete }) {
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIdx, setLightboxIdx]   = useState(0);
-  const isOwner = String(plan.teacherId?._id ?? plan.teacherId) === String(currentUser._id);
-  const admin   = isAdmin(currentUser.role);
-
-  const images   = plan.images ?? [];
-  const hasImages = images.length > 0;
-  const typeLabel = plan.type === 'work_schedule' ? 'Work Schedule' : 'Lesson Plan';
-  const typeColor = plan.type === 'work_schedule' ? 'bg-violet-100 text-violet-700' : 'bg-blue-100 text-blue-700';
-
-  function openLightbox(idx = 0) {
-    setLightboxIdx(idx);
-    setLightboxOpen(true);
-  }
+// ── Left pane: plan list item ─────────────────────────────────────────────────
+function PlanListItem({ plan, selected, onClick }) {
+  const subject = plan.subjectId?.name ?? plan.subjectId ?? null;
+  const cls     = plan.classId ? `${plan.classId.name}${plan.classId.stream ? ` ${plan.classId.stream}` : ''}` : null;
+  const isWS    = plan.type === 'work_schedule';
 
   return (
-    <>
-      <Card className="border-border/70 shadow-sm hover:shadow-md transition-shadow">
-        <CardContent className="p-4 space-y-3">
-          {/* Image thumbnail strip */}
-          {hasImages ? (
-            <div
-              className="relative cursor-pointer rounded-lg overflow-hidden border border-slate-100 bg-slate-50"
-              onClick={() => openLightbox(0)}
-            >
-              <img
-                src={images[0].url}
-                alt={plan.title}
-                className="w-full h-36 object-cover hover:opacity-90 transition-opacity"
-              />
-              {images.length > 1 && (
-                <span className="absolute bottom-2 right-2 text-xs bg-black/60 text-white px-2 py-0.5 rounded-full">
-                  +{images.length - 1} more
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-36 items-center justify-center rounded-lg border-2 border-dashed border-slate-100 bg-slate-50">
-              <FileText className="h-8 w-8 text-slate-300" />
-            </div>
-          )}
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'w-full text-left px-3 py-2.5 border-b last:border-b-0 transition-colors',
+        selected ? 'bg-primary/8 border-l-2 border-l-primary' : 'hover:bg-muted/40 border-l-2 border-l-transparent',
+      )}
+    >
+      <p className={cn('text-sm font-medium leading-snug truncate', selected && 'text-primary')}>
+        {plan.title}
+      </p>
+      <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground flex-wrap">
+        {subject && <span className="truncate max-w-[80px]">{subject}</span>}
+        {subject && cls && <span>·</span>}
+        {cls && <span className="truncate max-w-[60px]">{cls}</span>}
+        {plan.weekNumber && <><span>·</span><span>Wk {plan.weekNumber}</span></>}
+        <span className="ml-auto shrink-0">
+          <span className={cn(
+            'inline-flex items-center rounded-full border px-1.5 py-0 text-[10px] font-medium',
+            isWS ? 'border-border text-muted-foreground' : 'border-primary/30 text-primary',
+          )}>
+            {isWS ? 'Schedule' : 'Plan'}
+          </span>
+        </span>
+      </div>
+    </button>
+  );
+}
 
-          {/* Meta */}
-          <div>
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-semibold text-slate-900 leading-snug">{plan.title}</p>
-              <span className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${typeColor}`}>
-                {typeLabel}
-              </span>
-            </div>
-            {plan.description && (
-              <p className="mt-1 text-xs text-slate-500 line-clamp-2">{plan.description}</p>
-            )}
-          </div>
+// ── Right pane: plan detail viewer ────────────────────────────────────────────
+function PlanDetailPane({ plan, currentUser, onShare, onDelete }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIdx, setLightboxIdx]   = useState(0);
 
-          {/* Details */}
-          <div className="flex flex-wrap gap-1.5">
+  const isOwner  = String(plan.teacherId?._id ?? plan.teacherId) === String(currentUser._id);
+  const admin    = isAdmin(currentUser.role);
+  const images   = plan.images ?? [];
+  const hasImages = images.length > 0;
+  const cls = plan.classId ? `${plan.classId.name}${plan.classId.stream ? ` ${plan.classId.stream}` : ''}` : null;
+  const subject  = plan.subjectId?.name ?? null;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Detail header */}
+      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b shrink-0">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+            {plan.type === 'work_schedule' ? 'Work Schedule' : 'Lesson Plan'}
+          </p>
+          <h2 className="text-lg font-semibold leading-tight">{plan.title}</h2>
+          <div className="flex flex-wrap gap-1.5 mt-2">
             <Badge variant="outline" className="text-[11px]">{plan.term} {plan.academicYear}</Badge>
             {plan.weekNumber && <Badge variant="outline" className="text-[11px]">Week {plan.weekNumber}</Badge>}
-            {plan.classId && <Badge variant="outline" className="text-[11px]">{plan.classId.name}{plan.classId.stream ? ` ${plan.classId.stream}` : ''}</Badge>}
-            {images.length > 0 && <Badge variant="outline" className="text-[11px]">{images.length} page{images.length > 1 ? 's' : ''}</Badge>}
+            {cls && <Badge variant="outline" className="text-[11px]">{cls}</Badge>}
+            {subject && <Badge variant="outline" className="text-[11px]">{subject}</Badge>}
           </div>
+        </div>
 
-          {/* Teacher + date */}
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>{plan.teacherId?.firstName} {plan.teacherId?.lastName}</span>
-            <span>{formatDate(plan.createdAt)}</span>
-          </div>
-
-          {/* Shared with */}
-          {plan.sharedWith?.length > 0 && (
-            <p className="text-xs text-emerald-600 flex items-center gap-1">
-              <UserCheck className="h-3.5 w-3.5" />
-              Shared with {plan.sharedWith.length} teacher{plan.sharedWith.length > 1 ? 's' : ''}
-            </p>
+        {/* Actions */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {hasImages && (
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => { setLightboxIdx(0); setLightboxOpen(true); }}>
+              <Eye className="h-3.5 w-3.5" /> View
+            </Button>
           )}
+          {plan.pdfUrl && (
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1 border-ok/30 text-ok hover:bg-ok/8" asChild>
+              <a href={plan.pdfUrl} download><Download className="h-3.5 w-3.5" /> PDF</a>
+            </Button>
+          )}
+          {admin && (
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => onShare(plan)}>
+              <Share2 className="h-3.5 w-3.5" /> Share
+            </Button>
+          )}
+          {(isOwner || admin) && (
+            <Button size="sm" variant="ghost" className="h-8 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => onDelete(plan)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 pt-1 border-t border-slate-100 flex-wrap">
-            {hasImages && (
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openLightbox(0)}>
-                <Eye className="h-3.5 w-3.5" /> View
-              </Button>
-            )}
-            {plan.pdfUrl && (
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50" asChild>
-                <a href={plan.pdfUrl} download>
-                  <Download className="h-3.5 w-3.5" /> PDF
-                </a>
-              </Button>
-            )}
-            {plan.pdfStatus === 'processing' && (
-              <span className="text-[11px] text-muted-foreground italic">PDF generating…</span>
-            )}
-            {admin && (
-              <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onShare(plan)}>
-                <Share2 className="h-3.5 w-3.5" /> Share
-              </Button>
-            )}
-            {(isOwner || admin) && (
-              <Button
-                size="sm" variant="ghost"
-                className="h-7 text-xs gap-1 ml-auto text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={() => onDelete(plan)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        {/* Teacher + date */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{plan.teacherId?.firstName} {plan.teacherId?.lastName}</span>
+          <span>{formatDate(plan.createdAt)}</span>
+        </div>
+
+        {/* Shared-with */}
+        {plan.sharedWith?.length > 0 && (
+          <p className="text-xs text-ok flex items-center gap-1">
+            <UserCheck className="h-3.5 w-3.5" />
+            Shared with {plan.sharedWith.length} teacher{plan.sharedWith.length > 1 ? 's' : ''}
+          </p>
+        )}
+
+        {/* PDF processing state */}
+        {plan.pdfStatus === 'processing' && (
+          <p className="text-xs text-muted-foreground italic">PDF generating…</p>
+        )}
+
+        {/* Paper document viewer */}
+        <div
+          className="bg-white rounded border shadow-sm mx-auto max-w-2xl min-h-[320px] px-8 py-6 text-sm leading-relaxed"
+          style={{
+            backgroundImage: 'repeating-linear-gradient(transparent, transparent calc(12rem - 1px), hsl(var(--border)) calc(12rem - 1px), hsl(var(--border)) 12rem)',
+          }}
+        >
+          {plan.description ? (
+            <p className="whitespace-pre-wrap text-foreground">{plan.description}</p>
+          ) : (
+            <p className="text-muted-foreground italic text-xs">No description provided.</p>
+          )}
+        </div>
+
+        {/* Image pages */}
+        {hasImages && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+              Pages — {images.length} image{images.length > 1 ? 's' : ''}
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {images.map((img, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => { setLightboxIdx(idx); setLightboxOpen(true); }}
+                  className="relative rounded-lg overflow-hidden border aspect-[3/4] hover:opacity-90 transition-opacity group"
+                >
+                  <img src={img.url} alt={`Page ${idx + 1}`} className="w-full h-full object-cover" />
+                  <span className="absolute bottom-1.5 left-1.5 text-[10px] bg-black/50 text-white rounded px-1.5 py-0.5">
+                    {idx + 1}
+                  </span>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20 transition-opacity">
+                    <Eye className="h-5 w-5 text-white" />
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {hasImages && (
-        <ImageCarousel
-          images={images}
-          title={plan.title}
-          open={lightboxOpen}
-          onClose={() => setLightboxOpen(false)}
-          startIndex={lightboxIdx}
-        />
+        <ImageCarousel images={images} title={plan.title} open={lightboxOpen}
+          onClose={() => setLightboxOpen(false)} startIndex={lightboxIdx} />
       )}
-    </>
+    </div>
   );
 }
 
@@ -548,9 +529,12 @@ function PlanCard({ plan, currentUser, onShare, onDelete }) {
 export default function LessonPlansPage() {
   const { user } = useAuthStore();
   const qc = useQueryClient();
-  const { academicYear: defaultAcademicYear } = useSchoolTermDefaults(['lesson-plans', 'term-defaults']);
+  const { academicYear: defaultAcademicYear, term: defaultTerm } = useSchoolTermDefaults(['lesson-plans', 'term-defaults']);
   const [uploadOpen, setUploadOpen]   = useState(false);
   const [shareTarget, setShareTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [selectedId, setSelectedId]   = useState(null);
+  const [search, setSearch]           = useState('');
   const [filters, setFilters] = useState({
     academicYear: defaultAcademicYear,
     term: '',
@@ -574,110 +558,119 @@ export default function LessonPlansPage() {
     enabled: !!user?._id,
   });
 
-  const [deleteTarget, setDeleteTarget] = useState(null);
-
   const { mutate: deletePlan, isPending: deleting } = useMutation({
     mutationFn: (id) => lessonPlansApi.delete(id),
     onSuccess: () => {
       toast.success('Lesson plan deleted.');
       qc.invalidateQueries({ queryKey: ['lesson-plans'] });
       setDeleteTarget(null);
+      setSelectedId(null);
     },
     onError: (e) => toast.error(e?.response?.data?.message ?? 'Delete failed.'),
   });
 
-  function handleDelete(plan) { setDeleteTarget(plan); }
-
-  const plans = data ?? [];
   const setFilter = (k) => (v) => setFilters((p) => ({ ...p, [k]: v === 'all' ? '' : v }));
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card className="border-border/70 bg-gradient-to-br from-slate-50 via-white to-cyan-50/40">
-        <CardContent className="p-5 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Lesson Plans</h1>
-              <p className="mt-1 text-sm text-slate-600">Upload and manage lesson plans and work schedules</p>
-            </div>
-            <Button onClick={() => setUploadOpen(true)} className="gap-2 bg-cyan-700 hover:bg-cyan-800 sm:self-start">
-              <Upload className="h-4 w-4" /> Upload Plan
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+  const allPlans = data ?? [];
+  const filteredPlans = search
+    ? allPlans.filter((p) => p.title?.toLowerCase().includes(search.toLowerCase()))
+    : allPlans;
 
-      {/* Filters */}
-      <Card className="border-border/70">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="space-y-1">
-              <Label className="text-xs">Year</Label>
-              <Select value={filters.academicYear} onValueChange={setFilter('academicYear')}>
-                <SelectTrigger className="w-24 h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y} className="text-xs">{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Term</Label>
+  const selectedPlan = filteredPlans.find((p) => p._id === selectedId) ?? filteredPlans[0] ?? null;
+
+  return (
+    <div className="flex flex-col gap-4 h-[calc(100vh-6rem)]">
+      <div className="flex items-center justify-between shrink-0">
+        <PageHeader
+          overline="Academics"
+          title="Lesson Plans"
+          description="Upload and manage lesson plans and work schedules"
+        />
+        <Button onClick={() => setUploadOpen(true)} size="sm" className="gap-1.5 shrink-0">
+          <Plus className="h-4 w-4" /> Upload Plan
+        </Button>
+      </div>
+
+      <div className="flex gap-0 flex-1 min-h-0 rounded-lg border overflow-hidden">
+        {/* ── Left pane: list ─────────────────────────────────────────────── */}
+        <div className="w-72 shrink-0 flex flex-col border-r">
+          {/* Filters bar */}
+          <div className="p-2 space-y-2 border-b shrink-0">
+            <Input
+              placeholder="Search plans…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-xs"
+            />
+            <div className="flex gap-1.5">
               <Select value={filters.term || 'all'} onValueChange={setFilter('term')}>
-                <SelectTrigger className="w-28 h-8 text-xs"><SelectValue placeholder="All terms" /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="Term" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all" className="text-xs">All terms</SelectItem>
                   {TERMS.map((t) => <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Type</Label>
               <Select value={filters.type || 'all'} onValueChange={setFilter('type')}>
-                <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="All types" /></SelectTrigger>
+                <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="Type" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all" className="text-xs">All types</SelectItem>
-                  <SelectItem value="lesson_plan" className="text-xs">Lesson Plan</SelectItem>
-                  <SelectItem value="work_schedule" className="text-xs">Work Schedule</SelectItem>
+                  <SelectItem value="all" className="text-xs">All</SelectItem>
+                  <SelectItem value="lesson_plan" className="text-xs">Plans</SelectItem>
+                  <SelectItem value="work_schedule" className="text-xs">Schedules</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground ml-auto self-end pb-1">
-              {plans.length} plan{plans.length !== 1 ? 's' : ''}
-            </p>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-64" />)}
+          {/* Plan list */}
+          <div className="flex-1 overflow-y-auto">
+            {isLoading ? (
+              <div className="space-y-2 p-2">
+                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
+              </div>
+            ) : filteredPlans.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-4 text-center text-muted-foreground gap-2">
+                <BookOpen className="h-7 w-7 opacity-30" />
+                <p className="text-xs">No plans found</p>
+              </div>
+            ) : (
+              filteredPlans.map((plan) => (
+                <PlanListItem
+                  key={plan._id}
+                  plan={plan}
+                  selected={plan._id === (selectedId ?? filteredPlans[0]?._id)}
+                  onClick={() => setSelectedId(plan._id)}
+                />
+              ))
+            )}
+          </div>
+
+          {!isLoading && filteredPlans.length > 0 && (
+            <p className="text-[10px] text-muted-foreground px-3 py-2 border-t shrink-0 tabular-nums">
+              {filteredPlans.length} plan{filteredPlans.length !== 1 ? 's' : ''}
+            </p>
+          )}
         </div>
-      ) : plans.length === 0 ? (
-        <Card className="border-border/70">
-          <CardContent className="py-16 text-center">
-            <ImageIcon className="h-10 w-10 mx-auto text-slate-300 mb-3" />
-            <p className="text-sm font-medium text-slate-700">No lesson plans yet</p>
-            <p className="text-xs text-muted-foreground mt-1">Upload a photo of your lesson plan or work schedule.</p>
-            <Button onClick={() => setUploadOpen(true)} className="mt-4 gap-2 bg-cyan-700 hover:bg-cyan-800">
-              <Upload className="h-4 w-4" /> Upload your first plan
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {plans.map((plan) => (
-            <PlanCard
-              key={plan._id}
-              plan={plan}
+
+        {/* ── Right pane: detail ───────────────────────────────────────────── */}
+        <div className="flex-1 min-w-0 bg-muted/20">
+          {!selectedPlan ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+              <FileText className="h-10 w-10 opacity-25" />
+              <p className="text-sm">Select a plan to view it</p>
+              <Button variant="outline" size="sm" onClick={() => setUploadOpen(true)}>
+                <Upload className="h-3.5 w-3.5 mr-1.5" /> Upload your first plan
+              </Button>
+            </div>
+          ) : (
+            <PlanDetailPane
+              plan={selectedPlan}
               currentUser={user}
               onShare={setShareTarget}
-              onDelete={handleDelete}
+              onDelete={(p) => setDeleteTarget(p)}
             />
-          ))}
+          )}
         </div>
-      )}
+      </div>
 
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} />
       {shareTarget && (
@@ -692,7 +685,7 @@ export default function LessonPlansPage() {
               <div className="space-y-3">
                 <p>
                   You are about to permanently delete{' '}
-                  <span className="font-semibold text-slate-900">"{deleteTarget?.title}"</span>.
+                  <span className="font-semibold">"{deleteTarget?.title}"</span>.
                 </p>
                 <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive space-y-1">
                   <p className="font-medium">This will permanently remove:</p>

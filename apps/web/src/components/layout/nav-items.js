@@ -28,130 +28,58 @@ const ALL_STAFF = ['school_admin', 'director', 'headteacher', 'deputy_headteache
 const TRANSPORT_ACCESS = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'];
 const AUDIT_ACCESS = ['school_admin', 'director', 'headteacher'];
 
-// Items are ordered by daily-use frequency.
-// High-frequency daily tasks appear first; setup / admin-only items sink to the bottom.
-//
-// Frequency tiers:
-//   DAILY      — Dashboard, Students, Attendance, Fees, Staff, Messaging
-//   REGULAR    — Timetable, Leave
-//   PERIODIC   — Classes, Subjects, Exams, Lesson Plans
-//   RARELY     — Transport, Visitors, Audit Logs, Billing, Settings
-
-export const schoolNavItems = [
-  // ── Daily ──────────────────────────────────────────────────────────────────
+export const schoolNavGroups = [
   {
-    label: 'Dashboard',
-    href: '/dashboard',
-    icon: LayoutDashboard,
-    roles: ALL_STAFF,
-  },
-  {
-    label: 'Students',
-    href: '/students',
-    icon: GraduationCap,
-    roles: ALL_STAFF,
-  },
-  {
-    label: 'Attendance',
-    href: '/attendance',
-    icon: ClipboardList,
-    roles: ACADEMIC,
-  },
-  {
-    label: 'Fees',
-    href: '/fees',
-    icon: CreditCard,
-    roles: FINANCE,
-    children: [
-      { label: 'Payments',       href: '/fees/payments'   },
-      { label: 'Overview',       href: '/fees'            },
-      { label: 'Fee Structures', href: '/fees/structures' },
+    group: 'Today',
+    items: [
+      { label: 'Dashboard',  href: '/dashboard', icon: LayoutDashboard, roles: ALL_STAFF },
+      { label: 'Students',   href: '/students',  icon: GraduationCap,   roles: ALL_STAFF },
+      { label: 'Attendance', href: '/attendance',icon: ClipboardList,   roles: ACADEMIC },
+      {
+        label: 'Fees',
+        href: '/fees',
+        icon: CreditCard,
+        roles: FINANCE,
+        children: [
+          { label: 'Payments',       href: '/fees/payments'   },
+          { label: 'Overview',       href: '/fees'            },
+          { label: 'Fee Structures', href: '/fees/structures' },
+        ],
+      },
+      { label: 'Staff',      href: '/staff',     icon: Users,           roles: ADMIN },
+      {
+        label: 'Messaging',
+        href: '/messaging',
+        icon: MessageSquare,
+        roles: ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'],
+      },
     ],
   },
   {
-    label: 'Staff',
-    href: '/staff',
-    icon: Users,
-    roles: ADMIN,
+    group: 'Academic',
+    items: [
+      { label: 'Timetable',    href: '/timetable',    icon: Calendar,  roles: ALL_STAFF },
+      { label: 'Leave',        href: '/leave',        icon: Umbrella,  roles: ALL_STAFF },
+      { label: 'Classes',      href: '/classes',      icon: BookOpen,  roles: ALL_STAFF },
+      { label: 'Subjects',     href: '/subjects',     icon: BookOpen,  roles: ACADEMIC },
+      { label: 'Exams',        href: '/exams',        icon: FileText,  roles: ACADEMIC },
+      { label: 'Lesson Plans', href: '/lesson-plans', icon: Image,     roles: ACADEMIC },
+    ],
   },
   {
-    label: 'Messaging',
-    href: '/messaging',
-    icon: MessageSquare,
-    roles: ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'],
-  },
-
-  // ── Regular ────────────────────────────────────────────────────────────────
-  {
-    label: 'Timetable',
-    href: '/timetable',
-    icon: Calendar,
-    roles: ALL_STAFF,
-  },
-  {
-    label: 'Leave',
-    href: '/leave',
-    icon: Umbrella,
-    roles: ALL_STAFF,
-  },
-
-  // ── Periodic ───────────────────────────────────────────────────────────────
-  {
-    label: 'Classes',
-    href: '/classes',
-    icon: BookOpen,
-    roles: ALL_STAFF,
-  },
-  {
-    label: 'Subjects',
-    href: '/subjects',
-    icon: BookOpen,
-    roles: ACADEMIC,
-  },
-  {
-    label: 'Exams',
-    href: '/exams',
-    icon: FileText,
-    roles: ACADEMIC,
-  },
-  {
-    label: 'Lesson Plans',
-    href: '/lesson-plans',
-    icon: Image,
-    roles: ACADEMIC,
-  },
-  // ── Rarely / admin-only ────────────────────────────────────────────────────
-  {
-    label: 'Transport',
-    href: '/transport',
-    icon: Bus,
-    roles: TRANSPORT_ACCESS,
-  },
-  {
-    label: 'Visitors',
-    href: '/visitors',
-    icon: UserCheck,
-    roles: ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary'],
-  },
-  {
-    label: 'Audit Logs',
-    href: '/audit-logs',
-    icon: ShieldAlert,
-    roles: AUDIT_ACCESS,
-  },
-  {
-    label: 'Billing',
-    href: '/billing',
-    icon: Receipt,
-    roles: ['school_admin', 'director', 'headteacher'],
-  },
-  {
-    label: 'Settings',
-    href: '/settings',
-    icon: Settings,
-    roles: ALL_STAFF,
+    group: 'Operations',
+    items: [
+      { label: 'Transport',   href: '/transport',   icon: Bus,       roles: TRANSPORT_ACCESS },
+      { label: 'Visitors',    href: '/visitors',    icon: UserCheck, roles: ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary'] },
+      { label: 'Audit Logs',  href: '/audit-logs',  icon: ShieldAlert, roles: AUDIT_ACCESS },
+      { label: 'Billing',     href: '/billing',     icon: Receipt,   roles: ['school_admin', 'director', 'headteacher'] },
+      { label: 'Settings',    href: '/settings',    icon: Settings,  roles: ALL_STAFF },
+    ],
   },
 ];
+
+// Flat list — used by layout getPageTitle and any flat consumers
+export const schoolNavItems = schoolNavGroups.flatMap((g) => g.items);
 
 export const superadminNavItems = [
   { label: 'Overview',   href: '/superadmin',            icon: LayoutDashboard },

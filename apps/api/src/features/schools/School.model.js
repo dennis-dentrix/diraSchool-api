@@ -63,6 +63,35 @@ const schoolSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    // Direct Daraja C2B callback configuration. Money still goes directly to the
+    // school's own Paybill; Diraschool only receives reconciliation callbacks.
+    mpesa: {
+      paybill: {
+        type: String,
+        trim: true,
+      },
+      authorized: {
+        type: Boolean,
+        default: false,
+      },
+      authorizedAt: Date,
+      authorizationLetterUrl: {
+        type: String,
+        trim: true,
+      },
+      c2bRegistered: {
+        type: Boolean,
+        default: false,
+      },
+      c2bRegisteredAt: Date,
+      active: {
+        type: Boolean,
+        default: false,
+      },
+      lastRegistrationResponse: {
+        type: mongoose.Schema.Types.Mixed,
+      },
+    },
     // Interim payment automation: SMS notifications forwarded from the school
     // payment phone are parsed into fee payments when they match one student.
     paymentSmsSettings: {
@@ -115,5 +144,7 @@ const schoolSchema = new mongoose.Schema(
 );
 
 schoolSchema.index({ email: 1 }, { unique: true });
+schoolSchema.index({ 'mpesa.paybill': 1 }, { sparse: true });
+schoolSchema.index({ 'mpesa.paybill': 1, 'mpesa.active': 1 });
 
 export default mongoose.models.School || mongoose.model('School', schoolSchema);

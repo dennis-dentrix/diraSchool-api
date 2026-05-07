@@ -1,62 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71% 4%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
-    --primary: 221 83% 54%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 220 14% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 221 83% 54%;
-    --radius: 0.625rem;
-    /* Sidebar */
-    --sidebar: 222.2 84% 4.9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 210 40% 98%;
-  }
+    --background:             38 22% 95%;   /* paper #f7f5f0 */
+    --foreground:             140 15% 7%;   /* ink   #0f1410 */
+    --card:                   0 0% 100%;
+    --card-foreground:        140 15% 7%;
+    --popover:                0 0% 100%;
+    --popover-foreground:     140 15% 7%;
+    --primary:                184 50% 24%;  /* brand #1f5b5e */
+    --primary-foreground:     38 22% 95%;
+    --secondary:              42 22% 92%;
+    --secondary-foreground:   140 15% 14%;
+    --muted:                  42 22% 92%;
+    --muted-foreground:       155 7% 36%;  /* darkened: was 44%, now 5.8:1 on paper */
+    --accent:                 42 22% 92%;
+    --accent-foreground:      140 15% 14%;
+    --destructive:            8 56% 41%;
+    --destructive-foreground: 38 22% 95%;
+    --border:                 42 22% 86%;
+    --input:                  42 22% 86%;
+    --ring:                   184 50% 24%;
+    --radius:                 0.5rem;
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-    --sidebar: 222.2 84% 4.9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 210 40% 98%;
+    /* Sidebar */
+    --sidebar:                    160 7% 9%;    /* panel #161a18 */
+    --sidebar-foreground:         38 22% 95%;
+    --sidebar-border:             158 8% 15%;
+    --sidebar-accent:             158 8% 15%;
+    --sidebar-accent-foreground:  38 22% 95%;
+
+    /* Status colors (data only, never backgrounds) */
+    --ok:   135 33% 37%;   /* #3f7d4e */
+    --warn: 35 72% 31%;    /* darkened: was 37%, now ≥4.5:1 on paper */
+    --bad:  8 56% 41%;     /* #a23a2c */
   }
 }
 
@@ -71,10 +52,15 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+  }
+
+  h1, h2 {
+    font-family: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
   }
 
   /* Thin elegant scrollbar */
@@ -97,7 +83,7 @@
 
   /* Selection color */
   ::selection {
-    background-color: hsl(221 83% 54% / 0.15);
-    color: hsl(221 83% 40%);
+    background-color: hsl(184 50% 24% / 0.15);
+    color: hsl(184 50% 20%);
   }
 }

@@ -7,32 +7,28 @@ import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useState } from 'react';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { authApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
-// Only ask for password — the admin already captured the name during account creation.
-// If the name needs updating, the user can do so from their profile after logging in.
-const schema = z
-  .object({
-    password:        z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: "Passwords don't match",
-    path:    ['confirmPassword'],
-  });
+const schema = z.object({
+  password:        z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword: z.string(),
+}).refine((d) => d.password === d.confirmPassword, {
+  message: "Passwords don't match",
+  path: ['confirmPassword'],
+});
 
 export default function AcceptInvitePage() {
-  const params = useParams();
-  const token  = Array.isArray(params?.token) ? params.token[0] : params?.token;
-  const router = useRouter();
-  const { setUser } = useAuthStore();
-  const [showPwd, setShowPwd] = useState(false);
+  const params        = useParams();
+  const token         = Array.isArray(params?.token) ? params.token[0] : params?.token;
+  const tokenTail     = token ? token.slice(-8) : '';
+  const router        = useRouter();
+  const { setUser }   = useAuthStore();
+  const [showPwd,     setShowPwd]     = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm({
@@ -51,45 +47,52 @@ export default function AcceptInvitePage() {
   });
 
   return (
-    <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold">Activate your account</CardTitle>
-        <CardDescription>
-          Your name has been set by your administrator. Create a password to get started.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <>
+      {isPending && <div className="fixed inset-x-0 top-0 z-50 h-px bg-foreground" />}
+
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="font-display text-[32px] font-bold tracking-tight leading-none">Activate your account</h1>
+          <p className="text-muted-foreground text-sm">
+            Your name has been set by your administrator. Create a password to get started.
+          </p>
+          {tokenTail && (
+            <p className="text-xs font-mono text-muted-foreground/50 pt-1">invite: …{tokenTail}</p>
+          )}
+        </div>
+
         <form onSubmit={handleSubmit(mutate)} className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="password">Create password</Label>
             <div className="relative">
-              <Input id="password" type={showPwd ? 'text' : 'password'} placeholder="Min. 8 characters" {...register('password')} />
+              <Input id="password" type={showPwd ? 'text' : 'password'} className="h-10 pr-10" placeholder="Min. 8 characters" {...register('password')} />
               <button type="button" onClick={() => setShowPwd((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                 {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {errors.password && (
-              <p className="text-xs text-destructive">{errors.password.message}</p>
-            )}
+            {errors.password && <p className="text-xs text-bad">{errors.password.message}</p>}
           </div>
-          <div className="space-y-2">
+
+          <div className="space-y-1.5">
             <Label htmlFor="confirmPassword">Confirm password</Label>
             <div className="relative">
-              <Input id="confirmPassword" type={showConfirm ? 'text' : 'password'} placeholder="••••••••" {...register('confirmPassword')} />
+              <Input id="confirmPassword" type={showConfirm ? 'text' : 'password'} className="h-10 pr-10" placeholder="••••••••" {...register('confirmPassword')} />
               <button type="button" onClick={() => setShowConfirm((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                 {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {errors.confirmPassword && (
-              <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
-            )}
+            {errors.confirmPassword && <p className="text-xs text-bad">{errors.confirmPassword.message}</p>}
           </div>
-          <Button type="submit" className="w-full" disabled={isPending || !token}>
-            {isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+
+          <Button
+            type="submit"
+            className="w-full h-10 bg-foreground text-background hover:bg-foreground/90"
+            disabled={isPending || !token}
+          >
             Activate account
           </Button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </>
   );
 }

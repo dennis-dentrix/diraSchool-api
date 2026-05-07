@@ -176,6 +176,7 @@ const saveNotification = async ({ school, parsed, status, reason, payload, stude
       schoolId: school._id,
       provider: parsed.provider,
       status,
+      source: 'sms',
       messageId: payload.messageId,
       from: payload.from,
       to: payload.to,

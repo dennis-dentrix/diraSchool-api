@@ -4,17 +4,17 @@ import { useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-export default function VerifyEmailPage() {
-  const params = useParams();
-  const token = Array.isArray(params?.token) ? params.token[0] : params?.token;
-  const router = useRouter();
-  const { setUser } = useAuthStore();
+export default function VerifyEmailTokenPage() {
+  const params       = useParams();
+  const token        = Array.isArray(params?.token) ? params.token[0] : params?.token;
+  const router       = useRouter();
+  const { setUser }  = useAuthStore();
+  const tokenTail    = token ? token.slice(-8) : '';
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['verify-email', token],
@@ -23,7 +23,7 @@ export default function VerifyEmailPage() {
       return res.data.data?.user ?? res.data.user ?? null;
     },
     enabled: !!token,
-    retry: false,
+    retry:   false,
   });
 
   useEffect(() => {
@@ -34,34 +34,44 @@ export default function VerifyEmailPage() {
   }, [data, router, setUser]);
 
   return (
-    <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur text-center">
-      <CardContent className="pt-8 pb-6 space-y-4">
-        {isLoading && (
-          <>
-            <Loader2 className="h-12 w-12 text-blue-500 mx-auto animate-spin" />
-            <p className="font-medium">Verifying your email…</p>
-          </>
-        )}
-        {data && (
-          <>
-            <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-            <h2 className="text-xl font-semibold">Email verified!</h2>
-            <p className="text-muted-foreground text-sm">Redirecting you to the dashboard…</p>
-          </>
-        )}
-        {isError && (
-          <>
-            <XCircle className="h-12 w-12 text-destructive mx-auto" />
-            <h2 className="text-xl font-semibold">Verification failed</h2>
-            <p className="text-muted-foreground text-sm">
+    <div className="rounded-lg border bg-card p-8 space-y-5 text-center">
+      {isLoading && (
+        <>
+          <Loader2 className="h-10 w-10 mx-auto animate-spin text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="font-semibold">Verifying your email…</p>
+            <p className="text-xs font-mono text-muted-foreground">token: …{tokenTail}</p>
+          </div>
+        </>
+      )}
+
+      {data && (
+        <>
+          <CheckCircle2 className="h-10 w-10 mx-auto text-ok" />
+          <div className="space-y-1">
+            <h2 className="font-display text-xl font-bold">Email verified!</h2>
+            <p className="text-sm text-muted-foreground">Redirecting you to the dashboard…</p>
+          </div>
+        </>
+      )}
+
+      {isError && (
+        <>
+          <XCircle className="h-10 w-10 mx-auto text-bad" />
+          <div className="space-y-1">
+            <h2 className="font-display text-xl font-bold">Verification failed</h2>
+            <p className="text-sm text-muted-foreground">
               This link may have expired or already been used.
             </p>
-            <Link href="/login">
-              <Button variant="outline" className="w-full mt-2">Back to sign in</Button>
-            </Link>
-          </>
-        )}
-      </CardContent>
-    </Card>
+            <p className="text-xs font-mono text-muted-foreground/60 pt-1">token: …{tokenTail}</p>
+          </div>
+          <Link href="/login">
+            <Button className="w-full h-10 bg-foreground text-background hover:bg-foreground/90">
+              Back to sign in
+            </Button>
+          </Link>
+        </>
+      )}
+    </div>
   );
 }

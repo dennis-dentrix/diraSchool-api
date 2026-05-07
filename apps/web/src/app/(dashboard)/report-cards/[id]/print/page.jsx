@@ -8,7 +8,6 @@ import { reportCardsApi, settingsApi, schoolsApi } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { SchoolDocumentHeader } from '@/components/shared/school-document-header';
 
-// CBC grade descriptions
 const GRADE_LABELS = {
   EE: 'Exceeds Expectation',
   ME: 'Meets Expectation',
@@ -53,7 +52,6 @@ export default function ReportCardPrintPage() {
     },
   });
 
-  // Auto-trigger print dialog once data is loaded
   useEffect(() => {
     if (!isLoading && rc) {
       const timer = setTimeout(() => window.print(), 500);
@@ -78,17 +76,13 @@ export default function ReportCardPrintPage() {
 
   return (
     <>
-      {/* Print-specific styles */}
       <style>{`
         @page { size: A4 portrait; margin: 15mm 15mm 15mm 15mm; }
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          /* Hide everything except the report card using visibility trick */
           body * { visibility: hidden; }
           #report-print-root, #report-print-root * { visibility: visible; }
-          #report-print-root {
-            position: absolute; left: 0; top: 0; width: 100%;
-          }
+          #report-print-root { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
         }
         #report-print-root { font-family: 'Times New Roman', Times, serif; font-size: 11pt; color: #111; }
@@ -101,11 +95,11 @@ export default function ReportCardPrintPage() {
         .grade-BE, .grade-BE1, .grade-BE2 { background-color: #fee2e2 !important; color: #991b1b !important; font-weight: 700; }
       `}</style>
 
-      {/* Print Button — hidden in print */}
+      {/* Print bar — hidden when printing */}
       <div className="no-print flex justify-end p-4 bg-gray-50 border-b print:hidden">
         <button
           onClick={() => window.print()}
-          className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+          className="px-4 py-2 bg-slate-900 text-white text-sm rounded hover:bg-slate-700"
         >
           Print / Save as PDF
         </button>
@@ -117,7 +111,6 @@ export default function ReportCardPrintPage() {
         </button>
       </div>
 
-      {/* Report Card Body */}
       <div className="max-w-[780px] mx-auto p-6 bg-white" id="report-print-root">
 
         <SchoolDocumentHeader
@@ -129,7 +122,7 @@ export default function ReportCardPrintPage() {
           generatedAt={formatDate(rc.generatedAt ?? rc.createdAt)}
         />
 
-        {/* ── Student Details ──────────────────────────────────────────────── */}
+        {/* Student details */}
         <table className="mb-4 text-sm">
           <tbody>
             <tr>
@@ -182,7 +175,7 @@ export default function ReportCardPrintPage() {
           </tbody>
         </table>
 
-        {/* ── Attendance ───────────────────────────────────────────────────── */}
+        {/* Attendance */}
         <div className="mb-4">
           <h3 className="font-bold text-sm uppercase tracking-wide mb-1 bg-gray-200 px-2 py-1">
             Attendance Summary
@@ -209,7 +202,7 @@ export default function ReportCardPrintPage() {
           </table>
         </div>
 
-        {/* ── Subject Performance ──────────────────────────────────────────── */}
+        {/* Subject performance */}
         <div className="mb-4">
           <h3 className="font-bold text-sm uppercase tracking-wide mb-1 bg-gray-200 px-2 py-1">
             Subject Performance
@@ -221,7 +214,7 @@ export default function ReportCardPrintPage() {
                 <th className="text-center w-16">Avg %</th>
                 <th className="text-center w-16">Grade</th>
                 <th className="text-center w-12">Pts</th>
-                <th className="text-left">Teacher's Remark</th>
+                <th className="text-left">Teacher&apos;s Remark</th>
               </tr>
             </thead>
             <tbody>
@@ -249,7 +242,7 @@ export default function ReportCardPrintPage() {
           </table>
         </div>
 
-        {/* ── CBC Grading Key ──────────────────────────────────────────────── */}
+        {/* CBC Grading key */}
         <div className="mb-4">
           <h3 className="font-bold text-sm uppercase tracking-wide mb-1 bg-gray-200 px-2 py-1">
             CBC Grading Key
@@ -264,41 +257,35 @@ export default function ReportCardPrintPage() {
             </thead>
             <tbody>
               {cls?.levelCategory === 'jss' ? (
-                <>
-                  {[
-                    ['EE1', '75–100%'], ['EE2', '65–74%'],
-                    ['ME1', '55–64%'], ['ME2', '45–54%'],
-                    ['AE1', '35–44%'], ['AE2', '25–34%'],
-                    ['BE1', '15–24%'], ['BE2', '0–14%'],
-                  ].map(([g, range]) => (
-                    <tr key={g}>
-                      <td className={`text-center font-bold grade-${g}`}>{g}</td>
-                      <td>{GRADE_LABELS[g]}</td>
-                      <td className="text-center">{range}</td>
-                    </tr>
-                  ))}
-                </>
+                [
+                  ['EE1', '75–100%'], ['EE2', '65–74%'],
+                  ['ME1', '55–64%'], ['ME2', '45–54%'],
+                  ['AE1', '35–44%'], ['AE2', '25–34%'],
+                  ['BE1', '15–24%'], ['BE2', '0–14%'],
+                ].map(([g, range]) => (
+                  <tr key={g}>
+                    <td className={`text-center font-bold grade-${g}`}>{g}</td>
+                    <td>{GRADE_LABELS[g]}</td>
+                    <td className="text-center">{range}</td>
+                  </tr>
+                ))
               ) : (
-                <>
-                  {[
-                    ['EE', '75–100%'],
-                    ['ME', '50–74%'],
-                    ['AE', '25–49%'],
-                    ['BE', '0–24%'],
-                  ].map(([g, range]) => (
-                    <tr key={g}>
-                      <td className={`text-center font-bold grade-${g}`}>{g}</td>
-                      <td>{GRADE_LABELS[g]}</td>
-                      <td className="text-center">{range}</td>
-                    </tr>
-                  ))}
-                </>
+                [
+                  ['EE', '75–100%'], ['ME', '50–74%'],
+                  ['AE', '25–49%'],  ['BE', '0–24%'],
+                ].map(([g, range]) => (
+                  <tr key={g}>
+                    <td className={`text-center font-bold grade-${g}`}>{g}</td>
+                    <td>{GRADE_LABELS[g]}</td>
+                    <td className="text-center">{range}</td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
 
-        {/* ── Remarks ──────────────────────────────────────────────────────── */}
+        {/* Remarks */}
         <div className="mb-6">
           <h3 className="font-bold text-sm uppercase tracking-wide mb-1 bg-gray-200 px-2 py-1">
             Remarks
@@ -306,33 +293,33 @@ export default function ReportCardPrintPage() {
           <table className="text-sm">
             <tbody>
               <tr>
-                <td className="font-bold bg-gray-50 w-44 align-top">Class Teacher's Remarks</td>
+                <td className="font-bold bg-gray-50 w-44 align-top">Class Teacher&apos;s Remarks</td>
                 <td className="min-h-[48px]">{rc.teacherRemarks || ''}</td>
               </tr>
               <tr>
-                <td className="font-bold bg-gray-50 align-top">Principal's Remarks</td>
+                <td className="font-bold bg-gray-50 align-top">Principal&apos;s Remarks</td>
                 <td className="min-h-[48px]">{rc.principalRemarks || ''}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* ── Signatures ───────────────────────────────────────────────────── */}
+        {/* Signatures — dashed lines */}
         <div className="mt-8 grid grid-cols-3 gap-8 text-sm text-center">
           <div>
-            <div className="border-b border-black mb-1 h-10" />
+            <div className="border-b border-dashed border-black mb-1 h-10" />
             <p className="font-semibold">Class Teacher</p>
             <p className="text-xs text-gray-500">Signature &amp; Date</p>
           </div>
           <div>
-            <div className="border-b border-black mb-1 h-10 flex items-end justify-center pb-1">
+            <div className="border-b border-dashed border-black mb-1 h-10 flex items-end justify-center pb-1">
               {principalName && <span className="text-xs font-medium text-gray-600">{principalName}</span>}
             </div>
             <p className="font-semibold">Principal / Head Teacher</p>
             <p className="text-xs text-gray-500">Signature &amp; Date</p>
           </div>
           <div>
-            <div className="border-b border-black mb-1 h-10" />
+            <div className="border-b border-dashed border-black mb-1 h-10" />
             <p className="font-semibold">Parent / Guardian</p>
             <p className="text-xs text-gray-500">Signature &amp; Date</p>
           </div>
@@ -340,7 +327,7 @@ export default function ReportCardPrintPage() {
 
         {/* Footer */}
         <div className="mt-6 pt-3 border-t border-gray-300 text-center text-xs text-gray-400">
-          Serial: {documentSerial} · Generated by EduSaaS · {school?.name ?? ''} · {rc.academicYear} {rc.term}
+          Serial: {documentSerial} · Generated by DiraSchool · {school?.name ?? ''} · {rc.academicYear} {rc.term}
         </div>
       </div>
     </>

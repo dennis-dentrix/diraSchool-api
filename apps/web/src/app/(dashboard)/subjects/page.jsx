@@ -23,14 +23,32 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+const SUBJECT_TIERS = [
+  { value: 'core',     label: 'Core' },
+  { value: 'optional', label: 'Optional' },
+  { value: 'kcse',     label: 'KCSE' },
+];
+
 const schema = z.object({
   name:       z.string().min(1, 'Required'),
   code:       z.string().optional(),
   classId:    z.string().min(1, 'Required'),
   department: z.string().optional(),
+  tier:       z.string().optional(),
 });
 
 const CONFIRM_INIT = { open: false, title: '', description: '', onConfirm: null };
+
+// ── Tier pill — single-color outline, no rainbow ───────────────────────────────
+function TierPill({ tier }) {
+  if (!tier) return <span className="text-muted-foreground text-xs">—</span>;
+  const label = SUBJECT_TIERS.find((t) => t.value === tier)?.label ?? tier;
+  return (
+    <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs font-medium text-foreground">
+      {label}
+    </span>
+  );
+}
 
 // ── Admin table columns ───────────────────────────────────────────────────────
 const adminColumns = (onDelete, onAssign) => [
@@ -50,6 +68,11 @@ const adminColumns = (onDelete, onAssign) => [
     accessorKey: 'code',
     header: 'Code',
     cell: ({ row }) => <span className="text-sm font-mono">{row.original.code ?? '—'}</span>,
+  },
+  {
+    accessorKey: 'tier',
+    header: 'Tier',
+    cell: ({ row }) => <TierPill tier={row.original.tier} />,
   },
   {
     accessorKey: 'classId',
@@ -127,18 +150,21 @@ function DepartmentGroup({ department, subjects, onAssign, onDelete }) {
             const teacherCount = s.teacherIds?.length ?? 0;
             return (
               <div key={s._id} className="flex items-center justify-between px-4 py-2.5">
-                <div>
-                  <p className="text-sm font-medium">
-                    {s.name}
-                    {s.code && <span className="font-mono text-xs text-muted-foreground ml-1.5">{s.code}</span>}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {cls} · {teacherCount} teacher{teacherCount !== 1 ? 's' : ''}
-                  </p>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {s.name}
+                      {s.code && <span className="font-mono text-xs text-muted-foreground ml-1.5">{s.code}</span>}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {cls} · {teacherCount} teacher{teacherCount !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                  {s.tier && <TierPill tier={s.tier} />}
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
                       <MoreHorizontal className="h-3.5 w-3.5" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -167,45 +193,42 @@ function TeacherSubjectCard({ subject, isAssigned, onJoin, onLeave, isPending })
     : '—';
 
   return (
-    <Card className={isAssigned ? 'border-blue-200 bg-blue-50/30' : ''}>
-      <CardContent className="flex items-center justify-between py-3 px-4">
-        <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isAssigned ? 'bg-blue-100' : 'bg-muted'}`}>
-            <BookOpen className={`h-4 w-4 ${isAssigned ? 'text-blue-600' : 'text-muted-foreground'}`} />
-          </div>
-          <div>
-            <p className="text-sm font-medium">
-              {subject.name}
-              {subject.code && <span className="font-mono text-xs text-muted-foreground ml-1.5">{subject.code}</span>}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {cls}{subject.department ? ` · ${subject.department}` : ''}
-            </p>
-          </div>
+    <div className={`flex items-center justify-between rounded-lg border bg-card px-4 py-3 transition-colors ${isAssigned ? 'border-primary/20 bg-primary/5' : ''}`}>
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isAssigned ? 'bg-primary/15' : 'bg-muted'}`}>
+          <BookOpen className={`h-4 w-4 ${isAssigned ? 'text-primary' : 'text-muted-foreground'}`} />
         </div>
-        {isAssigned ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-red-600 border-red-200 hover:bg-red-50 shrink-0"
-            disabled={isPending}
-            onClick={() => onLeave(subject._id)}
-          >
-            <LogOut className="h-3.5 w-3.5 mr-1" /> Leave
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-blue-600 border-blue-200 hover:bg-blue-50 shrink-0"
-            disabled={isPending}
-            onClick={() => onJoin(subject._id)}
-          >
-            <LogIn className="h-3.5 w-3.5 mr-1" /> Join
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+        <div className="min-w-0">
+          <p className="text-sm font-medium">
+            {subject.name}
+            {subject.code && <span className="font-mono text-xs text-muted-foreground ml-1.5">{subject.code}</span>}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {cls}{subject.department ? ` · ${subject.department}` : ''}
+          </p>
+        </div>
+        {subject.tier && <TierPill tier={subject.tier} />}
+      </div>
+      {isAssigned ? (
+        <Button
+          size="sm" variant="outline"
+          className="text-bad border-bad/30 hover:bg-bad/8 shrink-0"
+          disabled={isPending}
+          onClick={() => onLeave(subject._id)}
+        >
+          <LogOut className="h-3.5 w-3.5 mr-1" /> Leave
+        </Button>
+      ) : (
+        <Button
+          size="sm" variant="outline"
+          className="text-primary border-primary/30 hover:bg-primary/8 shrink-0"
+          disabled={isPending}
+          onClick={() => onJoin(subject._id)}
+        >
+          <LogIn className="h-3.5 w-3.5 mr-1" /> Join
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -223,12 +246,11 @@ export default function SubjectsPage() {
   const [page, setPage]                             = useState(1);
   const [confirmDialog, setConfirmDialog]           = useState(CONFIRM_INIT);
   const [deptFilter, setDeptFilter]                 = useState('');
-  const [viewMode, setViewMode]                     = useState('table'); // 'table' | 'grouped'
-  const [teacherTab, setTeacherTab]                 = useState('mine'); // 'mine' | 'browse'
+  const [viewMode, setViewMode]                     = useState('table');
+  const [teacherTab, setTeacherTab]                 = useState('mine');
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({ resolver: zodResolver(schema) });
 
-  // Admin: full list (no teacher filter)
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['subjects', page, deptFilter],
     queryFn: async () => {
@@ -238,23 +260,15 @@ export default function SubjectsPage() {
     enabled: adminUser,
   });
 
-  // Teacher: my subjects only
   const { data: mySubjectsData, isLoading: myLoading } = useQuery({
     queryKey: ['my-subjects'],
-    queryFn: async () => {
-      const res = await subjectsApi.list({ limit: 200 });
-      return res.data;
-    },
+    queryFn: async () => { const res = await subjectsApi.list({ limit: 200 }); return res.data; },
     enabled: isTeacher,
   });
 
-  // Teacher: browse all subjects in school
   const { data: allSubjectsData, isLoading: allLoading } = useQuery({
     queryKey: ['subjects-browse'],
-    queryFn: async () => {
-      const res = await subjectsApi.list({ all: 'true', limit: 200 });
-      return res.data;
-    },
+    queryFn: async () => { const res = await subjectsApi.list({ all: 'true', limit: 200 }); return res.data; },
     enabled: isTeacher && teacherTab === 'browse',
   });
 
@@ -276,13 +290,11 @@ export default function SubjectsPage() {
   const teachers    = teachersData?.users ?? teachersData?.data ?? [];
   const meta        = data?.meta ?? data?.pagination;
 
-  // Unique departments from whichever list is relevant
   const departments = useMemo(() => {
     const src = adminUser ? subjects : allSubjects;
     return [...new Set(src.map((s) => s.department).filter(Boolean))].sort();
   }, [subjects, allSubjects, adminUser]);
 
-  // Subjects grouped by department for the "By Department" view
   const grouped = useMemo(() => {
     const src = deptFilter ? subjects.filter((s) => s.department === deptFilter) : subjects;
     const map = {};
@@ -294,10 +306,8 @@ export default function SubjectsPage() {
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [subjects, deptFilter]);
 
-  // Subject IDs the current teacher already belongs to
   const mySubjectIds = useMemo(() => new Set(mySubjects.map((s) => s._id)), [mySubjects]);
 
-  // ── Mutations ─────────────────────────────────────────────────────────────
   const { mutate: createSubject, isPending } = useMutation({
     mutationFn: (data) => subjectsApi.create(data),
     onSuccess: () => {
@@ -316,8 +326,7 @@ export default function SubjectsPage() {
   });
 
   const { mutate: assignTeachers, isPending: isAssigning } = useMutation({
-    mutationFn: ({ id, teacherIds, hodId }) =>
-      subjectsApi.assignTeachers(id, { teacherIds, hodId: hodId || null }),
+    mutationFn: ({ id, teacherIds, hodId }) => subjectsApi.assignTeachers(id, { teacherIds, hodId: hodId || null }),
     onSuccess: () => {
       toast.success('Teachers updated');
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
@@ -350,13 +359,12 @@ export default function SubjectsPage() {
 
   // ── Teacher view ──────────────────────────────────────────────────────────
   if (isTeacher) {
-    const browseList = deptFilter
-      ? allSubjects.filter((s) => s.department === deptFilter)
-      : allSubjects;
+    const browseList = deptFilter ? allSubjects.filter((s) => s.department === deptFilter) : allSubjects;
 
     return (
       <div className="space-y-5">
         <PageHeader
+          overline="Subjects"
           title="My Subjects"
           description="View your assigned subjects or join ones you teach"
         />
@@ -365,9 +373,7 @@ export default function SubjectsPage() {
           <TabsList>
             <TabsTrigger value="mine" className="gap-2">
               <GraduationCap className="h-4 w-4" /> My Subjects
-              {mySubjects.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{mySubjects.length}</Badge>
-              )}
+              {mySubjects.length > 0 && <Badge variant="secondary" className="ml-1">{mySubjects.length}</Badge>}
             </TabsTrigger>
             <TabsTrigger value="browse" className="gap-2">
               <BookOpen className="h-4 w-4" /> Browse All
@@ -375,13 +381,10 @@ export default function SubjectsPage() {
           </TabsList>
         </Tabs>
 
-        {/* My subjects */}
         {teacherTab === 'mine' && (
           myLoading ? (
             <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />
-              ))}
+              {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
             </div>
           ) : mySubjects.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground text-sm space-y-2">
@@ -389,7 +392,7 @@ export default function SubjectsPage() {
               <p>You haven&apos;t been assigned to any subjects yet.</p>
               <p>
                 Switch to{' '}
-                <button className="underline text-blue-600" onClick={() => setTeacherTab('browse')}>
+                <button className="underline text-primary" onClick={() => setTeacherTab('browse')}>
                   Browse All
                 </button>{' '}
                 to find and join subjects you teach.
@@ -398,26 +401,18 @@ export default function SubjectsPage() {
           ) : (
             <div className="space-y-2">
               {mySubjects.map((s) => (
-                <TeacherSubjectCard
-                  key={s._id}
-                  subject={s}
-                  isAssigned
-                  onLeave={(id) => selfAssign({ id, action: 'leave' })}
-                  isPending={isSelfAssigning}
-                />
+                <TeacherSubjectCard key={s._id} subject={s} isAssigned
+                  onLeave={(id) => selfAssign({ id, action: 'leave' })} isPending={isSelfAssigning} />
               ))}
             </div>
           )
         )}
 
-        {/* Browse all */}
         {teacherTab === 'browse' && (
           <div className="space-y-4">
             {departments.length > 0 && (
               <Select value={deptFilter} onValueChange={(v) => setDeptFilter(v === '__all__' ? '' : v)}>
-                <SelectTrigger className="w-44 h-8 text-xs">
-                  <SelectValue placeholder="All departments" />
-                </SelectTrigger>
+                <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="All departments" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">All departments</SelectItem>
                   {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -426,23 +421,17 @@ export default function SubjectsPage() {
             )}
             {allLoading ? (
               <div className="space-y-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />
-                ))}
+                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-16 rounded-xl bg-muted animate-pulse" />)}
               </div>
             ) : browseList.length === 0 ? (
               <p className="text-center py-8 text-sm text-muted-foreground">No subjects found.</p>
             ) : (
               <div className="space-y-2">
                 {browseList.map((s) => (
-                  <TeacherSubjectCard
-                    key={s._id}
-                    subject={s}
-                    isAssigned={mySubjectIds.has(s._id)}
+                  <TeacherSubjectCard key={s._id} subject={s} isAssigned={mySubjectIds.has(s._id)}
                     onJoin={(id) => selfAssign({ id, action: 'join' })}
                     onLeave={(id) => selfAssign({ id, action: 'leave' })}
-                    isPending={isSelfAssigning}
-                  />
+                    isPending={isSelfAssigning} />
                 ))}
               </div>
             )}
@@ -455,19 +444,20 @@ export default function SubjectsPage() {
   // ── Admin view ────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4">
-      <PageHeader title="Subjects" description="Manage subjects, departments, and teacher assignments">
+      <PageHeader
+        overline="Subjects"
+        title="Subjects"
+        description="Manage subjects, departments, and teacher assignments"
+      >
         <Button size="sm" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Add Subject
         </Button>
       </PageHeader>
 
-      {/* Filters + view toggle */}
       <div className="flex flex-wrap gap-3 items-center">
         {departments.length > 0 && (
           <Select value={deptFilter} onValueChange={(v) => { setDeptFilter(v === '__all__' ? '' : v); setPage(1); }}>
-            <SelectTrigger className="w-44 h-8 text-xs">
-              <SelectValue placeholder="All departments" />
-            </SelectTrigger>
+            <SelectTrigger className="w-44 h-8 text-xs"><SelectValue placeholder="All departments" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">All departments</SelectItem>
               {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -490,7 +480,6 @@ export default function SubjectsPage() {
         </div>
       </div>
 
-      {/* Table view */}
       {viewMode === 'table' && (
         <DataTable
           columns={adminColumns(
@@ -506,26 +495,18 @@ export default function SubjectsPage() {
         />
       )}
 
-      {/* Grouped view */}
       {viewMode === 'grouped' && (
         isLoading ? (
           <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-32 rounded-xl bg-muted animate-pulse" />
-            ))}
+            {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-32 rounded-xl bg-muted animate-pulse" />)}
           </div>
         ) : grouped.length === 0 ? (
           <p className="text-center py-8 text-sm text-muted-foreground">No subjects yet.</p>
         ) : (
           <div className="space-y-4">
             {grouped.map(([dept, items]) => (
-              <DepartmentGroup
-                key={dept}
-                department={dept}
-                subjects={items}
-                onAssign={openAssign}
-                onDelete={(id) => openConfirm('Delete subject?', 'This action cannot be undone.', () => deleteSubject(id))}
-              />
+              <DepartmentGroup key={dept} department={dept} subjects={items} onAssign={openAssign}
+                onDelete={(id) => openConfirm('Delete subject?', 'This action cannot be undone.', () => deleteSubject(id))} />
             ))}
           </div>
         )
@@ -547,9 +528,21 @@ export default function SubjectsPage() {
                 <Input {...register('code')} placeholder="MTH" />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Department (optional)</Label>
-              <Input {...register('department')} placeholder="e.g. Sciences, Languages" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Department (optional)</Label>
+                <Input {...register('department')} placeholder="e.g. Sciences" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Tier (optional)</Label>
+                <Select onValueChange={(v) => setValue('tier', v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select tier" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {SUBJECT_TIERS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Class</Label>
@@ -557,9 +550,7 @@ export default function SubjectsPage() {
                 <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
                 <SelectContent>
                   {(classesData?.classes ?? classesData?.data ?? []).map((c) => (
-                    <SelectItem key={c._id} value={c._id}>
-                      {c.name}{c.stream ? ` ${c.stream}` : ''}
-                    </SelectItem>
+                    <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -573,25 +564,18 @@ export default function SubjectsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Assign teachers + HOD dialog ──────────────────────────────────── */}
+      {/* ── Assign teachers dialog ─────────────────────────────────────────── */}
       <Dialog open={!!assignTarget} onOpenChange={() => setAssignTarget(null)}>
         <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Teachers — {assignTarget?.name}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Teachers — {assignTarget?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Select Teachers</Label>
               <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-2">
-                {teachers.length === 0 && (
-                  <p className="text-xs text-muted-foreground p-2">No teachers found</p>
-                )}
+                {teachers.length === 0 && <p className="text-xs text-muted-foreground p-2">No teachers found</p>}
                 {teachers.map((t) => (
                   <label key={t._id} className="flex items-center gap-2 cursor-pointer p-1 hover:bg-muted rounded">
-                    <Checkbox
-                      checked={selectedTeacherIds.includes(t._id)}
-                      onCheckedChange={() => toggleTeacher(t._id)}
-                    />
+                    <Checkbox checked={selectedTeacherIds.includes(t._id)} onCheckedChange={() => toggleTeacher(t._id)} />
                     <span className="text-sm">{t.firstName} {t.lastName}</span>
                   </label>
                 ))}
@@ -599,30 +583,18 @@ export default function SubjectsPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Head of Department (optional)</Label>
-              <Select
-                value={selectedHodId || '__none__'}
-                onValueChange={(v) => setSelectedHodId(v === '__none__' ? '' : v)}
-              >
+              <Select value={selectedHodId || '__none__'} onValueChange={(v) => setSelectedHodId(v === '__none__' ? '' : v)}>
                 <SelectTrigger><SelectValue placeholder="Select HOD" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">None</SelectItem>
-                  {teachers.map((t) => (
-                    <SelectItem key={t._id} value={t._id}>{t.firstName} {t.lastName}</SelectItem>
-                  ))}
+                  {teachers.map((t) => <SelectItem key={t._id} value={t._id}>{t.firstName} {t.lastName}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignTarget(null)}>Cancel</Button>
-            <Button
-              disabled={isAssigning}
-              onClick={() => assignTeachers({
-                id: assignTarget._id,
-                teacherIds: selectedTeacherIds,
-                hodId: selectedHodId,
-              })}
-            >
+            <Button disabled={isAssigning} onClick={() => assignTeachers({ id: assignTarget._id, teacherIds: selectedTeacherIds, hodId: selectedHodId })}>
               Save
             </Button>
           </DialogFooter>
@@ -630,16 +602,11 @@ export default function SubjectsPage() {
       </Dialog>
 
       {/* ── Confirm dialog ─────────────────────────────────────────────────── */}
-      <AlertDialog
-        open={confirmDialog.open}
-        onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}
-      >
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
-            {confirmDialog.description && (
-              <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
-            )}
+            {confirmDialog.description && <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

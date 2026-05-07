@@ -103,6 +103,22 @@ export const env = {
   // Paystack — optional. Set PAYSTACK_ENABLED=true to activate checkout endpoints.
   PAYSTACK_ENABLED: process.env.PAYSTACK_ENABLED === 'true',
   PAYSTACK_SECRET_KEY: process.env.PAYSTACK_SECRET_KEY,
+  // Safaricom Daraja C2B — optional until a school connects M-Pesa.
+  MPESA_CONSUMER_KEY: process.env.MPESA_CONSUMER_KEY,
+  MPESA_CONSUMER_SECRET: process.env.MPESA_CONSUMER_SECRET,
+  MPESA_PASSKEY: process.env.MPESA_PASSKEY,
+  MPESA_SHORTCODE: process.env.MPESA_SHORTCODE,
+  MPESA_ENV: process.env.MPESA_ENV || 'production',
+  MPESA_BASE_URL: process.env.MPESA_BASE_URL || (
+    process.env.MPESA_ENV === 'sandbox'
+      ? 'https://sandbox.safaricom.co.ke'
+      : 'https://api.safaricom.co.ke'
+  ),
+  MPESA_CALLBACK_BASE_URL: process.env.MPESA_CALLBACK_BASE_URL,
+  MPESA_IP_WHITELIST_ENABLED: process.env.MPESA_IP_WHITELIST_ENABLED,
+  MPESA_ALLOWED_IPS: process.env.MPESA_ALLOWED_IPS
+    ? process.env.MPESA_ALLOWED_IPS.split(',').map((ip) => ip.trim()).filter(Boolean)
+    : [],
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV === 'development',
 };

@@ -1,20 +1,33 @@
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-export function EmptyState({ icon: Icon, title, description, action, className }) {
+/**
+ * Empty / zero-state placeholder.
+ * Design rule: icon is rendered outline at muted opacity — no filled circle background.
+ */
+export function EmptyState({ icon: Icon, title, description, action, secondaryAction, className }) {
   return (
     <div className={cn('flex flex-col items-center justify-center py-16 text-center px-4', className)}>
       {Icon && (
-        <div className="flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
-          <Icon className="h-8 w-8 text-muted-foreground" />
-        </div>
+        <Icon className="h-10 w-10 text-muted-foreground/40 mb-4" strokeWidth={1.25} aria-hidden />
       )}
-      <h3 className="text-lg font-semibold">{title}</h3>
-      {description && <p className="text-muted-foreground text-sm mt-1 max-w-xs">{description}</p>}
-      {action && (
-        <Button className="mt-4" onClick={action.onClick}>
-          {action.label}
-        </Button>
+      <p className="font-display text-base font-semibold text-foreground">{title}</p>
+      {description && (
+        <p className="text-sm text-muted-foreground mt-1 max-w-xs">{description}</p>
+      )}
+      {(action || secondaryAction) && (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {action && (
+            <Button size="sm" onClick={action.onClick}>
+              {action.label}
+            </Button>
+          )}
+          {secondaryAction && (
+            <Button size="sm" variant="outline" onClick={secondaryAction.onClick}>
+              {secondaryAction.label}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

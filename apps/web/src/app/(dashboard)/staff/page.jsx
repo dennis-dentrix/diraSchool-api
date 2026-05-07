@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Plus, Search, MoreHorizontal, Mail, KeyRound, PauseCircle, PlayCircle,
+  Plus, Search, X, MoreHorizontal, Mail, KeyRound, PauseCircle, PlayCircle,
   UserCheck, UserX, AlertTriangle, Pencil, Trash2,
-  CheckCircle2, XCircle, Clock, AlertCircle, Umbrella, Loader2,
+  CheckCircle2, XCircle, AlertCircle, Umbrella, Loader2,
   CalendarDays, MapPin, ChevronLeft, ChevronRight as ChevronRightIcon,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -14,7 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { usersApi, leaveApi, checkInsApi, getErrorMessage } from '@/lib/api';
 import { ROLE_LABELS } from '@/lib/constants';
-import { getRoleBadgeColor, formatDate } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
 import { RefreshButton } from '@/components/shared/refresh-button';
@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -53,10 +54,22 @@ const LEAVE_TYPES = [
 const LEAVE_TYPE_MAP = Object.fromEntries(LEAVE_TYPES.map((t) => [t.value, t]));
 
 const STATUS_CONFIG = {
-  pending:   { label: 'Pending',   className: 'bg-amber-100 text-amber-800 border-amber-200' },
-  approved:  { label: 'Approved',  className: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
-  rejected:  { label: 'Rejected',  className: 'bg-red-100 text-red-800 border-red-200' },
-  cancelled: { label: 'Cancelled', className: 'bg-slate-100 text-slate-600 border-slate-200' },
+  pending:   { label: 'Pending',   className: 'text-warn border-warn/30 bg-warn/8' },
+  approved:  { label: 'Approved',  className: 'text-ok border-ok/30 bg-ok/8' },
+  rejected:  { label: 'Rejected',  className: 'text-bad border-bad/30 bg-bad/8' },
+  cancelled: { label: 'Cancelled', className: 'text-muted-foreground border-border bg-muted/40' },
+};
+
+// Role → visual tone (for badge coloring)
+const ROLE_TONE = {
+  school_admin:         'text-primary border-primary/20 bg-primary/8',
+  director:             'text-primary border-primary/20 bg-primary/8',
+  headteacher:          'text-primary border-primary/20 bg-primary/8',
+  deputy_headteacher:   'text-primary border-primary/20 bg-primary/8',
+  secretary:            'text-warn border-warn/30 bg-warn/8',
+  accountant:           'text-warn border-warn/30 bg-warn/8',
+  teacher:              'text-ok border-ok/30 bg-ok/8',
+  department_head:      'text-ok border-ok/30 bg-ok/8',
 };
 
 const inviteSchema = z.object({
@@ -79,7 +92,7 @@ function staffName(staffId) {
 function StatusBadge({ status }) {
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.pending;
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cfg.className}`}>
+    <span className={cn('inline-flex items-center h-5 px-2 rounded-full border text-[10px] font-medium', cfg.className)}>
       {cfg.label}
     </span>
   );
@@ -91,25 +104,29 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseReque
   {
     id: 'name',
     header: 'Staff Member',
-    cell: ({ row }) => (
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-          <span className="text-xs font-bold text-blue-700">
-            {row.original.firstName?.[0]}{row.original.lastName?.[0]}
-          </span>
+    cell: ({ row }) => {
+      const u = row.original;
+      return (
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0 border border-primary/15 uppercase">
+            {u.firstName?.[0]}{u.lastName?.[0]}
+          </div>
+          <div>
+            <p className="font-medium text-sm text-foreground leading-tight">{u.firstName} {u.lastName}</p>
+            <p className="text-[11px] text-muted-foreground">{u.email}</p>
+          </div>
         </div>
-        <div>
-          <p className="font-medium text-sm">{row.original.firstName} {row.original.lastName}</p>
-          <p className="text-xs text-muted-foreground">{row.original.email}</p>
-        </div>
-      </div>
-    ),
+      );
+    },
   },
   {
     accessorKey: 'role',
     header: 'Role',
     cell: ({ row }) => (
-      <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRoleBadgeColor(row.original.role)}`}>
+      <span className={cn(
+        'inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border capitalize',
+        ROLE_TONE[row.original.role] ?? 'text-muted-foreground border-border bg-muted/40',
+      )}>
         {ROLE_LABELS[row.original.role] ?? row.original.role}
       </span>
     ),
@@ -117,7 +134,20 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseReque
   {
     accessorKey: 'phone',
     header: 'Phone',
-    cell: ({ row }) => <span className="text-sm">{row.original.phone ?? '—'}</span>,
+    cell: ({ row }) => (
+      <span className="text-xs text-muted-foreground font-mono tabular-nums">
+        {row.original.phone ?? '—'}
+      </span>
+    ),
+  },
+  {
+    id: 'tsc',
+    header: 'TSC No.',
+    cell: ({ row }) => (
+      <span className="text-xs text-muted-foreground font-mono tabular-nums">
+        {row.original.tscNumber ?? '—'}
+      </span>
+    ),
   },
   {
     id: 'status',
@@ -125,16 +155,20 @@ const columns = ({ onResendInvite, onResetPassword, onToggleActive, onPauseReque
     cell: ({ row }) => {
       const u = row.original;
       if (!u.isActive)
-        return <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">Paused</span>;
+        return <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-bad border-bad/30 bg-bad/8">Paused</span>;
       if (u.invitePending)
-        return <span className="text-xs px-2 py-1 rounded-full font-medium bg-yellow-100 text-yellow-800">Invite Pending</span>;
-      return <span className="text-xs px-2 py-1 rounded-full font-medium bg-green-100 text-green-800">Active</span>;
+        return <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-warn border-warn/30 bg-warn/8">Invite Pending</span>;
+      return <span className="inline-flex items-center h-5 px-2 rounded-full text-[10px] font-medium border text-ok border-ok/30 bg-ok/8">Active</span>;
     },
   },
   {
     accessorKey: 'createdAt',
     header: 'Joined',
-    cell: ({ row }) => <span className="text-sm text-muted-foreground">{formatDate(row.original.createdAt)}</span>,
+    cell: ({ row }) => (
+      <span className="text-xs text-muted-foreground font-mono tabular-nums">
+        {formatDate(row.original.createdAt)}
+      </span>
+    ),
   },
   {
     id: 'actions',
@@ -258,7 +292,7 @@ function LeaveActionDialog({ leave, action, onClose }) {
           <Button
             onClick={() => mutate()}
             disabled={!canSubmit || isPending}
-            className={isReject ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}
+            variant={isReject ? 'destructive' : 'default'}
           >
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : isReject ? 'Reject' : 'Approve'}
           </Button>
@@ -292,10 +326,10 @@ function LeaveRow({ leave, onApprove, onReject }) {
       </div>
       {leave.status === 'pending' && (
         <div className="flex items-center gap-2 shrink-0">
-          <Button size="sm" variant="outline" className="h-8 text-emerald-700 border-emerald-200 hover:bg-emerald-50" onClick={() => onApprove(leave)}>
+          <Button size="sm" variant="outline" className="h-7 text-ok border-ok/30 hover:bg-ok/8" onClick={() => onApprove(leave)}>
             <CheckCircle2 className="h-3.5 w-3.5" /> Approve
           </Button>
-          <Button size="sm" variant="outline" className="h-8 text-red-600 border-red-200 hover:bg-red-50" onClick={() => onReject(leave)}>
+          <Button size="sm" variant="outline" className="h-7 text-bad border-bad/30 hover:bg-bad/8" onClick={() => onReject(leave)}>
             <XCircle className="h-3.5 w-3.5" /> Reject
           </Button>
         </div>
@@ -353,23 +387,19 @@ function LeaveTab() {
 
       {/* On leave today banner */}
       {onLeaveToday?.length > 0 && (
-        <Card className="border-amber-200 bg-amber-50/40">
-          <CardHeader className="pb-2 pt-3">
-            <CardTitle className="text-sm flex items-center gap-2 text-amber-800">
-              <AlertCircle className="h-4 w-4" />
-              {onLeaveToday.length} staff member{onLeaveToday.length !== 1 ? 's' : ''} on leave today
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pb-3">
-            <div className="flex flex-wrap gap-2">
-              {onLeaveToday.map((l) => (
-                <span key={l._id} className="text-xs bg-white border border-amber-200 rounded-full px-2.5 py-1 text-amber-800">
-                  {staffName(l.staffId)} · {LEAVE_TYPE_MAP[l.leaveType]?.label}
-                </span>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-lg border border-warn/30 bg-warn/5 px-4 py-3">
+          <p className="text-xs font-semibold text-warn mb-2 flex items-center gap-1.5">
+            <AlertCircle className="h-3.5 w-3.5" />
+            {onLeaveToday.length} staff member{onLeaveToday.length !== 1 ? 's' : ''} on leave today
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {onLeaveToday.map((l) => (
+              <span key={l._id} className="text-xs border border-warn/30 rounded-full px-2.5 py-1 text-warn bg-background">
+                {staffName(l.staffId)} · {LEAVE_TYPE_MAP[l.leaveType]?.label}
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Leave list */}
@@ -487,16 +517,22 @@ function CheckInsTab() {
 
       {/* Summary */}
       {!isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
-            { label: 'Present',  value: counts.present  ?? present.length, color: 'bg-green-50 text-green-700' },
-            { label: 'Absent',   value: counts.absent   ?? absent.length,  color: 'bg-red-50 text-red-700' },
-            { label: 'On Time',  value: counts.on_time  ?? 0,              color: 'bg-blue-50 text-blue-700' },
-            { label: 'Late',     value: counts.late     ?? 0,              color: 'bg-amber-50 text-amber-700' },
-          ].map(({ label, value, color }) => (
-            <div key={label} className={`rounded-xl px-4 py-3 text-center ${color}`}>
-              <p className="text-2xl font-bold tabular-nums">{value}</p>
-              <p className="text-xs font-medium mt-0.5 opacity-80">{label}</p>
+            { label: 'Present', value: counts.present ?? present.length, tone: 'ok',   bar: 'bg-ok' },
+            { label: 'Absent',  value: counts.absent  ?? absent.length,  tone: 'bad',  bar: 'bg-bad' },
+            { label: 'On Time', value: counts.on_time ?? 0,              tone: null,   bar: 'bg-primary' },
+            { label: 'Late',    value: counts.late    ?? 0,              tone: 'warn', bar: 'bg-warn' },
+          ].map(({ label, value, tone, bar }) => (
+            <div key={label} className="relative rounded-lg border border-border bg-card pl-5 pr-4 py-3 overflow-hidden">
+              <span className={cn('absolute left-0 inset-y-0 w-[3px] rounded-l-lg', bar)} />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
+              <p className={cn(
+                'font-mono text-2xl font-semibold tabular-nums leading-none',
+                tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : tone === 'bad' ? 'text-bad' : 'text-foreground',
+              )}>
+                {value}
+              </p>
             </div>
           ))}
         </div>
@@ -539,11 +575,10 @@ function CheckInsTab() {
                           )}
                           <Badge
                             variant="outline"
-                            className={`text-[10px] ${
-                              c.status === 'late'
-                                ? 'border-amber-200 text-amber-700 bg-amber-50'
-                                : 'border-green-200 text-green-700 bg-green-50'
-                            }`}
+                            className={cn('text-[10px]', c.status === 'late'
+                              ? 'border-warn/30 text-warn bg-warn/8'
+                              : 'border-ok/30 text-ok bg-ok/8',
+                            )}
                           >
                             {c.status === 'late' ? 'Late' : 'On Time'}
                           </Badge>
@@ -613,6 +648,20 @@ export default function StaffPage() {
   });
   const [deleteTarget, setDeleteTarget] = useState(null);
   const debouncedSearch = useDebounce(search, 400);
+
+  // Total counts per status for summary cards
+  const { data: staffCounts } = useQuery({
+    queryKey: ['staff-status-counts'],
+    queryFn: async () => {
+      const [active, invite, paused] = await Promise.all([
+        usersApi.list({ limit: 1, isActive: 'true',  invitePending: 'false' }).then((r) => r.data?.pagination?.total ?? r.data?.meta?.total ?? 0),
+        usersApi.list({ limit: 1, isActive: 'true',  invitePending: 'true'  }).then((r) => r.data?.pagination?.total ?? r.data?.meta?.total ?? 0),
+        usersApi.list({ limit: 1, isActive: 'false'                         }).then((r) => r.data?.pagination?.total ?? r.data?.meta?.total ?? 0),
+      ]);
+      return { active, invite, paused };
+    },
+    staleTime: 60_000,
+  });
 
   const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm({
     resolver: zodResolver(inviteSchema),
@@ -694,15 +743,18 @@ export default function StaffPage() {
     onDeleteRequest: (u)    => setDeleteTarget(u),
   };
 
+  const totalStaff = (staffCounts?.active ?? 0) + (staffCounts?.invite ?? 0) + (staffCounts?.paused ?? 0);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
-        title={`Staff ${staffRows.length ? `(${pagination?.total ?? staffRows.length})` : ''}`}
-        description={isDeputy ? 'Manage teacher records' : 'Manage teaching and non-teaching staff'}
+        overline={staffCounts ? `${staffCounts.active} active` : undefined}
+        title="Staff"
+        description={isDeputy ? 'Manage teacher records' : 'Teaching and non-teaching staff directory'}
       >
-        <RefreshButton queryKeys={[['users']]} />
+        <RefreshButton queryKeys={[['users'], ['staff-status-counts']]} />
         <Button size="sm" onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" /> Invite Staff
+          <Plus className="h-3.5 w-3.5 mr-1.5" /> Invite Staff
         </Button>
       </PageHeader>
 
@@ -731,70 +783,82 @@ export default function StaffPage() {
         {/* ── Directory tab ────────────────────────────────────────────────── */}
         <TabsContent value="directory" className="space-y-4 mt-4">
 
-          {/* Summary cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card>
-              <CardContent className="flex items-center gap-3 py-4 px-5">
-                <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                  <UserCheck className="h-4 w-4 text-green-700" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold leading-none">{active.length}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Active</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-center gap-3 py-4 px-5">
-                <div className="w-9 h-9 rounded-full bg-yellow-100 flex items-center justify-center shrink-0">
-                  <Mail className="h-4 w-4 text-yellow-700" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold leading-none">{pending.length}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Invite Pending</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="flex items-center gap-3 py-4 px-5">
-                <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                  <UserX className="h-4 w-4 text-red-700" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold leading-none">{paused.length}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Paused</p>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Summary cards — ledger cell style */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { label: 'Total',          value: totalStaff,               hint: 'on staff',           tone: null,   bar: 'bg-border' },
+              { label: 'Active',         value: staffCounts?.active ?? 0, hint: 'with system access',  tone: 'ok',   bar: 'bg-ok' },
+              { label: 'Invite Pending', value: staffCounts?.invite ?? 0, hint: 'awaiting acceptance', tone: 'warn', bar: 'bg-warn' },
+              { label: 'Paused',         value: staffCounts?.paused ?? 0, hint: 'access suspended',    tone: 'bad',  bar: 'bg-bad' },
+            ].map(({ label, value, hint, tone, bar }) => (
+              <div key={label} className="relative rounded-lg border border-border bg-card pl-5 pr-4 py-3 overflow-hidden">
+                <span className={cn('absolute left-0 inset-y-0 w-[3px] rounded-l-lg', bar)} />
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">{label}</p>
+                <p className={cn(
+                  'font-mono text-2xl font-semibold tabular-nums leading-none',
+                  tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : tone === 'bad' ? 'text-bad' : 'text-foreground',
+                )}>
+                  {value}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1">{hint}</p>
+              </div>
+            ))}
           </div>
 
           {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {/* Search */}
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Search by name or email…"
-                className="pl-9"
+                placeholder="Name or email…"
+                className="pl-8 h-8 text-sm"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => { setSearch(''); setPage(1); }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
-            <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v === '__all__' ? '' : v); setPage(1); }}>
-              <SelectTrigger className="w-44"><SelectValue placeholder="All roles" /></SelectTrigger>
+
+            {/* Role select */}
+            <Select value={roleFilter || '__all__'} onValueChange={(v) => { setRoleFilter(v === '__all__' ? '' : v); setPage(1); }}>
+              <SelectTrigger className="h-8 text-xs w-44 shrink-0"><SelectValue placeholder="All roles" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">All roles</SelectItem>
                 {roleOptions.map((r) => <SelectItem key={r} value={r}>{ROLE_LABELS[r] ?? r}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === '__all__' ? '' : v); setPage(1); }}>
-              <SelectTrigger className="w-44"><SelectValue placeholder="All statuses" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="invite">Invite Pending</SelectItem>
-                <SelectItem value="paused">Paused</SelectItem>
-              </SelectContent>
-            </Select>
+
+            {/* Status chips */}
+            <div className="flex items-center gap-1.5">
+              {[
+                { value: '',       label: 'All'            },
+                { value: 'active', label: 'Active'         },
+                { value: 'invite', label: 'Invite Pending' },
+                { value: 'paused', label: 'Paused'         },
+              ].map(({ value, label }) => (
+                <button
+                  key={value || '__all__'}
+                  type="button"
+                  onClick={() => { setStatusFilter(value); setPage(1); }}
+                  className={cn(
+                    'inline-flex items-center h-7 px-3 rounded-full text-xs font-medium border transition-colors shrink-0',
+                    statusFilter === value
+                      ? 'bg-foreground text-background border-transparent'
+                      : 'bg-transparent text-muted-foreground border-border hover:border-foreground/30 hover:text-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <DataTable

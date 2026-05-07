@@ -3,10 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, BookOpen, Users, MoreHorizontal, ChevronRight, GraduationCap, Pencil, UserPlus, Image as ImageIcon, FileText, Eye, ExternalLink, Download } from 'lucide-react';
+import {
+  Plus, Users, MoreHorizontal, ChevronRight, GraduationCap, Pencil,
+  UserPlus, Image as ImageIcon, FileText, Eye, ExternalLink, Download,
+} from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { cn } from '@/lib/utils';
 import { classesApi, usersApi, lessonPlansApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { LEVEL_CATEGORIES, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
@@ -48,6 +52,44 @@ const editSchema = z.object({
 const CONFIRM_INIT = { open: false, title: '', description: '', onConfirm: null };
 const PROMOTE_INIT = { open: false, sourceClass: null, targetClassId: '', action: 'promote' };
 
+// ── Enrollment bar ─────────────────────────────────────────────────────────────
+function EnrollmentBar({ count, max = 40 }) {
+  const n = count ?? 0;
+  const pct = Math.min(100, Math.round((n / max) * 100));
+  const barColor = pct >= 95 ? 'bg-bad' : pct >= 75 ? 'bg-ok' : 'bg-primary';
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-mono text-sm tabular-nums">{n}</span>
+      <div className="w-14 h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Teacher chip ───────────────────────────────────────────────────────────────
+function TeacherChip({ teacher }) {
+  if (!teacher || typeof teacher !== 'object') return <span className="text-muted-foreground text-xs">—</span>;
+  return (
+    <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs whitespace-nowrap">
+      {teacher.firstName} {teacher.lastName}
+    </span>
+  );
+}
+
+// ── Skeleton table row ─────────────────────────────────────────────────────────
+function SkeletonTableRow() {
+  return (
+    <div className="flex items-center gap-4 px-4 py-3 border-b last:border-0">
+      <Skeleton className="h-3.5 rounded-full flex-1" />
+      <Skeleton className="h-3 w-20 rounded-full" />
+      <Skeleton className="h-5 w-24 rounded-full" />
+      <Skeleton className="h-3 w-16 rounded-full" />
+      <Skeleton className="h-7 w-7 rounded-md" />
+    </div>
+  );
+}
+
 export default function ClassesPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -71,9 +113,7 @@ export default function ClassesPage() {
   const formAcademicYear = watch('academicYear');
   const formTerm = watch('term');
 
-  const editForm = useForm({
-    resolver: zodResolver(editSchema),
-  });
+  const editForm = useForm({ resolver: zodResolver(editSchema) });
 
   useEffect(() => {
     setFilterYear(defaultAcademicYear);
@@ -124,14 +164,8 @@ export default function ClassesPage() {
       const linkedParents = Array.isArray(student.parentIds) ? student.parentIds : [];
       const guardians = Array.isArray(student.guardians) ? student.guardians : [];
       const contacts = linkedParents.length > 0
-        ? linkedParents.map((p) => ({
-          name: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || '—',
-          phone: p.phone ?? '—',
-        }))
-        : guardians.map((g) => ({
-          name: `${g.firstName ?? ''} ${g.lastName ?? ''}`.trim() || '—',
-          phone: g.phone ?? '—',
-        }));
+        ? linkedParents.map((p) => ({ name: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || '—', phone: p.phone ?? '—' }))
+        : guardians.map((g) => ({ name: `${g.firstName ?? ''} ${g.lastName ?? ''}`.trim() || '—', phone: g.phone ?? '—' }));
       return {
         studentId: student._id,
         studentName: `${student.firstName ?? ''} ${student.lastName ?? ''}`.trim() || '—',
@@ -159,11 +193,6 @@ export default function ClassesPage() {
       toast.success('Class updated');
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       setEditingClass(null);
-      // Refresh selected class info in sheet if it's the same class
-      if (selectedClass?._id === editingClass?._id) {
-        const updated = classes.find((c) => c._id === editingClass._id);
-        if (updated) setSelectedClass(updated);
-      }
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -180,15 +209,9 @@ export default function ClassesPage() {
 
   const { mutate: promoteClass, isPending: isPromoting } = useMutation({
     mutationFn: ({ id, targetClassId, action }) =>
-      classesApi.promote(
-        id,
-        action === 'graduate'
-          ? { action }
-          : { action, targetClassId },
-      ),
+      classesApi.promote(id, action === 'graduate' ? { action } : { action, targetClassId }),
     onSuccess: (res) => {
-      const msg = res?.data?.message ?? 'Students promoted successfully';
-      toast.success(msg);
+      toast.success(res?.data?.message ?? 'Students promoted successfully');
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       setPromoteDialog(PROMOTE_INIT);
       setSelectedClass(null);
@@ -206,8 +229,7 @@ export default function ClassesPage() {
       stream: cls.stream ?? '',
       levelCategory: cls.levelCategory ?? '',
       classTeacherId: typeof cls.classTeacherId === 'object'
-        ? cls.classTeacherId?._id ?? ''
-        : cls.classTeacherId ?? '',
+        ? cls.classTeacherId?._id ?? '' : cls.classTeacherId ?? '',
     });
     setEditingClass(cls);
   };
@@ -229,8 +251,12 @@ export default function ClassesPage() {
   const teacherList = teachers?.users ?? teachers?.data ?? [];
 
   return (
-    <div>
-      <PageHeader title="Classes" description="Manage classes and student promotion">
+    <div className="space-y-5">
+      <PageHeader
+        overline="Classes"
+        title="Classes"
+        description="Manage classes and student promotion"
+      >
         <Select value={filterYear} onValueChange={setFilterYear}>
           <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -244,107 +270,127 @@ export default function ClassesPage() {
         )}
       </PageHeader>
 
+      {/* ── Hairline table ──────────────────────────────────────────────────── */}
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-36" />)}
+        <div className="rounded-lg border overflow-hidden">
+          <div className="flex items-center gap-4 px-4 py-2.5 bg-muted/30 border-b">
+            {['flex-1', 'w-28', 'w-32', 'w-20', 'w-8'].map((w, i) => (
+              <Skeleton key={i} className={cn('h-3 rounded-full', w)} />
+            ))}
+          </div>
+          {Array.from({ length: 5 }).map((_, i) => <SkeletonTableRow key={i} />)}
         </div>
       ) : isError ? (
         <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-destructive/20 bg-destructive/5">
-          <BookOpen className="h-8 w-8 mb-2 text-destructive/60" />
           <p className="text-sm font-medium text-destructive">Failed to load classes</p>
           <p className="text-xs text-muted-foreground mt-1">Please refresh and try again.</p>
         </div>
       ) : classes.length === 0 ? (
         <EmptyState
-          icon={BookOpen}
+          icon={Users}
           title="No classes yet"
           description="Create your first class to get started"
           action={adminUser ? { label: 'Add Class', onClick: () => setOpen(true) } : undefined}
         />
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {classes.map((cls) => (
-            <Card
-              key={cls._id}
-              className="hover:shadow-md transition-shadow cursor-pointer group"
-              onClick={() => setSelectedClass(cls)}
-            >
-              <CardContent className="pt-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <BookOpen className="h-4 w-4 text-blue-600 shrink-0" />
-                      <h3 className="font-semibold truncate">
-                        {cls.name}{cls.stream ? ` — ${cls.stream}` : ''}
-                      </h3>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{cls.levelCategory}</p>
-                    <div className="flex items-center gap-1 mt-2 text-sm text-muted-foreground">
-                      <Users className="h-3.5 w-3.5" />
-                      <span>{cls.studentCount ?? 0} students</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{cls.term} · {cls.academicYear}</p>
-                  </div>
-                  <div className="flex items-center gap-1 -mt-1 -mr-1">
-                    {(adminUser || canManageEnrollmentPromotion) && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {adminUser && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={(e) => openEdit(cls, e)}
-                              >
-                                <Pencil className="h-3.5 w-3.5 mr-2" /> Edit class
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block rounded-lg border overflow-hidden">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-muted/30">
+                  <th className="text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 py-2.5 border-b">Class</th>
+                  <th className="text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 py-2.5 border-b">Level</th>
+                  <th className="text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 py-2.5 border-b">Class Teacher</th>
+                  <th className="text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-4 py-2.5 border-b">Enrollment</th>
+                  <th className="px-2 py-2.5 border-b w-16" />
+                </tr>
+              </thead>
+              <tbody>
+                {classes.map((cls) => (
+                  <tr
+                    key={cls._id}
+                    className="hover:bg-muted/20 transition-colors cursor-pointer border-b last:border-0"
+                    onClick={() => setSelectedClass(cls)}
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-medium">
+                        {cls.name}{cls.stream ? <span className="text-muted-foreground font-normal"> · {cls.stream}</span> : null}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{cls.term} · {cls.academicYear}</p>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">{cls.levelCategory}</td>
+                    <td className="px-4 py-3">
+                      <TeacherChip teacher={cls.classTeacherId} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <EnrollmentBar count={cls.studentCount} />
+                    </td>
+                    <td className="px-2 py-3">
+                      <div className="flex items-center justify-end gap-0.5">
+                        {(adminUser || canManageEnrollmentPromotion) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()}>
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {adminUser && (
+                                <>
+                                  <DropdownMenuItem onClick={(e) => openEdit(cls, e)}>
+                                    <Pencil className="h-3.5 w-3.5 mr-2" /> Edit class
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                </>
+                              )}
+                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setPromoteDialog({ open: true, sourceClass: cls, targetClassId: '', action: 'promote' }); }}>
+                                <GraduationCap className="h-3.5 w-3.5 mr-2" /> Promote students
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                            </>
-                          )}
-                          <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPromoteDialog({ open: true, sourceClass: cls, targetClassId: '', action: 'promote' });
-                              }}
-                          >
-                            <GraduationCap className="h-3.5 w-3.5 mr-2" /> Promote students
-                          </DropdownMenuItem>
-                          {adminUser && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openConfirm(
-                                    'Delete class?',
-                                    'This will permanently remove the class and cannot be undone.',
-                                    () => deleteClass(cls._id),
-                                  );
-                                }}
-                              >
-                                Delete class
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
-                  </div>
+                              {adminUser && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onClick={(e) => { e.stopPropagation(); openConfirm('Delete class?', 'This will permanently remove the class and cannot be undone.', () => deleteClass(cls._id)); }}
+                                  >
+                                    Delete class
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/40" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile list */}
+          <div className="md:hidden space-y-2">
+            {classes.map((cls) => (
+              <div
+                key={cls._id}
+                className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 cursor-pointer hover:bg-muted/20 transition-colors"
+                onClick={() => setSelectedClass(cls)}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">
+                    {cls.name}{cls.stream ? ` · ${cls.stream}` : ''}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {cls.levelCategory} · <EnrollmentBar count={cls.studentCount} max={40} />
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* ── Class detail side panel ───────────────────────────────────────── */}
@@ -356,7 +402,7 @@ export default function ClassesPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <SheetTitle className="text-lg">
-                      {selectedClass.name}{selectedClass.stream ? ` — ${selectedClass.stream}` : ''}
+                      {selectedClass.name}{selectedClass.stream ? ` · ${selectedClass.stream}` : ''}
                     </SheetTitle>
                     <SheetDescription>
                       {selectedClass.levelCategory} · {selectedClass.term} · {selectedClass.academicYear}
@@ -370,15 +416,17 @@ export default function ClassesPage() {
                 </div>
               </SheetHeader>
 
-              {/* Meta info */}
+              {/* Meta */}
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-xs text-muted-foreground mb-0.5">Students</p>
-                  <p className="text-xl font-bold">{selectedClass.studentCount ?? classStudents.length}</p>
+                <div className="relative rounded-lg border bg-card pl-4 pr-3 py-3 overflow-hidden">
+                  <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-primary" />
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Enrolled</p>
+                  <p className="font-mono text-xl font-semibold tabular-nums">{selectedClass.studentCount ?? classStudents.length}</p>
                 </div>
-                <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-xs text-muted-foreground mb-0.5">Class Teacher</p>
-                  <p className="text-sm font-medium">
+                <div className="relative rounded-lg border bg-card pl-4 pr-3 py-3 overflow-hidden">
+                  <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-muted-foreground/40" />
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Class Teacher</p>
+                  <p className="text-sm font-medium leading-tight">
                     {typeof selectedClass.classTeacherId === 'object' && selectedClass.classTeacherId
                       ? `${selectedClass.classTeacherId.firstName} ${selectedClass.classTeacherId.lastName}`
                       : '—'}
@@ -409,7 +457,6 @@ export default function ClassesPage() {
                   </TabsTrigger>
                 </TabsList>
 
-                {/* ── Students tab ────────────────────────────────────── */}
                 <TabsContent value="students">
                   {studentsLoading ? (
                     <SkeletonList count={5} className="h-10" />
@@ -420,7 +467,7 @@ export default function ClassesPage() {
                       {studentContactRows.map((row, idx) => (
                         <div key={row.studentId} className="px-3 py-2.5 bg-background hover:bg-muted/40 transition-colors">
                           <div className="flex items-center gap-2.5">
-                            <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}</span>
+                            <span className="text-xs text-muted-foreground w-5 text-right tabular-nums">{idx + 1}</span>
                             <div>
                               <p className="text-sm font-medium">{row.studentName}</p>
                               <p className="text-xs text-muted-foreground font-mono">{row.admissionNumber}</p>
@@ -439,14 +486,10 @@ export default function ClassesPage() {
                   )}
                 </TabsContent>
 
-                {/* ── Lesson Plans tab ────────────────────────────────── */}
                 <TabsContent value="plans">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs text-muted-foreground">Plans & work schedules for this class</p>
-                    <Button
-                      size="sm" variant="outline" className="h-7 text-xs gap-1"
-                      onClick={() => router.push(`/lesson-plans`)}
-                    >
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => router.push('/lesson-plans')}>
                       <ExternalLink className="h-3 w-3" /> All Plans
                     </Button>
                   </div>
@@ -455,8 +498,8 @@ export default function ClassesPage() {
                     <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24" />)}</div>
                   ) : !classPlans?.length ? (
                     <div className="py-8 text-center">
-                      <ImageIcon className="h-8 w-8 mx-auto text-slate-200 mb-2" />
-                      <p className="text-sm text-muted-foreground">No lesson plans uploaded for this class yet.</p>
+                      <FileText className="h-8 w-8 mx-auto text-muted-foreground/20 mb-2" />
+                      <p className="text-sm text-muted-foreground">No lesson plans for this class yet.</p>
                       <Button size="sm" variant="outline" className="mt-3 gap-1.5 text-xs" onClick={() => router.push('/lesson-plans')}>
                         <ExternalLink className="h-3.5 w-3.5" /> Go to Lesson Plans
                       </Button>
@@ -465,13 +508,11 @@ export default function ClassesPage() {
                     <div className="space-y-3">
                       {classPlans.map((plan) => {
                         const firstImg = plan.images?.[0];
-
-
                         return (
-                          <div key={plan._id} className="rounded-lg border border-slate-200 overflow-hidden">
+                          <div key={plan._id} className="rounded-lg border overflow-hidden">
                             {firstImg ? (
                               <div className="relative">
-                                <img src={firstImg.url} alt={plan.title} className="w-full h-28 object-cover bg-slate-50" />
+                                <img src={firstImg.url} alt={plan.title} className="w-full h-28 object-cover bg-muted" />
                                 {plan.images.length > 1 && (
                                   <span className="absolute bottom-1 right-1 text-[10px] bg-black/60 text-white px-1.5 py-0.5 rounded-full">
                                     {plan.images.length} pages
@@ -479,37 +520,30 @@ export default function ClassesPage() {
                                 )}
                               </div>
                             ) : (
-                              <div className="flex items-center justify-center h-16 bg-slate-50 border-b border-slate-100">
-                                <FileText className="h-6 w-6 text-slate-300" />
+                              <div className="flex items-center justify-center h-16 bg-muted/50 border-b">
+                                <FileText className="h-6 w-6 text-muted-foreground/30" />
                               </div>
                             )}
                             <div className="p-2.5 space-y-1.5">
                               <div className="flex items-start justify-between gap-2">
-                                <p className="text-xs font-semibold text-slate-900 leading-snug">{plan.title}</p>
+                                <p className="text-xs font-semibold leading-snug">{plan.title}</p>
                                 <Badge variant="outline" className="text-[10px] shrink-0 capitalize">
                                   {plan.type === 'work_schedule' ? 'Schedule' : 'Plan'}
                                 </Badge>
                               </div>
-                              {plan.subjectId && (
-                                <p className="text-[11px] text-muted-foreground">{plan.subjectId.name}</p>
-                              )}
+                              {plan.subjectId && <p className="text-[11px] text-muted-foreground">{plan.subjectId.name}</p>}
                               <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                                 <span>{plan.term} {plan.academicYear}{plan.weekNumber ? ` · Wk ${plan.weekNumber}` : ''}</span>
                                 <span>{formatDate(plan.createdAt)}</span>
                               </div>
-                              <p className="text-[11px] text-muted-foreground">
-                                By {plan.teacherId?.firstName} {plan.teacherId?.lastName}
-                              </p>
                               <div className="flex items-center gap-2 pt-1">
                                 {firstImg && (
-                                  <a href={firstImg.url} target="_blank" rel="noreferrer"
-                                    className="inline-flex items-center gap-1 text-[11px] text-cyan-700 hover:underline">
+                                  <a href={firstImg.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
                                     <Eye className="h-3 w-3" /> View
                                   </a>
                                 )}
                                 {plan.pdfUrl && (
-                                  <a href={plan.pdfUrl} download
-                                    className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:underline">
+                                  <a href={plan.pdfUrl} download className="inline-flex items-center gap-1 text-[11px] text-ok hover:underline">
                                     <Download className="h-3 w-3" /> Download PDF
                                   </a>
                                 )}
@@ -558,18 +592,14 @@ export default function ClassesPage() {
                 <Label>Academic Year</Label>
                 <Select value={formAcademicYear || defaultAcademicYear} onValueChange={(v) => setValue('academicYear', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                  </SelectContent>
+                  <SelectContent>{ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Term</Label>
                 <Select value={formTerm || defaultTerm} onValueChange={(v) => setValue('term', v)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                  </SelectContent>
+                  <SelectContent>{TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -601,9 +631,7 @@ export default function ClassesPage() {
               <div className="space-y-1.5">
                 <Label>Class Name</Label>
                 <Input {...editForm.register('name')} placeholder="Grade 5" />
-                {editForm.formState.errors.name && (
-                  <p className="text-xs text-destructive">{editForm.formState.errors.name.message}</p>
-                )}
+                {editForm.formState.errors.name && <p className="text-xs text-destructive">{editForm.formState.errors.name.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>Stream (optional)</Label>
@@ -612,35 +640,22 @@ export default function ClassesPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Level Category</Label>
-              <Select
-                defaultValue={editingClass?.levelCategory}
-                onValueChange={(v) => editForm.setValue('levelCategory', v)}
-              >
+              <Select defaultValue={editingClass?.levelCategory} onValueChange={(v) => editForm.setValue('levelCategory', v)}>
                 <SelectTrigger><SelectValue placeholder="Select level" /></SelectTrigger>
-                <SelectContent>
-                  {LEVEL_CATEGORIES.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
-                </SelectContent>
+                <SelectContent>{LEVEL_CATEGORIES.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
               </Select>
-              {editForm.formState.errors.levelCategory && (
-                <p className="text-xs text-destructive">{editForm.formState.errors.levelCategory.message}</p>
-              )}
+              {editForm.formState.errors.levelCategory && <p className="text-xs text-destructive">{editForm.formState.errors.levelCategory.message}</p>}
             </div>
             <div className="space-y-1.5">
               <Label>Class Teacher (optional)</Label>
               <Select
-                defaultValue={
-                  typeof editingClass?.classTeacherId === 'object'
-                    ? editingClass?.classTeacherId?._id
-                    : editingClass?.classTeacherId ?? ''
-                }
+                defaultValue={typeof editingClass?.classTeacherId === 'object' ? editingClass?.classTeacherId?._id : editingClass?.classTeacherId ?? ''}
                 onValueChange={(v) => editForm.setValue('classTeacherId', v === '__none__' ? '' : v)}
               >
                 <SelectTrigger><SelectValue placeholder="Select teacher" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">— No teacher —</SelectItem>
-                  {teacherList.map((t) => (
-                    <SelectItem key={t._id} value={t._id}>{t.firstName} {t.lastName}</SelectItem>
-                  ))}
+                  {teacherList.map((t) => <SelectItem key={t._id} value={t._id}>{t.firstName} {t.lastName}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -652,21 +667,15 @@ export default function ClassesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Promote dialog — requires target class selection ──────────────── */}
-      <Dialog
-        open={promoteDialog.open}
-        onOpenChange={(o) => !o && setPromoteDialog(PROMOTE_INIT)}
-      >
+      {/* ── Promote dialog ────────────────────────────────────────────────── */}
+      <Dialog open={promoteDialog.open} onOpenChange={(o) => !o && setPromoteDialog(PROMOTE_INIT)}>
         <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Promote Students</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Promote Students</DialogTitle></DialogHeader>
           <div className="space-y-4 py-1">
             <p className="text-sm text-muted-foreground">
               Move all active students from{' '}
               <span className="font-semibold text-foreground">
-                {promoteDialog.sourceClass?.name}
-                {promoteDialog.sourceClass?.stream ? ` ${promoteDialog.sourceClass.stream}` : ''}
+                {promoteDialog.sourceClass?.name}{promoteDialog.sourceClass?.stream ? ` ${promoteDialog.sourceClass.stream}` : ''}
               </span>{' '}
               to another class.
             </p>
@@ -674,29 +683,21 @@ export default function ClassesPage() {
               <Label>Target Class</Label>
               <Select
                 value={promoteDialog.targetClassId}
-                onValueChange={(v) =>
-                  setPromoteDialog((d) => ({
-                    ...d,
-                    targetClassId: v,
-                    action: v === '__graduate__' ? 'graduate' : 'promote',
-                  }))
-                }
+                onValueChange={(v) => setPromoteDialog((d) => ({ ...d, targetClassId: v, action: v === '__graduate__' ? 'graduate' : 'promote' }))}
               >
                 <SelectTrigger><SelectValue placeholder="Select destination class" /></SelectTrigger>
                 <SelectContent>
-                  {classes
-                    .filter((c) => c._id !== promoteDialog.sourceClass?._id)
-                    .map((c) => (
-                      <SelectItem key={c._id} value={c._id}>
-                        {c.name}{c.stream ? ` — ${c.stream}` : ''} ({c.term} · {c.academicYear})
-                      </SelectItem>
-                    ))}
+                  {classes.filter((c) => c._id !== promoteDialog.sourceClass?._id).map((c) => (
+                    <SelectItem key={c._id} value={c._id}>
+                      {c.name}{c.stream ? ` — ${c.stream}` : ''} ({c.term} · {c.academicYear})
+                    </SelectItem>
+                  ))}
                   <SelectItem value="__graduate__">Graduation List (mark as graduated)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {(promoteDialog.targetClassId || promoteDialog.action === 'graduate') && (
-              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              <p className="text-xs text-warn bg-warn/5 border border-warn/30 rounded-md px-3 py-2">
                 {promoteDialog.action === 'graduate'
                   ? 'This will mark all active students as graduated. This action cannot be undone.'
                   : 'This will move all active students. This action cannot be undone.'}
@@ -707,13 +708,11 @@ export default function ClassesPage() {
             <Button variant="outline" onClick={() => setPromoteDialog(PROMOTE_INIT)}>Cancel</Button>
             <Button
               disabled={(!promoteDialog.targetClassId && promoteDialog.action !== 'graduate') || isPromoting}
-              onClick={() =>
-                promoteClass({
-                  id: promoteDialog.sourceClass._id,
-                  targetClassId: promoteDialog.targetClassId === '__graduate__' ? undefined : promoteDialog.targetClassId,
-                  action: promoteDialog.action,
-                })
-              }
+              onClick={() => promoteClass({
+                id: promoteDialog.sourceClass._id,
+                targetClassId: promoteDialog.targetClassId === '__graduate__' ? undefined : promoteDialog.targetClassId,
+                action: promoteDialog.action,
+              })}
             >
               {isPromoting
                 ? (promoteDialog.action === 'graduate' ? 'Graduating…' : 'Promoting…')
@@ -724,25 +723,17 @@ export default function ClassesPage() {
       </Dialog>
 
       {/* ── Confirm dialog ────────────────────────────────────────────────── */}
-      <AlertDialog
-        open={confirmDialog.open}
-        onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}
-      >
+      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog(CONFIRM_INIT)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle>
-            {confirmDialog.description && (
-              <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>
-            )}
+            {confirmDialog.description && <AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription>}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                confirmDialog.onConfirm?.();
-                setConfirmDialog(CONFIRM_INIT);
-              }}
+              onClick={() => { confirmDialog.onConfirm?.(); setConfirmDialog(CONFIRM_INIT); }}
             >
               Confirm
             </AlertDialogAction>

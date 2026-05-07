@@ -1,202 +1,339 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { CreditCard, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { feesApi } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { ACADEMIC_YEARS, TERMS } from '@/lib/constants';
+import { useSchoolTermDefaults } from '@/hooks/use-school-term-defaults';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-function PaymentRow({ payment }) {
-  const method = payment.method ?? '';
-  const isMpesa = method.toLowerCase() === 'mpesa';
+// ── Sparkline SVG (12 data points) ───────────────────────────────────────────
+function Sparkline({ data = [], height = 36, width = 120 }) {
+  const pts = data.slice(-12);
+  if (pts.length < 2 || pts.every((v) => v === 0)) return null;
+  const max = Math.max(...pts, 1);
+  const coords = pts.map((v, i) => {
+    const x = (i / (pts.length - 1)) * width;
+    const y = height - (v / max) * (height - 2) - 1;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
   return (
-    <div className="flex items-center justify-between py-3 border-b last:border-0">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">
-          {payment.studentId?.firstName ?? '—'} {payment.studentId?.lastName ?? ''}
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={coords.join(' ')}
+        className="opacity-70"
+      />
+      <circle
+        cx={coords[coords.length - 1].split(',')[0]}
+        cy={coords[coords.length - 1].split(',')[1]}
+        r="2.5"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+// ── Method pill ───────────────────────────────────────────────────────────────
+const METHOD_CLS = {
+  mpesa: 'border-ok/30 text-ok',
+  bank:  'border-primary/30 text-primary',
+  cash:  'border-border text-foreground',
+  cheque:'border-muted-foreground/30 text-muted-foreground',
+};
+
+function MethodPill({ method }) {
+  const m = (method ?? '').toLowerCase();
+  const label = m === 'mpesa' ? 'M-Pesa' : m ? m[0].toUpperCase() + m.slice(1) : 'Cash';
+  return (
+    <span className={cn('inline-flex items-center rounded-full border px-2 py-0 text-[10px] font-medium', METHOD_CLS[m] ?? METHOD_CLS.cash)}>
+      {label}
+    </span>
+  );
+}
+
+// ── Time-ledger row ───────────────────────────────────────────────────────────
+function LedgerRow({ payment, rank }) {
+  const student = payment.studentId;
+  const time = payment.paymentDate ?? payment.createdAt;
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b last:border-0">
+      <span className="font-mono text-[11px] text-muted-foreground w-5 text-right shrink-0 tabular-nums">{rank}</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium leading-tight truncate">
+          {student?.firstName ?? '—'} {student?.lastName ?? ''}
         </p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {payment.studentId?.admissionNumber ?? ''}
-          {payment.term ? ` · ${payment.term}` : ''}
-        </p>
+        <p className="font-mono text-[11px] text-muted-foreground tabular-nums">{student?.admissionNumber ?? ''}</p>
       </div>
-      <div className="flex items-center gap-3 shrink-0 ml-3">
-        <span
-          className={`hidden sm:inline text-xs px-2 py-0.5 rounded-full font-medium ${
-            isMpesa ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-600'
-          }`}
-        >
-          {isMpesa ? 'M-Pesa' : method || 'Cash'}
-        </span>
-        <span className="text-sm font-semibold tabular-nums">{formatCurrency(payment.amount)}</span>
-        <span className="text-xs text-muted-foreground w-20 text-right hidden md:block">
-          {formatDate(payment.createdAt)}
-        </span>
-      </div>
+      <MethodPill method={payment.method} />
+      <span className="font-mono text-sm tabular-nums text-right w-24 shrink-0 font-semibold">
+        {formatCurrency(payment.amount)}
+      </span>
+      <span className="text-[10px] text-muted-foreground w-12 text-right shrink-0 tabular-nums hidden sm:block">
+        {time ? new Date(time).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }) : '—'}
+      </span>
     </div>
   );
 }
 
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function FeesPage() {
-  const router = useRouter();
+  const { academicYear: defaultYear, term: defaultTerm } = useSchoolTermDefaults(['fees-overview', 'term-defaults']);
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedTerm, setSelectedTerm] = useState('');
 
-  const { data: paymentsRes, isLoading: paymentsLoading } = useQuery({
-    queryKey: ['payments', 'recent'],
-    queryFn: async () => {
-      const res = await feesApi.listPayments({ limit: 10 });
-      return res.data;
-    },
-  });
+  const year = selectedYear || defaultYear;
+  const term = selectedTerm || defaultTerm;
 
   const { data: summaryRes, isLoading: summaryLoading } = useQuery({
-    queryKey: ['fees-dashboard-summary'],
+    queryKey: ['fees-dashboard-summary', year, term],
     queryFn: async () => {
-      const res = await feesApi.dashboardSummary();
+      const res = await feesApi.dashboardSummary({ academicYear: year, term });
       return res.data;
     },
   });
 
-  const payments = paymentsRes?.data ?? paymentsRes ?? [];
-  const monthCollected = summaryRes?.summary?.monthToDate?.totalAmount ?? 0;
-  const followUpCount  = summaryRes?.summary?.students?.followUpCount  ?? 0;
+  const { data: paymentsRes, isLoading: paymentsLoading } = useQuery({
+    queryKey: ['payments-overview', year, term],
+    queryFn: async () => {
+      const res = await feesApi.listPayments({ limit: 60, academicYear: year, term });
+      return res.data;
+    },
+  });
 
-  // Count today's payments from the loaded list for a live subtitle
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayCount = Array.isArray(payments)
-    ? payments.filter((p) => String(p.createdAt ?? '').slice(0, 10) === todayStr).length
-    : 0;
+  const summary  = summaryRes?.summary ?? summaryRes?.data?.summary ?? {};
+  const payments = paymentsRes?.data ?? paymentsRes?.payments ?? [];
+
+  const collected = summary?.termToDate?.totalAmount ?? summary?.monthToDate?.totalAmount ?? 0;
+  const target    = summary?.termFees?.totalAmount ?? 0;
+  const variance  = collected - target;
+
+  // 12-week sparkline
+  const sparkData = useMemo(() => {
+    if (!Array.isArray(payments)) return [];
+    const now = Date.now();
+    const weeks = Array(12).fill(0);
+    for (const p of payments) {
+      const ms = new Date(p.paymentDate ?? p.createdAt).getTime();
+      const w = Math.floor((now - ms) / (7 * 24 * 60 * 60 * 1000));
+      if (w >= 0 && w < 12) weeks[11 - w] += p.amount;
+    }
+    return weeks;
+  }, [payments]);
+
+  // Today's payments
+  const todayStr     = new Date().toISOString().slice(0, 10);
+  const todayPayments = useMemo(() =>
+    Array.isArray(payments)
+      ? payments.filter((p) => String(p.paymentDate ?? p.createdAt ?? '').slice(0, 10) === todayStr)
+      : [],
+  [payments, todayStr]);
+  const todayTotal = todayPayments.reduce((s, p) => s + (p.amount ?? 0), 0);
+
+  // Defaulters from summary
+  const defaulters = useMemo(() => {
+    const list = summary?.defaulters ?? summary?.students?.defaulters ?? [];
+    return [...list].sort((a, b) => (b.outstanding ?? b.balance ?? 0) - (a.outstanding ?? a.balance ?? 0));
+  }, [summary]);
 
   return (
-    <div className="space-y-5" data-tour="finance-dashboard">
+    <div className="space-y-6" data-tour="finance-dashboard">
 
-      {/* ── Page header ─────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">Fees &amp; Payments</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {todayCount > 0
-              ? `${todayCount} payment${todayCount !== 1 ? 's' : ''} recorded today`
-              : 'No payments recorded today yet'}
-          </p>
+      {/* ── Ledger header ─────────────────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Fees Overview</p>
+            <h1 className="text-2xl font-bold tracking-tight leading-none">Fees &amp; Collections</h1>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Select value={term} onValueChange={setSelectedTerm}>
+              <SelectTrigger className="h-8 w-28 text-xs rounded-full border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={year} onValueChange={setSelectedYear}>
+              <SelectTrigger className="h-8 w-24 text-xs rounded-full border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <Button onClick={() => router.push('/fees/payments')} className="shrink-0 gap-2">
-          <CreditCard className="h-4 w-4" />
-          <span>Record Payment</span>
-        </Button>
-      </div>
 
-      {/* ── Two key numbers ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4">
-
-        {/* Collected this month */}
-        <Card data-tour="todays-collections">
-          <CardContent className="pt-5 pb-4">
-            {summaryLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-28" />
-                <Skeleton className="h-8 w-24" />
-              </div>
-            ) : (
-              <>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
-                  Collected this month
-                </p>
-                <p className="text-3xl font-bold mt-1 tabular-nums">{formatCurrency(monthCollected)}</p>
-                <div className="flex items-center gap-1 mt-2">
-                  <TrendingUp className="h-3.5 w-3.5 text-green-600" />
-                  <span className="text-xs text-green-700 font-medium">All payment methods</span>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Students needing follow-up */}
-        <Card
-          data-tour="fee-balances-widget"
-          className={followUpCount > 0 ? 'cursor-pointer hover:shadow-md transition-shadow border-orange-200' : ''}
-          onClick={followUpCount > 0 ? () => router.push('/fees/payments') : undefined}
-        >
-          <CardContent className="pt-5 pb-4">
-            {summaryLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-3 w-28" />
-                <Skeleton className="h-8 w-16" />
-              </div>
-            ) : (
-              <>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">
-                  Need follow-up
-                </p>
-                <p className={`text-3xl font-bold mt-1 ${followUpCount > 0 ? 'text-orange-600' : ''}`}>
-                  {followUpCount}
-                </p>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {followUpCount > 0 ? 'Students with unpaid fees — tap to view' : 'All students up to date'}
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Unallocated payments notice (only shown when relevant) ─────────── */}
-      <div className="hidden" data-tour="unallocated-payments">
-        {/* Referenced by the tour; shown in the Payments sub-page */}
-      </div>
-
-      {/* ── Recent payments ──────────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base font-semibold">Recent Payments</CardTitle>
-          <Link
-            href="/fees/payments"
-            className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-          >
-            View all <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </CardHeader>
-        <CardContent className="pt-0">
-          {paymentsLoading ? (
-            <div className="space-y-3 py-2">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Skeleton className="h-3.5 w-32" />
-                    <Skeleton className="h-3 w-20" />
-                  </div>
-                  <Skeleton className="h-5 w-20" />
+        {/* Balance trio */}
+        <div className="rounded-lg border bg-card px-5 py-4">
+          {summaryLoading ? (
+            <div className="flex gap-8">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-2.5 w-20" />
+                  <Skeleton className="h-7 w-28" />
                 </div>
               ))}
             </div>
-          ) : !Array.isArray(payments) || payments.length === 0 ? (
-            <div className="py-10 text-center">
-              <CreditCard className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
-              <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => router.push('/fees/payments')}
-              >
-                Record the first payment
-              </Button>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex gap-6 sm:gap-8 flex-1 flex-wrap">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Collected</p>
+                  <p className="font-mono text-2xl font-bold tabular-nums text-ok">{formatCurrency(collected)}</p>
+                </div>
+                {target > 0 && (
+                  <>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Target</p>
+                      <p className="font-mono text-2xl font-bold tabular-nums">{formatCurrency(target)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Variance</p>
+                      <p className={cn('font-mono text-2xl font-bold tabular-nums', variance >= 0 ? 'text-ok' : 'text-bad')}>
+                        {variance >= 0 ? '+' : ''}{formatCurrency(Math.abs(variance))}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+              {sparkData.some((v) => v > 0) && (
+                <div className="shrink-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">12-week trend</p>
+                  <Sparkline data={sparkData} className="text-ok" />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Today's collections ──────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Today's Collections
+          </p>
+          <div className="flex items-center gap-3">
+            {todayPayments.length > 0 && (
+              <span className="font-mono text-sm tabular-nums font-semibold text-ok">{formatCurrency(todayTotal)}</span>
+            )}
+            <Link href="/fees/payments" className="text-xs text-primary hover:underline flex items-center gap-0.5">
+              View all <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        </div>
+        <div className="rounded-lg border bg-card">
+          {paymentsLoading ? (
+            <div className="px-4 divide-y">
+              {[...Array(4)].map((_, i) => <div key={i} className="py-2.5"><Skeleton className="h-9 w-full" /></div>)}
+            </div>
+          ) : todayPayments.length === 0 ? (
+            <div className="py-10 text-center text-muted-foreground">
+              <p className="text-sm">No payments recorded today.</p>
+              <Link href="/fees/payments" className="text-xs text-primary hover:underline mt-1 inline-block">
+                Record a payment →
+              </Link>
             </div>
           ) : (
-            <div>
-              {payments.map((p) => (
-                <PaymentRow key={p._id} payment={p} />
+            <div className="px-4">
+              {todayPayments.slice(0, 8).map((p, i) => (
+                <LedgerRow key={p._id} payment={p} rank={i + 1} />
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* ── Tour anchor: finance reports ─────────────────────────────────────── */}
+      {/* ── Defaulters ──────────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Defaulters
+            {defaulters.length > 0 && (
+              <span className="ml-1.5 font-mono text-bad">({defaulters.length})</span>
+            )}
+          </p>
+        </div>
+
+        {summaryLoading ? (
+          <div className="rounded-lg border bg-card px-4 divide-y">
+            {[...Array(4)].map((_, i) => <div key={i} className="py-2.5"><Skeleton className="h-8 w-full" /></div>)}
+          </div>
+        ) : defaulters.length === 0 ? (
+          <div className="rounded-lg border bg-card py-10 text-center text-muted-foreground">
+            <p className="text-sm">No defaulters — all students are up to date.</p>
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-card overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="py-2 pl-4 pr-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground w-8">#</th>
+                    <th className="py-2 px-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Student</th>
+                    <th className="py-2 px-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Class</th>
+                    <th className="py-2 px-2 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Days</th>
+                    <th className="py-2 px-2 pr-4 text-right text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Outstanding</th>
+                    <th className="py-2 px-2 pr-4 w-8"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {defaulters.map((d, i) => {
+                    const cls = d.classId
+                      ? `${d.classId.name}${d.classId.stream ? ` ${d.classId.stream}` : ''}`
+                      : d.className ?? '—';
+                    const days = d.daysOverdue ?? d.days ?? 0;
+                    const daysColor = days >= 30 ? 'text-bad' : days >= 14 ? 'text-warn' : 'text-foreground';
+                    return (
+                      <tr key={d._id ?? d.studentId ?? i} className="hover:bg-muted/20">
+                        <td className="py-2.5 pl-4 pr-2">
+                          <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{i + 1}</span>
+                        </td>
+                        <td className="py-2.5 px-2">
+                          <p className="font-medium leading-tight">{d.firstName ?? d.name} {d.lastName ?? ''}</p>
+                          <p className="font-mono text-[11px] text-muted-foreground tabular-nums">{d.admissionNumber ?? ''}</p>
+                        </td>
+                        <td className="py-2.5 px-2 hidden sm:table-cell text-muted-foreground text-xs">{cls}</td>
+                        <td className="py-2.5 px-2 hidden md:table-cell">
+                          {days > 0 ? (
+                            <span className={cn('font-mono text-sm tabular-nums', daysColor)}>{days}</span>
+                          ) : <span className="text-muted-foreground text-xs">—</span>}
+                        </td>
+                        <td className="py-2.5 px-2 pr-4 text-right">
+                          <span className="font-mono text-sm tabular-nums font-semibold text-bad">
+                            {formatCurrency(d.outstanding ?? d.balance ?? 0)}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-2 pr-4 text-right">
+                          <Link
+                            href={`/students/${d._id ?? d.studentId}`}
+                            className="text-primary hover:underline text-xs inline-flex items-center gap-0.5"
+                          >
+                            <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div data-tour="finance-reports" className="hidden" />
     </div>
   );

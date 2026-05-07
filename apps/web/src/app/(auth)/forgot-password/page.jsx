@@ -7,12 +7,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { authApi, getErrorMessage } from '@/lib/api';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 const schema = z.object({ email: z.string().email('Enter a valid email') });
 
@@ -26,50 +25,61 @@ export default function ForgotPasswordPage() {
   const { mutate, isPending } = useMutation({
     mutationFn: ({ email }) => authApi.forgotPassword(email),
     onSuccess: () => setSent(true),
-    onError: (err) => toast.error(getErrorMessage(err)),
+    onError:   (err) => toast.error(getErrorMessage(err)),
   });
 
   if (sent) {
     return (
-      <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur text-center">
-        <CardContent className="pt-8 pb-6 space-y-4">
-          <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-          <h2 className="text-xl font-semibold">Check your email</h2>
-          <p className="text-muted-foreground text-sm">
-            We sent a password reset link to your email address. The link expires in 1 hour.
+      <div className="space-y-6 text-center">
+        <div className="flex justify-center">
+          <CheckCircle2 className="h-10 w-10 text-ok" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="font-display text-2xl font-bold tracking-tight">Check your email</h2>
+          <p className="text-sm text-muted-foreground">
+            We sent a password reset link. The link expires in 1 hour.
           </p>
-          <Link href="/login">
-            <Button variant="outline" className="w-full mt-2">Back to sign in</Button>
-          </Link>
-        </CardContent>
-      </Card>
+        </div>
+        <Link href="/login">
+          <Button className="w-full h-10 bg-foreground text-background hover:bg-foreground/90">
+            Back to sign in
+          </Button>
+        </Link>
+      </div>
     );
   }
 
   return (
-    <Card className="border-0 shadow-2xl bg-white/95 backdrop-blur">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold">Forgot password?</CardTitle>
-        <CardDescription>Enter your email and we'll send you a reset link</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <>
+      {isPending && <div className="fixed inset-x-0 top-0 z-50 h-px bg-foreground" />}
+
+      <div className="space-y-6">
+        <div className="space-y-1">
+          <h1 className="font-display text-[32px] font-bold tracking-tight leading-none">Forgot password?</h1>
+          <p className="text-muted-foreground text-sm">Enter your email and we'll send you a reset link</p>
+        </div>
+
         <form onSubmit={handleSubmit(mutate)} className="space-y-4">
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <Label htmlFor="email">Email address</Label>
-            <Input id="email" type="email" placeholder="you@school.ac.ke" {...register('email')} />
-            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+            <Input id="email" type="email" className="h-10" placeholder="you@school.ac.ke" {...register('email')} />
+            {errors.email && <p className="text-xs text-bad">{errors.email.message}</p>}
           </div>
-          <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          <Button
+            type="submit"
+            className="w-full h-10 bg-foreground text-background hover:bg-foreground/90"
+            disabled={isPending}
+          >
             Send reset link
           </Button>
         </form>
-        <div className="mt-4 text-center">
-          <Link href="/login" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+
+        <div className="text-center">
+          <Link href="/login" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-3 w-3" /> Back to sign in
           </Link>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </>
   );
 }

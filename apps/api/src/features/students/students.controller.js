@@ -301,12 +301,13 @@ export const enrollStudent = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/v1/students
- * Lists students for the school. Supports ?classId=, ?status=, ?search= (name/admission), ?page=, ?limit=
+ * Lists students for the school. Supports ?classId=, ?status=, ?gender=, ?search= (name/admission), ?page=, ?limit=
  */
 export const listStudents = asyncHandler(async (req, res) => {
   const filter = { schoolId: req.user.schoolId };
   if (req.query.classId) filter.classId = req.query.classId;
   if (req.query.status) filter.status = req.query.status;
+  if (req.query.gender && ['male', 'female'].includes(req.query.gender)) filter.gender = req.query.gender;
 
   if (req.query.search) {
     const rx = new RegExp(req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -317,11 +318,18 @@ export const listStudents = asyncHandler(async (req, res) => {
     ];
   }
 
+  const SORT_FIELDS = { name: 'lastName', admNo: 'admissionNumber', status: 'status', enrolled: 'enrollmentDate' };
+  const sortField = SORT_FIELDS[req.query.sortBy] ?? 'lastName';
+  const sortDir   = req.query.order === 'desc' ? -1 : 1;
+  const sortSpec  = { [sortField]: sortDir };
+  if (sortField !== 'lastName') { sortSpec.lastName = 1; sortSpec.firstName = 1; }
+  else { sortSpec.firstName = sortDir; }
+
   const total = await Student.countDocuments(filter);
   const { skip, limit, meta } = paginate(req.query, total);
 
   const students = await Student.find(filter)
-    .sort({ lastName: 1, firstName: 1 })
+    .sort(sortSpec)
     .skip(skip)
     .limit(limit)
     .populate('classId', 'name stream levelCategory')

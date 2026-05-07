@@ -28,7 +28,7 @@ const SMS_SEGMENT = 160;
 function CharCounter({ text }) {
   const len = text?.length ?? 0;
   const segments = Math.max(1, Math.ceil(len / SMS_SEGMENT));
-  const color = len > MAX_CHARS ? 'text-destructive' : len > 300 ? 'text-amber-500' : 'text-muted-foreground';
+  const color = len > MAX_CHARS ? 'text-destructive' : len > 300 ? 'text-warn' : 'text-muted-foreground';
   return (
     <p className={`text-xs ${color} text-right`}>
       {len}/{MAX_CHARS} · {segments} SMS segment{segments !== 1 ? 's' : ''}
@@ -38,10 +38,10 @@ function CharCounter({ text }) {
 
 function StatusBadge({ status }) {
   const map = {
-    queued: { label: 'Queued', className: 'bg-slate-100 text-slate-700 border-slate-200', icon: Clock },
-    sent: { label: 'Sent', className: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
-    partial: { label: 'Partial', className: 'bg-amber-100 text-amber-700 border-amber-200', icon: AlertCircle },
-    failed: { label: 'Failed', className: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle },
+    queued: { label: 'Queued', className: 'bg-muted text-muted-foreground border-border', icon: Clock },
+    sent: { label: 'Sent', className: 'bg-ok/8 text-ok border-ok/30', icon: CheckCircle2 },
+    partial: { label: 'Partial', className: 'bg-warn/8 text-warn border-warn/30', icon: AlertCircle },
+    failed: { label: 'Failed', className: 'bg-bad/8 text-bad border-bad/30', icon: AlertCircle },
   };
   const { label, className, icon: Icon } = map[status] ?? map.queued;
   return (
@@ -489,7 +489,7 @@ function ComingSoon() {
         <MessageSquare className="h-8 w-8 text-primary" />
       </div>
       <div className="space-y-2">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold mb-2">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-warn/10 text-warn border border-warn/20 text-xs font-semibold mb-2">
           <Sparkles className="h-3 w-3" /> Coming Soon
         </div>
         <h2 className="text-2xl font-bold text-foreground tracking-tight">SMS Messaging</h2>
@@ -531,14 +531,15 @@ export default function MessagingPage() {
       <PageHeader
         title="Messaging"
         description="Send SMS messages to parents and staff"
+        overline="SMS"
       />
 
       {TEST_NUMBERS && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-          <FlaskConical className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" aria-hidden />
+        <div className="flex items-start gap-3 rounded-xl border border-warn/30 bg-warn/5 p-4">
+          <FlaskConical className="h-4 w-4 text-warn mt-0.5 shrink-0" aria-hidden />
           <div>
-            <p className="text-sm font-semibold text-amber-900">Test mode active</p>
-            <p className="text-xs text-amber-800 mt-0.5">
+            <p className="text-sm font-semibold">Test mode active</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
               All SMS (including broadcasts) are redirected to: <strong>{TEST_NUMBERS}</strong>. Remove <code>AT_TEST_NUMBERS</code> from the server env to send to real recipients.
             </p>
           </div>

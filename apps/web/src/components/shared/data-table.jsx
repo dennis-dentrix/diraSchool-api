@@ -7,7 +7,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import {
   Table,
@@ -20,8 +20,15 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export function DataTable({ columns, data, loading, error, pageCount, onPageChange, currentPage }) {
-  const [sorting, setSorting] = useState([]);
+export function DataTable({
+  columns, data, loading, error,
+  pageCount, onPageChange, currentPage,
+  sorting: externalSorting, onSortingChange: externalOnSortingChange,
+}) {
+  const [internalSorting, setInternalSorting] = useState([]);
+  const isServerSorted = !!externalOnSortingChange;
+  const sorting = isServerSorted ? (externalSorting ?? []) : internalSorting;
+  const handleSortingChange = isServerSorted ? externalOnSortingChange : setInternalSorting;
 
   const table = useReactTable({
     data: data ?? [],
@@ -29,9 +36,10 @@ export function DataTable({ columns, data, loading, error, pageCount, onPageChan
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
     state: { sorting },
     manualPagination: !!onPageChange,
+    manualSorting: isServerSorted,
     pageCount,
   });
   const mobileLabelFor = (cell) => {
@@ -108,47 +116,54 @@ export function DataTable({ columns, data, loading, error, pageCount, onPageChan
         )}
       </div>
 
-      <div className="hidden rounded-md border overflow-hidden md:block">
+      <div className="hidden rounded-lg border border-border overflow-hidden md:block">
         <div className="w-full overflow-x-auto">
           <Table className="min-w-[760px]">
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="bg-muted/50">
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="font-semibold text-xs uppercase tracking-wide">
-                    {header.isPlaceholder ? null : (
-                      <div
-                        className={header.column.getCanSort() ? 'flex items-center gap-1 cursor-pointer select-none' : ''}
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {header.column.getCanSort() && <ArrowUpDown className="h-3 w-3 text-muted-foreground" />}
-                      </div>
-                    )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="bg-muted/30 hover:bg-muted/30">
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground h-9"
+                    >
+                      {header.isPlaceholder ? null : (
+                        <div
+                          className={header.column.getCanSort() ? 'flex items-center gap-1 cursor-pointer select-none hover:text-foreground transition-colors' : ''}
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {header.column.getCanSort() && (
+                            header.column.getIsSorted() === 'asc'  ? <ArrowUp   className="h-3 w-3 text-foreground" /> :
+                            header.column.getIsSorted() === 'desc' ? <ArrowDown className="h-3 w-3 text-foreground" /> :
+                            <ArrowUpDown className="h-3 w-3 opacity-30" />
+                          )}
+                        </div>
+                      )}
+                    </TableHead>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  No results found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} className="hover:bg-muted/20 transition-colors border-border">
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id} className="py-2.5">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center text-sm text-muted-foreground">
+                    No results found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
           </Table>
         </div>
       </div>
