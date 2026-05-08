@@ -28,7 +28,7 @@ const jsonLd = {
       '@id': 'https://diraschool.com/#org',
       name: 'DiraSchool',
       url: 'https://diraschool.com',
-      logo: 'https://diraschool.com/icon.svg',
+      logo: 'https://diraschool.com/logo.svg',
       description: 'CBC school management system for Kenyan schools.',
       address: { '@type': 'PostalAddress', addressCountry: 'KE' },
     },
@@ -455,11 +455,11 @@ function ProductPreview() {
                   ))}
                 </div>
                 {[
-                  ['Amani Kariuki',   'Grade 5A', 'Term 1', 'ME', 'published', 'text-emerald-400'],
+                  ['Amani Kariuki', 'Grade 5A', 'Term 1', 'ME', 'published', 'text-emerald-400'],
                   ['Brian Odhiambo', 'Grade 5B', 'Term 1', 'EE', 'published', 'text-emerald-400'],
-                  ['Cynthia Wanja',  'Grade 6A', 'Term 1', 'AE', 'draft',     'text-amber-400'],
-                  ['David Mutua',    'Grade 4A', 'Term 1', 'BE', 'draft',     'text-amber-400'],
-                  ['Esther Njoki',   'Grade 5A', 'Term 1', 'EE', 'published', 'text-emerald-400'],
+                  ['Cynthia Wanja', 'Grade 6A', 'Term 1', 'AE', 'draft', 'text-amber-400'],
+                  ['David Mutua', 'Grade 4A', 'Term 1', 'BE', 'draft', 'text-amber-400'],
+                  ['Esther Njoki', 'Grade 5A', 'Term 1', 'EE', 'published', 'text-emerald-400'],
                 ].map(([name, cls, term, grade, status, statusColor]) => (
                   <div key={name} className="border-t border-white/5 px-3 py-2.5 grid grid-cols-5 gap-4 hover:bg-white/[0.02] transition-colors cursor-default">
                     <span className="text-slate-200 text-xs font-medium truncate">{name}</span>
