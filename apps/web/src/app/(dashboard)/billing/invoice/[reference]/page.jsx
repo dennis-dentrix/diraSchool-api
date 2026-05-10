@@ -46,8 +46,6 @@ export default function InvoicePage() {
   const schoolName = school?.name ?? user?.school?.name ?? 'John Doe';
   const contactName = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || 'John Doe' : 'John Doe';
   const invoiceNumber = `INV-${String(payment._id ?? reference).slice(-8).toUpperCase()}`;
-  const exVat = payment.subtotalExVat ?? Math.round(payment.amount / 1.16);
-  const vat = payment.vatAmount ?? (payment.amount - exVat);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -102,18 +100,10 @@ export default function InvoicePage() {
                   {fmtCycle(payment.billingCycle)} · {payment.studentCount ?? '—'} enrolled students
                 </p>
               </td>
-              <td className="py-3 text-right font-mono text-slate-900">{fmt(exVat)}</td>
+              <td className="py-3 text-right font-mono text-slate-900">{fmt(payment.amount)}</td>
             </tr>
           </tbody>
           <tfoot>
-            <tr className="border-t border-slate-200">
-              <td className="pt-3 pr-4 text-slate-500 text-sm">Subtotal (ex-VAT)</td>
-              <td className="pt-3 text-right font-mono text-slate-600">{fmt(exVat)}</td>
-            </tr>
-            <tr>
-              <td className="py-1 pr-4 text-slate-500 text-sm">VAT (16%)</td>
-              <td className="py-1 text-right font-mono text-slate-600">{fmt(vat)}</td>
-            </tr>
             <tr className="border-t-2 border-slate-900">
               <td className="pt-3 pr-4 font-bold text-slate-900">Total paid</td>
               <td className="pt-3 text-right font-bold font-mono text-slate-900 text-base">{fmt(payment.amount)} {payment.currency ?? 'KES'}</td>
@@ -138,7 +128,6 @@ export default function InvoicePage() {
         <div className="mt-8 pt-6 border-t border-slate-100 text-center">
           <p className="text-xs text-slate-400">
             Thank you for using DiraSchool. This invoice is your official payment confirmation.
-            If you are VAT-registered with KRA, you may reclaim the 16% VAT shown above.
           </p>
         </div>
       </div>

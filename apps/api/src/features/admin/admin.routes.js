@@ -5,6 +5,7 @@ import {
   listSchools,
   getSchool,
   updateSchoolStatus,
+  reviewSchoolDeactivationRequest,
   listSystemAuditLogs,
   listAdminUsers,
   toggleAdminUser,
@@ -29,6 +30,7 @@ router.get('/stats',                        getStats);
 router.get('/schools',                      listSchools);
 router.get('/schools/:id',                  getSchool);
 router.patch('/schools/:id/status',         updateSchoolStatus);
+router.patch('/schools/:id/deactivation-request', reviewSchoolDeactivationRequest);
 router.patch('/schools/:id/sms-sender-id',  approveSmsenderId);
 router.get('/audit-logs',                   listSystemAuditLogs);
 router.get('/users',                        listAdminUsers);

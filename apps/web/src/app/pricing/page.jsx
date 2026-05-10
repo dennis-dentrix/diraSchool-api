@@ -79,8 +79,8 @@ const FEATURES = [
 
 const FAQS = [
   {
-    q: 'What is VAT and does my school pay it?',
-    a: 'VAT (Value Added Tax) is a government tax of 16%. All services in Kenya charge it. You will see it as a clear line item on your invoice. If your school is registered for VAT with KRA, you can claim it back — check with your accountant. DiraSchool provides all necessary tax documentation.',
+    q: 'Do prices include taxes?',
+    a: 'The prices shown are the amounts schools pay for the subscription. If tax handling changes later, we will show it clearly before checkout.',
   },
   {
     q: 'How is billing aligned with the school calendar?',
@@ -437,7 +437,7 @@ function PriceCalculator() {
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-4">
-          Prices shown exclude VAT. VAT documentation provided upon request.
+          Prices shown are the subscription amounts before any future tax changes.
         </p>
       </div>
     </section>
@@ -546,7 +546,7 @@ function TrialCTA() {
 
         {/* Trust badges */}
         <div className="mt-12 flex flex-wrap justify-center gap-6 text-xs text-slate-600">
-          {['30-day free trial', 'No credit card required', 'CBC-compliant reports', 'Kenyan VAT documentation', 'Cancel any time'].map((t) => (
+          {['30-day free trial', 'No credit card required', 'CBC-compliant reports', 'Simple receipts', 'Cancel any time'].map((t) => (
             <span key={t} className="flex items-center gap-1.5">
               <Check className="h-3 w-3 text-emerald-500" />{t}
             </span>

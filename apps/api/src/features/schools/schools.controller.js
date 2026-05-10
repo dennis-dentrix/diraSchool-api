@@ -1,13 +1,27 @@
+import crypto from 'node:crypto';
+import mongoose from 'mongoose';
 import School from './School.model.js';
 import User from '../users/User.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
-import { SUBSCRIPTION_STATUSES, AUDIT_ACTIONS, AUDIT_RESOURCES, CACHE_TTL } from '../../constants/index.js';
+import {
+  SUBSCRIPTION_STATUSES,
+  AUDIT_ACTIONS,
+  AUDIT_RESOURCES,
+  CACHE_TTL,
+  JOB_NAMES,
+  ROLES,
+} from '../../constants/index.js';
 import { getRedis, cacheGet, cacheSet, cacheDel } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
-import { sendSenderIdRequestNotification } from '../../services/email.service.js';
+import {
+  sendSchoolDeactivationRequestNotification,
+  sendSenderIdRequestNotification,
+} from '../../services/email.service.js';
 import { normalisePhone } from '../../utils/phone.js';
+import { queueEmailWithDirectFallback } from '../../utils/emailJobs.js';
+import { env } from '../../config/env.js';
 
 // Bust the subscription cache for a school after any admin change.
 const bustSubCache = async (schoolId) => {
@@ -90,6 +104,55 @@ export const updateMySchool = asyncHandler(async (req, res) => {
   return sendSuccess(res, { school });
 });
 
+export const requestSchoolDeactivation = asyncHandler(async (req, res) => {
+  const school = await School.findById(req.user.schoolId);
+  if (!school) return sendError(res, 'School not found.', 404);
+  if (school.isActive === false) return sendError(res, 'This school account is already inactive.', 400);
+
+  if (school.deactivationRequest?.status === 'pending') {
+    return sendError(res, 'A deactivation request is already pending review.', 409);
+  }
+
+  school.deactivationRequest = {
+    status: 'pending',
+    reason: req.body.reason,
+    confirmation: req.body.confirmation,
+    requestedByUserId: req.user._id,
+    requestedAt: new Date(),
+    reviewedByUserId: undefined,
+    reviewedAt: undefined,
+    reviewNote: undefined,
+  };
+
+  await school.save();
+  await cacheDel(schoolInfoKey(school._id)).catch(() => {});
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.UPDATE,
+    resource: AUDIT_RESOURCES.SCHOOL,
+    resourceId: school._id,
+    meta: {
+      type: 'deactivation_request',
+      requestedBy: req.user.email,
+    },
+  });
+
+  sendSchoolDeactivationRequestNotification({
+    schoolName: school.name,
+    schoolId: String(school._id),
+    schoolEmail: school.email,
+    requestedBy: `${req.user.firstName} ${req.user.lastName}`.trim(),
+    requestedByEmail: req.user.email,
+    reason: req.body.reason,
+    meta: { schoolId: school._id, userId: req.user._id },
+  }).catch(() => {});
+
+  return sendSuccess(res, {
+    message: 'Deactivation request submitted. A Diraschool superadmin must review it before access is disabled.',
+    school,
+  });
+});
+
 // ── Superadmin endpoints ──────────────────────────────────────────────────────
 
 /**
@@ -98,13 +161,7 @@ export const updateMySchool = asyncHandler(async (req, res) => {
  * Default subscription: trial (30 days) — set by the model.
  */
 export const createSchool = asyncHandler(async (req, res) => {
-  const { name, email, phone, county, constituency, registrationNumber, address } = req.body;
-
-  // Duplicate email check — give a cleaner message than the Mongo 11000 error
-  const existing = await School.findOne({ email });
-  if (existing) return sendError(res, 'A school with this email already exists.', 409);
-
-  const school = await School.create({
+  const {
     name,
     email,
     phone,
@@ -112,9 +169,100 @@ export const createSchool = asyncHandler(async (req, res) => {
     constituency,
     registrationNumber,
     address,
-  });
+    adminFirstName,
+    adminLastName,
+    adminEmail,
+    adminPhone,
+  } = req.body;
 
-  return sendSuccess(res, { school }, 201);
+  // Duplicate email check — give a cleaner message than the Mongo 11000 error
+  const existing = await School.findOne({ email });
+  if (existing) return sendError(res, 'A school with this email already exists.', 409);
+
+  const existingUser = await User.findOne({ email: adminEmail });
+  if (existingUser) return sendError(res, 'A user with this admin email already exists.', 409);
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  let school;
+  let admin;
+  try {
+    [school] = await School.create(
+      [
+        {
+          name,
+          email,
+          phone: normalisePhone(phone),
+          county,
+          constituency,
+          registrationNumber,
+          address,
+        },
+      ],
+      { session }
+    );
+
+    [admin] = await User.create(
+      [
+        {
+          firstName: adminFirstName.trim(),
+          lastName: adminLastName.trim(),
+          email: adminEmail.toLowerCase().trim(),
+          phone: adminPhone ? normalisePhone(adminPhone) : undefined,
+          password: crypto.randomBytes(16).toString('hex'),
+          role: ROLES.SCHOOL_ADMIN,
+          schoolId: school._id,
+          mustChangePassword: false,
+          invitePending: true,
+          inviteToken: tokenHash,
+          inviteTokenExpiry: expiry,
+          emailVerified: true,
+        },
+      ],
+      { session }
+    );
+
+    await session.commitTransaction();
+  } catch (err) {
+    if (session.inTransaction()) await session.abortTransaction();
+    throw err;
+  } finally {
+    await session.endSession();
+  }
+
+  const inviteUrl = `${env.CLIENT_URL}/accept-invite/${rawToken}`;
+  queueEmailWithDirectFallback(
+    JOB_NAMES.SEND_INVITE_EMAIL,
+    {
+      to: admin.email,
+      firstName: admin.firstName,
+      schoolName: school.name,
+      inviteUrl,
+      expiresInDays: 7,
+      meta: {
+        schoolId: school._id,
+        userId: admin._id,
+        flow: 'superadmin-school-create',
+        initiatedBy: req.user._id,
+      },
+    },
+    'Superadmin school invite'
+  );
+
+  return sendSuccess(
+    res,
+    {
+      school,
+      admin: admin.toSafeObject(),
+      message: `School registered. An invitation email has been sent to ${admin.email}.`,
+    },
+    201
+  );
 });
 
 /**

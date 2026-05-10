@@ -563,7 +563,7 @@ function PricingTeaser() {
               Annual billing saves 10%. No hidden costs, ever.
             </p>
             <div className="mt-5 flex flex-wrap gap-3 text-xs">
-              {['Annual billing: 10% off', 'VAT invoices provided', 'All features included', 'No student limits'].map((t) => (
+              {['Annual billing: 10% off', 'Simple receipts provided', 'All features included', 'No student limits'].map((t) => (
                 <span key={t} className="flex items-center gap-1.5 text-slate-400">
                   <Check className="h-3 w-3 text-emerald-400 shrink-0" />{t}
                 </span>

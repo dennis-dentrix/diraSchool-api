@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle2, XCircle, Clock, MessageSquare } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock, MessageSquare, ShieldOff, XCircle } from 'lucide-react';
 import { adminApi, studentsApi, getErrorMessage } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,7 @@ export default function SchoolDetailPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [subForm, setSubForm] = useState(null);
+  const [deactivationReviewNote, setDeactivationReviewNote] = useState('');
 
   // Use the admin endpoint — returns staff breakdown too
   const { data: school, isLoading } = useQuery({
@@ -82,6 +83,17 @@ export default function SchoolDetailPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const { mutate: reviewDeactivationRequest, isPending: reviewingDeactivation } = useMutation({
+    mutationFn: (data) => adminApi.reviewDeactivationRequest(id, data),
+    onSuccess: (res) => {
+      toast.success(res.data?.message ?? 'Deactivation request reviewed');
+      setDeactivationReviewNote('');
+      queryClient.invalidateQueries({ queryKey: ['sa-school', id] });
+      queryClient.invalidateQueries({ queryKey: ['sa-schools-list'] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   const [senderIdForm, setSenderIdForm] = useState({ approvedId: '', rejectionReason: '' });
   const { mutate: reviewSenderId, isPending: reviewPending } = useMutation({
     mutationFn: (data) => adminApi.approveSenderId(id, data),
@@ -103,6 +115,8 @@ export default function SchoolDetailPage() {
   const plan   = school?.planTier ?? 'standard';
   const status = school?.subscriptionStatus ?? 'active';
   const staff  = school?.staff;
+  const deactivationRequest = school?.deactivationRequest;
+  const deactivationPending = deactivationRequest?.status === 'pending';
 
   return (
     <div className="space-y-6">
@@ -118,6 +132,7 @@ export default function SchoolDetailPage() {
         <div className="flex gap-2">
           <Badge className={`capitalize ${planColors[plan]}`}>{plan}</Badge>
           <Badge className={`capitalize ${statusColors[status]}`}>{status}</Badge>
+          {deactivationPending && <Badge className="bg-orange-100 text-orange-800">Deactivation requested</Badge>}
         </div>
       </div>
 
@@ -125,6 +140,13 @@ export default function SchoolDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="subscription">Subscription</TabsTrigger>
+          <TabsTrigger value="account">
+            <ShieldOff className="h-3.5 w-3.5 mr-1.5" />
+            Account
+            {deactivationPending && (
+              <span className="ml-1.5 h-2 w-2 rounded-full bg-orange-500 inline-block" />
+            )}
+          </TabsTrigger>
           <TabsTrigger value="sms">
             <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
             SMS
@@ -178,6 +200,90 @@ export default function SchoolDetailPage() {
               </div>
             </div>
           </div>
+        </TabsContent>
+
+        {/* ── Account Review ───────────────────────────────────────────────── */}
+        <TabsContent value="account">
+          <Card className="max-w-2xl">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ShieldOff className="h-4 w-4 text-destructive" />
+                Account Deactivation
+              </CardTitle>
+              <CardDescription>
+                Review requests submitted from the school's Settings danger zone.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!deactivationRequest || deactivationRequest.status === 'none' ? (
+                <p className="text-sm text-muted-foreground">No deactivation request has been submitted.</p>
+              ) : (
+                <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">Status</span>
+                    <Badge className={
+                      deactivationRequest.status === 'pending' ? 'bg-orange-100 text-orange-800' :
+                      deactivationRequest.status === 'approved' ? 'bg-red-100 text-red-800' :
+                      deactivationRequest.status === 'rejected' ? 'bg-slate-100 text-slate-800' :
+                      'bg-muted text-muted-foreground'
+                    }>
+                      {deactivationRequest.status}
+                    </Badge>
+                  </div>
+                  <InfoRow label="Requested" value={deactivationRequest.requestedAt ? formatDate(deactivationRequest.requestedAt) : '—'} />
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Reason</p>
+                    <p className="text-sm whitespace-pre-line">{deactivationRequest.reason ?? '—'}</p>
+                  </div>
+                  {deactivationRequest.reviewedAt && (
+                    <InfoRow label="Reviewed" value={formatDate(deactivationRequest.reviewedAt)} />
+                  )}
+                  {deactivationRequest.reviewNote && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Review note</p>
+                      <p className="text-sm whitespace-pre-line">{deactivationRequest.reviewNote}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {deactivationPending && (
+                <div className="space-y-3 rounded-lg border border-orange-200 bg-orange-50/60 p-4">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-orange-700 mt-0.5 shrink-0" />
+                    <p className="text-sm text-orange-900">
+                      Approving disables the school account immediately and deactivates all non-superadmin users in that school.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Review note</Label>
+                    <Textarea
+                      rows={3}
+                      value={deactivationReviewNote}
+                      onChange={(e) => setDeactivationReviewNote(e.target.value)}
+                      placeholder="Optional note sent to the school."
+                    />
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                      variant="destructive"
+                      disabled={reviewingDeactivation}
+                      onClick={() => reviewDeactivationRequest({ action: 'approve', reviewNote: deactivationReviewNote || undefined })}
+                    >
+                      Approve and disable account
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={reviewingDeactivation}
+                      onClick={() => reviewDeactivationRequest({ action: 'reject', reviewNote: deactivationReviewNote || undefined })}
+                    >
+                      Reject request
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ── Subscription ──────────────────────────────────────────────────── */}

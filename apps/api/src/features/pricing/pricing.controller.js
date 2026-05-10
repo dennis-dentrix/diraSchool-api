@@ -4,7 +4,6 @@ import { FEATURE_ADDONS, FEATURE_ADDON_PRICING } from '../../constants/index.js'
 
 const BASE_FEE = 12000;
 const PER_STUDENT_RATE = 50;
-const VAT_RATE = 0.16;
 const SCHOOL_FEE_ASSUMPTION = 10000; // KES per student per term (for % calc)
 
 const MULTIPLIERS = {
@@ -16,7 +15,6 @@ const MULTIPLIERS = {
 const schema = z.object({
   students: z.coerce.number().int().min(1).max(10000),
   option: z.enum(['per-term', 'annual', 'multi-year']).default('per-term'),
-  includeVAT: z.coerce.boolean().default(false),
   addOns: z.string().optional(), // csv: transport,sms
 });
 
@@ -37,7 +35,6 @@ const parseAddOns = (rawAddOns) => {
  * Query params:
  *   students    int 1–10000   required
  *   option      per-term|annual|multi-year   default: per-term
- *   includeVAT  boolean   default: true
  */
 export const calculatePrice = (req, res) => {
   const parsed = schema.safeParse(req.query);
@@ -53,16 +50,14 @@ export const calculatePrice = (req, res) => {
     (sum, addOn) => sum + (FEATURE_ADDON_PRICING[addOn] ?? 0),
     0
   );
-  const subtotalExVAT = BASE_FEE + students * PER_STUDENT_RATE + addOnsPerTerm;
-  const periodSubtotal = subtotalExVAT * multiplier;
-  const vatAmount = Math.round(periodSubtotal * VAT_RATE);
-  const totalIncVAT = periodSubtotal + vatAmount;
+  const subtotal = BASE_FEE + students * PER_STUDENT_RATE + addOnsPerTerm;
+  const periodTotal = subtotal * multiplier;
 
-  const costPerStudentPerTerm = subtotalExVAT / students;
-  const pctOfFeeIncome = (subtotalExVAT / (students * SCHOOL_FEE_ASSUMPTION)) * 100;
+  const costPerStudentPerTerm = subtotal / students;
+  const pctOfFeeIncome = (subtotal / (students * SCHOOL_FEE_ASSUMPTION)) * 100;
 
   // For annual/multi-year, also return the effective per-term equivalent
-  const effectivePerTerm = option !== 'per-term' ? totalIncVAT / 3 : null;
+  const effectivePerTerm = option !== 'per-term' ? periodTotal / 3 : null;
 
   return sendSuccess(res, {
     inputs: {
@@ -70,7 +65,6 @@ export const calculatePrice = (req, res) => {
       option,
       baseFee: BASE_FEE,
       perStudentRate: PER_STUDENT_RATE,
-      vatRate: VAT_RATE,
     },
     breakdown: {
       baseFee: BASE_FEE,
@@ -80,16 +74,14 @@ export const calculatePrice = (req, res) => {
         name,
         pricePerTerm: FEATURE_ADDON_PRICING[name] ?? 0,
       })),
-      subtotalExVAT: Math.round(subtotalExVAT),
+      subtotal: Math.round(subtotal),
       multiplier,
-      periodSubtotalExVAT: Math.round(periodSubtotal),
-      vatAmount,
-      totalIncVAT: Math.round(totalIncVAT),
+      total: Math.round(periodTotal),
     },
     insights: {
       costPerStudentPerTerm: Math.round(costPerStudentPerTerm * 100) / 100,
       pctOfFeeIncome: Math.round(pctOfFeeIncome * 100) / 100,
-      ...(effectivePerTerm ? { effectivePerTermIncVAT: Math.round(effectivePerTerm) } : {}),
+      ...(effectivePerTerm ? { effectivePerTerm: Math.round(effectivePerTerm) } : {}),
     },
   });
 };

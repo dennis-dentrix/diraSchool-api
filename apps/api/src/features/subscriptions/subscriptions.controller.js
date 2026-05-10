@@ -19,7 +19,6 @@ import logger from '../../config/logger.js';
 
 const BASE_FEE = 12000;
 const PER_STUDENT_RATE = 50;
-const VAT_RATE = 0.16;
 const MULTIPLIERS = {
   'per-term': 1,
   annual: 2.70,      // 3 terms × 0.90 = 10% off
@@ -29,9 +28,8 @@ const MULTIPLIERS = {
 const calcAmount = ({ studentCount, billingCycle }) => {
   const subtotal = BASE_FEE + studentCount * PER_STUDENT_RATE;
   const multiplier = MULTIPLIERS[billingCycle] ?? 1;
-  const exVat = Math.round(subtotal * multiplier);
-  const vat = Math.round(exVat * VAT_RATE);
-  return { subtotalExVat: exVat, vatAmount: vat, total: exVat + vat };
+  const total = Math.round(subtotal * multiplier);
+  return { subtotalExVat: total, vatAmount: 0, total };
 };
 
 const merchantRef = (schoolId) =>

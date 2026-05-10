@@ -57,6 +57,36 @@ const schoolSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    deactivationRequest: {
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'rejected', 'cancelled'],
+        default: 'none',
+        index: true,
+      },
+      reason: {
+        type: String,
+        trim: true,
+      },
+      confirmation: {
+        type: String,
+        trim: true,
+      },
+      requestedByUserId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      requestedAt: Date,
+      reviewedByUserId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+      reviewedAt: Date,
+      reviewNote: {
+        type: String,
+        trim: true,
+      },
+    },
     // Optional billing group — when set, this school shares a subscription with others in the group
     groupId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -156,6 +186,7 @@ const schoolSchema = new mongoose.Schema(
 );
 
 schoolSchema.index({ email: 1 }, { unique: true });
+schoolSchema.index({ 'deactivationRequest.status': 1, createdAt: -1 });
 schoolSchema.index({ 'mpesa.paybill': 1 }, { sparse: true });
 schoolSchema.index({ 'mpesa.paybill': 1, 'mpesa.active': 1 });
 

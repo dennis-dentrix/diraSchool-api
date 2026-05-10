@@ -34,7 +34,26 @@ const createSchoolSchema = z.object({
   constituency: z.string().trim().min(1).optional(),
   registrationNumber: z.string().trim().min(1).optional(),
   address: z.string().trim().min(1).optional(),
+  adminFirstName: z.string().trim().min(1, 'Admin first name is required'),
+  adminLastName: z.string().trim().min(1, 'Admin last name is required'),
+  adminEmail: emailField,
+  adminPhone: phoneField.optional().or(z.literal('')),
 });
+
+const deactivationRequestSchema = z
+  .object({
+    reason: z.string().trim().min(30, 'Please provide a detailed reason of at least 30 characters.').max(1000),
+    confirmation: z.literal('DEACTIVATE', {
+      errorMap: () => ({ message: 'Type DEACTIVATE to confirm this request.' }),
+    }),
+    dataRetentionAcknowledged: z.literal(true, {
+      errorMap: () => ({ message: 'Confirm that you understand access will be disabled after approval.' }),
+    }),
+    billingAcknowledged: z.literal(true, {
+      errorMap: () => ({ message: 'Confirm that any billing or data export issues have been reviewed.' }),
+    }),
+  })
+  .strict();
 
 // ── School admin updates their own school ────────────────────────────────────
 // Cannot touch subscription fields — those are superadmin-only.
@@ -98,3 +117,4 @@ export const validateCreateSchool = validate(createSchoolSchema);
 export const validateUpdateMySchool = validate(updateMySchoolSchema);
 export const validateSuperadminUpdateSchool = validate(superadminUpdateSchoolSchema);
 export const validateUpdateSubscription = validate(updateSubscriptionSchema);
+export const validateDeactivationRequest = validate(deactivationRequestSchema);

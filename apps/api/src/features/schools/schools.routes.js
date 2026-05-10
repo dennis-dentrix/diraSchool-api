@@ -11,6 +11,7 @@ import {
   validateUpdateMySchool,
   validateSuperadminUpdateSchool,
   validateUpdateSubscription,
+  validateDeactivationRequest,
 } from './schools.validator.js';
 import {
   getMySchool,
@@ -20,6 +21,7 @@ import {
   getSchool,
   updateSchool,
   updateSubscription,
+  requestSchoolDeactivation,
   requestSmsSenderId,
 } from './schools.controller.js';
 
@@ -44,6 +46,13 @@ router.post(
   '/me/sms-sender-id-request',
   authorize(ROLES.SCHOOL_ADMIN, ROLES.DIRECTOR, ROLES.HEADTEACHER),
   requestSmsSenderId
+);
+
+router.post(
+  '/me/deactivation-request',
+  authorize(ROLES.SCHOOL_ADMIN),
+  validateDeactivationRequest,
+  requestSchoolDeactivation
 );
 
 // ── Superadmin routes (/api/v1/schools) ──────────────────────────────────────

@@ -30,6 +30,20 @@ const statusColors = {
   expired: 'bg-gray-100 text-gray-800',
 };
 
+const CREATE_FORM_INIT = {
+  name: '',
+  email: '',
+  phone: '',
+  county: '',
+  constituency: '',
+  registrationNumber: '',
+  address: '',
+  adminFirstName: '',
+  adminLastName: '',
+  adminEmail: '',
+  adminPhone: '',
+};
+
 export default function SuperadminSchoolsPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -42,7 +56,7 @@ export default function SuperadminSchoolsPage() {
   const [selectedSchool, setSelectedSchool] = useState(null);
   const [subForm, setSubForm] = useState({ planTier: '', subscriptionStatus: '', trialExpiry: '' });
   const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ name: '', email: '', phone: '', county: '', constituency: '', registrationNumber: '', address: '' });
+  const [createForm, setCreateForm] = useState(CREATE_FORM_INIT);
 
   const { data, isLoading } = useQuery({
     queryKey: ['sa-schools-list', page, search, statusFilter, activeFilter],
@@ -70,11 +84,11 @@ export default function SuperadminSchoolsPage() {
 
   const { mutate: createSchool, isPending: isCreating } = useMutation({
     mutationFn: (data) => adminApi.createSchool(data),
-    onSuccess: () => {
-      toast.success('School registered successfully');
+    onSuccess: (res) => {
+      toast.success(res.data?.message ?? 'School registered successfully');
       queryClient.invalidateQueries({ queryKey: ['sa-schools-list'] });
       setCreateOpen(false);
-      setCreateForm({ name: '', email: '', phone: '', county: '', constituency: '', registrationNumber: '', address: '' });
+      setCreateForm(CREATE_FORM_INIT);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -111,6 +125,11 @@ export default function SuperadminSchoolsPage() {
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize w-fit ${statusColors[row.original.subscriptionStatus] ?? 'bg-gray-100 text-gray-800'}`}>
             {row.original.subscriptionStatus ?? 'active'}
           </span>
+          {row.original.deactivationRequest?.status === 'pending' && (
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium w-fit bg-orange-100 text-orange-800">
+              Deactivation requested
+            </span>
+          )}
         </div>
       ),
     },
@@ -224,11 +243,12 @@ export default function SuperadminSchoolsPage() {
       />
 
       {/* ── Register school dialog ───────────────────────────────────────── */}
-      <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreateForm({ name: '', email: '', phone: '', county: '', constituency: '', registrationNumber: '', address: '' }); }}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) setCreateForm(CREATE_FORM_INIT); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Register New School</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
+              <p className="col-span-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">School account</p>
               <div className="col-span-2 space-y-1.5">
                 <Label>School Name *</Label>
                 <Input value={createForm.name} onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Nairobi Academy" />
@@ -257,12 +277,40 @@ export default function SuperadminSchoolsPage() {
                 <Label>Physical Address</Label>
                 <Input value={createForm.address} onChange={(e) => setCreateForm((p) => ({ ...p, address: e.target.value }))} placeholder="P.O Box 123, Nairobi" />
               </div>
+              <p className="col-span-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground pt-2">School admin login</p>
+              <div className="space-y-1.5">
+                <Label>Admin First Name *</Label>
+                <Input value={createForm.adminFirstName} onChange={(e) => setCreateForm((p) => ({ ...p, adminFirstName: e.target.value }))} placeholder="Mary" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Admin Last Name *</Label>
+                <Input value={createForm.adminLastName} onChange={(e) => setCreateForm((p) => ({ ...p, adminLastName: e.target.value }))} placeholder="Wanjiku" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Admin Email *</Label>
+                <Input type="email" value={createForm.adminEmail} onChange={(e) => setCreateForm((p) => ({ ...p, adminEmail: e.target.value }))} placeholder="admin@school.ac.ke" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Admin Phone</Label>
+                <Input value={createForm.adminPhone} onChange={(e) => setCreateForm((p) => ({ ...p, adminPhone: e.target.value }))} placeholder="+254 700 000000" />
+              </div>
+              <p className="col-span-2 text-xs text-muted-foreground">
+                The school admin will receive an invitation email and set their own password before logging in.
+              </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button
-              disabled={isCreating || !createForm.name || !createForm.email || !createForm.phone}
+              disabled={
+                isCreating ||
+                !createForm.name ||
+                !createForm.email ||
+                !createForm.phone ||
+                !createForm.adminFirstName ||
+                !createForm.adminLastName ||
+                !createForm.adminEmail
+              }
               onClick={() => createSchool({
                 name: createForm.name,
                 email: createForm.email,
@@ -271,6 +319,10 @@ export default function SuperadminSchoolsPage() {
                 constituency: createForm.constituency || undefined,
                 registrationNumber: createForm.registrationNumber || undefined,
                 address: createForm.address || undefined,
+                adminFirstName: createForm.adminFirstName,
+                adminLastName: createForm.adminLastName,
+                adminEmail: createForm.adminEmail,
+                adminPhone: createForm.adminPhone || undefined,
               })}
             >
               {isCreating ? 'Registering…' : 'Register School'}

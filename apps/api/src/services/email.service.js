@@ -36,6 +36,14 @@ const decodeHtmlEntities = (value) =>
 
 const stripHtml = (value) => decodeHtmlEntities(String(value || '').replace(/<[^>]+>/g, ''));
 
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 const htmlToText = (html) => {
   const text = String(html || '')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
@@ -299,6 +307,37 @@ export const sendSenderIdReviewedEmail = ({
     meta,
   });
 
+export const sendSchoolDeactivationRequestNotification = ({
+  schoolName, schoolId, schoolEmail, requestedBy, requestedByEmail, reason, meta = {},
+}) =>
+  sendEmail({
+    to: 'diraschadmin@diraschool.com',
+    subject: `School deactivation request — ${schoolName}`,
+    html: _schoolDeactivationRequestTemplate({
+      schoolName,
+      schoolId,
+      schoolEmail,
+      requestedBy,
+      requestedByEmail,
+      reason,
+    }),
+    template: 'school-deactivation-request',
+    meta,
+  });
+
+export const sendSchoolDeactivationReviewedEmail = ({
+  to, schoolName, action, reviewNote, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: action === 'approve'
+      ? `Your Diraschool account deactivation was approved — ${schoolName}`
+      : `Your Diraschool account deactivation request was not approved — ${schoolName}`,
+    html: _schoolDeactivationReviewedTemplate({ schoolName, action, reviewNote }),
+    template: 'school-deactivation-reviewed',
+    meta,
+  });
+
 export const sendDepartmentMemberEmail = ({
   to, firstName, schoolName, departmentName, action, meta = {},
 }) =>
@@ -404,6 +443,54 @@ const _checkoutReminderTemplate = ({ firstName, schoolName, checkOutTime }) =>
         If you have already checked out and received this message in error, please contact your school administrator.
       </p>
     `
+  );
+
+const _schoolDeactivationRequestTemplate = ({
+  schoolName,
+  schoolId,
+  schoolEmail,
+  requestedBy,
+  requestedByEmail,
+  reason,
+}) =>
+  _shell(
+    `Deactivation request — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">School deactivation request</h2>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+        <strong>${schoolName}</strong> has requested account deactivation.
+      </p>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="margin:0 0 6px;font-size:14px;color:#92400e;"><strong>School ID:</strong> ${escapeHtml(schoolId)}</p>
+        <p style="margin:0 0 6px;font-size:14px;color:#92400e;"><strong>School email:</strong> ${escapeHtml(schoolEmail)}</p>
+        <p style="margin:0 0 6px;font-size:14px;color:#92400e;"><strong>Requested by:</strong> ${escapeHtml(requestedBy)} (${escapeHtml(requestedByEmail)})</p>
+      </div>
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;">Reason</p>
+      <p style="margin:0;font-size:15px;color:#374151;line-height:1.6;white-space:pre-line;">${escapeHtml(reason)}</p>
+    `
+  );
+
+const _schoolDeactivationReviewedTemplate = ({ schoolName, action, reviewNote }) =>
+  _shell(
+    action === 'approve'
+      ? `Account deactivation approved — ${schoolName}`
+      : `Account deactivation not approved — ${schoolName}`,
+    action === 'approve'
+      ? `
+        <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Account deactivation approved</h2>
+        <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+          Your Diraschool account for <strong>${schoolName}</strong> has been deactivated.
+          Staff access has been disabled, and your school data remains preserved.
+        </p>
+        ${reviewNote ? `<p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6;"><strong>Note:</strong> ${escapeHtml(reviewNote)}</p>` : ''}
+      `
+      : `
+        <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Account deactivation request not approved</h2>
+        <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">
+          Your Diraschool account for <strong>${schoolName}</strong> remains active.
+        </p>
+        ${reviewNote ? `<p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6;"><strong>Reason:</strong> ${escapeHtml(reviewNote)}</p>` : ''}
+      `
   );
 
 const _shell = (title, body) => `<!DOCTYPE html>

@@ -21,11 +21,34 @@ import SmsDelivery from '../sms/SmsDelivery.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
-import { SUBSCRIPTION_STATUSES, PLAN_TIERS, ROLES, SMS_DELIVERY_STATUS } from '../../constants/index.js';
+import {
+  AUDIT_ACTIONS,
+  AUDIT_RESOURCES,
+  SUBSCRIPTION_STATUSES,
+  PLAN_TIERS,
+  ROLES,
+  SMS_DELIVERY_STATUS,
+} from '../../constants/index.js';
 import { env } from '../../config/env.js';
 import { captureError, sentryEnabled } from '../../config/sentry.js';
-import { sendSenderIdReviewedEmail } from '../../services/email.service.js';
+import { getRedis } from '../../config/redis.js';
+import {
+  sendSchoolDeactivationReviewedEmail,
+  sendSenderIdReviewedEmail,
+} from '../../services/email.service.js';
+import { logAction } from '../../utils/auditLogger.js';
 import { getCurrentTermAndYear } from '../../utils/term.js';
+
+const bustSchoolSubCache = async (schoolId) => {
+  try {
+    const redis = getRedis();
+    if (!redis) return;
+    await redis.del(`school:sub:${schoolId}`);
+    await redis.del(`school:info:${schoolId}`);
+  } catch {
+    // non-fatal
+  }
+};
 
 // ── GET /api/v1/admin/stats ──────────────────────────────────────────────────
 
@@ -273,9 +296,71 @@ export const updateSchoolStatus = asyncHandler(async (req, res) => {
   }
 
   await school.save();
+  await bustSchoolSubCache(school._id);
 
   return sendSuccess(res, {
     message: 'School updated successfully.',
+    school,
+  });
+});
+
+export const reviewSchoolDeactivationRequest = asyncHandler(async (req, res) => {
+  const { action, reviewNote } = req.body;
+  if (!['approve', 'reject'].includes(action)) {
+    return sendError(res, 'Action must be approve or reject.', 400);
+  }
+
+  const school = await School.findById(req.params.id);
+  if (!school) return sendError(res, 'School not found.', 404);
+  if (school.deactivationRequest?.status !== 'pending') {
+    return sendError(res, 'This school does not have a pending deactivation request.', 400);
+  }
+
+  if (action === 'approve') {
+    school.deactivationRequest.status = 'approved';
+    school.isActive = false;
+    school.subscriptionStatus = SUBSCRIPTION_STATUSES.SUSPENDED;
+  } else {
+    school.deactivationRequest.status = 'rejected';
+  }
+
+  school.deactivationRequest.reviewedByUserId = req.user._id;
+  school.deactivationRequest.reviewedAt = new Date();
+  school.deactivationRequest.reviewNote = reviewNote || undefined;
+
+  if (action === 'approve') {
+    await User.updateMany(
+      { schoolId: school._id, role: { $ne: ROLES.SUPERADMIN } },
+      { isActive: false }
+    );
+  }
+
+  await school.save();
+  await bustSchoolSubCache(school._id);
+
+  logAction(req, {
+    action: action === 'approve' ? AUDIT_ACTIONS.SUSPEND : AUDIT_ACTIONS.UPDATE,
+    resource: AUDIT_RESOURCES.SCHOOL,
+    resourceId: school._id,
+    meta: {
+      type: 'deactivation_request_review',
+      reviewAction: action,
+      reviewNote: reviewNote || null,
+    },
+  });
+
+  sendSchoolDeactivationReviewedEmail({
+    to: school.email,
+    schoolName: school.name,
+    action,
+    reviewNote,
+    meta: { schoolId: school._id, userId: req.user._id },
+  }).catch(() => {});
+
+  return sendSuccess(res, {
+    message: action === 'approve'
+      ? 'School account deactivation approved. The account is now disabled.'
+      : 'School account deactivation request rejected.',
     school,
   });
 });

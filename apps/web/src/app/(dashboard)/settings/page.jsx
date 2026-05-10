@@ -63,6 +63,7 @@ export default function SettingsPage() {
   const canEdit               = ['school_admin', 'director', 'headteacher'].includes(user?.role);
   const canViewPaymentsSms    = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'].includes(user?.role);
   const canManageDaraja       = user?.role === 'school_admin';
+  const canRequestDeactivation = user?.role === 'school_admin';
   const schoolId              = typeof user?.schoolId === 'object' ? user.schoolId?._id : user?.schoolId;
   const queryClient           = useQueryClient();
 
@@ -81,6 +82,12 @@ export default function SettingsPage() {
   const [senderIdForm,        setSenderIdForm]        = useState('');
   const [showAddEvent,        setShowAddEvent]        = useState(false);
   const [newHoliday,          setNewHoliday]          = useState({ name: '', date: '', description: '' });
+  const [deactivationForm,    setDeactivationForm]    = useState({
+    reason: '',
+    confirmation: '',
+    dataRetentionAcknowledged: false,
+    billingAcknowledged: false,
+  });
   const [confirmDialog,       setConfirmDialog]       = useState(CONFIRM_INIT);
 
   const { data, isLoading } = useQuery({
@@ -161,6 +168,21 @@ export default function SettingsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const { mutate: requestDeactivation, isPending: requestingDeactivation } = useMutation({
+    mutationFn: () => schoolsApi.requestDeactivation(deactivationForm),
+    onSuccess: (res) => {
+      toast.success(res.data?.message ?? 'Deactivation request submitted');
+      queryClient.invalidateQueries({ queryKey: ['school-me'] });
+      setDeactivationForm({
+        reason: '',
+        confirmation: '',
+        dataRetentionAcknowledged: false,
+        billingAcknowledged: false,
+      });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   // ── Derived state ──────────────────────────────────────────────────────────
 
   const todayIso    = new Date().toISOString().slice(0, 10);
@@ -173,6 +195,7 @@ export default function SettingsPage() {
   const paymentSmsSettings = schoolData?.paymentSmsSettings ?? {};
   const paymentSmsProvider = paymentSmsSettings.provider ?? (schoolData?.mpesaTillNumber ? 'mpesa' : 'auto');
   const paymentSmsPhone    = paymentSmsSettings.phoneNumber ?? schoolData?.mpesaTillNumber;
+  const pendingDeactivation = schoolData?.deactivationRequest?.status === 'pending';
 
   const startEditingInfo = () => { setInfoForm({ principalName: data?.principalName ?? '', motto: data?.motto ?? '', physicalAddress: data?.physicalAddress ?? '', currentAcademicYear: data?.currentAcademicYear ?? String(new Date().getFullYear()) }); setEditingInfo(true); };
   const startEditingTerms = () => {
@@ -614,27 +637,90 @@ export default function SettingsPage() {
       <div className="space-y-4">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-bad">Danger Zone</p>
         <p className="text-sm text-muted-foreground">
-          These actions are irreversible. Contact support before proceeding.
+          Account deactivation requires a reviewed request. A superadmin must approve it before access is disabled.
         </p>
-        <div className="divide-y rounded-lg border border-bad/20 bg-card px-4">
-          <div className="flex items-center justify-between py-3 gap-4">
-            <div>
-              <p className="text-sm font-medium">Reset all settings</p>
-              <p className="text-xs text-muted-foreground">Clears all academic, payment, and SMS settings to defaults.</p>
-            </div>
-            <Button variant="destructive" size="sm" disabled>Reset</Button>
+        <div className="rounded-lg border border-bad/20 bg-card p-4 space-y-4">
+          <div>
+            <p className="text-sm font-medium">Request school account deactivation</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              This does not delete school data. If approved, staff login access is disabled and your records remain preserved.
+            </p>
           </div>
-          <div className="flex items-center justify-between py-3 gap-4">
-            <div>
-              <p className="text-sm font-medium">Delete school account</p>
-              <p className="text-xs text-muted-foreground">Permanently removes all school data. Contact support to proceed.</p>
+
+          {pendingDeactivation ? (
+            <div className="rounded-md border border-warn/30 bg-warn/5 px-3 py-2.5">
+              <p className="text-sm font-medium text-warn">Request pending review</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Submitted {schoolData?.deactivationRequest?.requestedAt ? formatDate(schoolData.deactivationRequest.requestedAt) : 'recently'}.
+                A Diraschool superadmin will approve or reject it.
+              </p>
             </div>
-            <Button variant="destructive" size="sm" disabled>Delete</Button>
-          </div>
+          ) : canRequestDeactivation ? (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Reason for deactivation</Label>
+                <textarea
+                  value={deactivationForm.reason}
+                  onChange={(e) => setDeactivationForm((p) => ({ ...p, reason: e.target.value }))}
+                  rows={4}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  placeholder="Explain why the school wants to deactivate the account, and whether you need data export or billing follow-up."
+                />
+              </div>
+
+              <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={deactivationForm.dataRetentionAcknowledged}
+                    onChange={(e) => setDeactivationForm((p) => ({ ...p, dataRetentionAcknowledged: e.target.checked }))}
+                    className="mt-1"
+                  />
+                  <span>Staff will lose access only after a superadmin approves the request.</span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={deactivationForm.billingAcknowledged}
+                    onChange={(e) => setDeactivationForm((p) => ({ ...p, billingAcknowledged: e.target.checked }))}
+                    className="mt-1"
+                  />
+                  <span>Any billing, data export, or handover issues have been reviewed before requesting deactivation.</span>
+                </label>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Type DEACTIVATE to confirm</Label>
+                <Input
+                  value={deactivationForm.confirmation}
+                  onChange={(e) => setDeactivationForm((p) => ({ ...p, confirmation: e.target.value.toUpperCase() }))}
+                  placeholder="DEACTIVATE"
+                />
+              </div>
+
+              <Button
+                variant="destructive"
+                disabled={
+                  requestingDeactivation ||
+                  deactivationForm.reason.trim().length < 30 ||
+                  deactivationForm.confirmation !== 'DEACTIVATE' ||
+                  !deactivationForm.dataRetentionAcknowledged ||
+                  !deactivationForm.billingAcknowledged
+                }
+                onClick={() => requestDeactivation()}
+              >
+                {requestingDeactivation ? 'Submitting…' : 'Submit deactivation request'}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Only the school admin can submit this request.</p>
+          )}
         </div>
         <div className="flex items-start gap-2 rounded-md border px-3 py-2.5">
           <AlertTriangle className="h-3.5 w-3.5 text-warn mt-0.5 shrink-0" />
-          <p className="text-xs text-muted-foreground">Destructive operations are disabled in this build. Contact support@diraschool.com.</p>
+          <p className="text-xs text-muted-foreground">
+            Diraschool does not allow instant self-service deletion from this screen. Superadmin review prevents accidental lockouts and gives both sides time to resolve billing or data-export needs.
+          </p>
         </div>
       </div>
     );
