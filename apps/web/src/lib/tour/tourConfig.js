@@ -5,11 +5,12 @@
 function makeStepButtons({ isFirst, isLast }) {
   const buttons = [];
   if (!isFirst) {
-    buttons.push({ label: 'Back', action() { this.back(); }, classes: 'tour-btn-secondary' });
+    buttons.push({ text: 'Back', label: 'Back', action() { this.back(); }, classes: 'tour-btn-secondary' });
   }
-  buttons.push({ label: 'Skip tour', action() { this.cancel(); }, classes: 'tour-btn-skip' });
+  buttons.push({ text: 'Skip', label: 'Skip tour', action() { this.cancel(); }, classes: 'tour-btn-skip' });
   buttons.push({
-    label: isLast ? 'Done ✓' : 'Next →',
+    text: isLast ? 'Done' : 'Next',
+    label: isLast ? 'Done' : 'Next',
     action() { isLast ? this.complete() : this.next(); },
     classes: 'tour-btn-primary',
   });

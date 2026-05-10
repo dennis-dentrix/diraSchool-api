@@ -59,36 +59,36 @@ function SectionHeader({ title, description, editing, canEdit, saving, onEdit, o
 }
 
 export default function SettingsPage() {
-  const { user }              = useAuthStore();
-  const canEdit               = ['school_admin', 'director', 'headteacher'].includes(user?.role);
-  const canViewPaymentsSms    = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'].includes(user?.role);
-  const canManageDaraja       = user?.role === 'school_admin';
+  const { user } = useAuthStore();
+  const canEdit = ['school_admin', 'director', 'headteacher'].includes(user?.role);
+  const canViewPaymentsSms = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'secretary', 'accountant'].includes(user?.role);
+  const canManageDaraja = user?.role === 'school_admin';
   const canRequestDeactivation = user?.role === 'school_admin';
-  const schoolId              = typeof user?.schoolId === 'object' ? user.schoolId?._id : user?.schoolId;
-  const queryClient           = useQueryClient();
+  const schoolId = typeof user?.schoolId === 'object' ? user.schoolId?._id : user?.schoolId;
+  const queryClient = useQueryClient();
 
-  const [activeSection,       setActiveSection]       = useState('general');
-  const [editingProfile,      setEditingProfile]      = useState(false);
-  const [profileForm,         setProfileForm]         = useState(null);
-  const [editingInfo,         setEditingInfo]         = useState(false);
-  const [infoForm,            setInfoForm]            = useState(null);
-  const [editingTerms,        setEditingTerms]        = useState(false);
-  const [termsForm,           setTermsForm]           = useState(null);
-  const [editingDaraja,       setEditingDaraja]       = useState(false);
-  const [darajaForm,          setDarajaForm]          = useState(null);
-  const [editingMpesa,        setEditingMpesa]        = useState(false);
-  const [mpesaForm,           setMpesaForm]           = useState(null);
-  const [logoFile,            setLogoFile]            = useState(null);
-  const [senderIdForm,        setSenderIdForm]        = useState('');
-  const [showAddEvent,        setShowAddEvent]        = useState(false);
-  const [newHoliday,          setNewHoliday]          = useState({ name: '', date: '', description: '' });
-  const [deactivationForm,    setDeactivationForm]    = useState({
+  const [activeSection, setActiveSection] = useState('general');
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState(null);
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [infoForm, setInfoForm] = useState(null);
+  const [editingTerms, setEditingTerms] = useState(false);
+  const [termsForm, setTermsForm] = useState(null);
+  const [editingDaraja, setEditingDaraja] = useState(false);
+  const [darajaForm, setDarajaForm] = useState(null);
+  const [editingMpesa, setEditingMpesa] = useState(false);
+  const [mpesaForm, setMpesaForm] = useState(null);
+  const [logoFile, setLogoFile] = useState(null);
+  const [senderIdForm, setSenderIdForm] = useState('');
+  const [showAddEvent, setShowAddEvent] = useState(false);
+  const [newHoliday, setNewHoliday] = useState({ name: '', date: '', description: '' });
+  const [deactivationForm, setDeactivationForm] = useState({
     reason: '',
     confirmation: '',
     dataRetentionAcknowledged: false,
     billingAcknowledged: false,
   });
-  const [confirmDialog,       setConfirmDialog]       = useState(CONFIRM_INIT);
+  const [confirmDialog, setConfirmDialog] = useState(CONFIRM_INIT);
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -185,16 +185,16 @@ export default function SettingsPage() {
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  const todayIso    = new Date().toISOString().slice(0, 10);
+  const todayIso = new Date().toISOString().slice(0, 10);
   const currentTerm = (data?.terms ?? []).find((t) => { const s = String(t?.startDate ?? '').slice(0, 10); const e = String(t?.endDate ?? '').slice(0, 10); return s && e && todayIso >= s && todayIso <= e; });
-  const nextTerm    = [...(data?.terms ?? [])].filter((t) => String(t?.startDate ?? '').slice(0, 10) > todayIso).sort((a, b) => String(a?.startDate ?? '').localeCompare(String(b?.startDate ?? '')))[0];
+  const nextTerm = [...(data?.terms ?? [])].filter((t) => String(t?.startDate ?? '').slice(0, 10) > todayIso).sort((a, b) => String(a?.startDate ?? '').localeCompare(String(b?.startDate ?? '')))[0];
   const todayHoliday = (data?.holidays ?? []).find((h) => String(h?.date ?? '').slice(0, 10) === todayIso);
   const schoolDayStatus = todayHoliday ? (/mid\s*term/i.test(`${todayHoliday?.name ?? ''} ${todayHoliday?.description ?? ''}`) ? `Midterm break – ${todayHoliday.name}` : `Event – ${todayHoliday.name}`) : currentTerm ? 'In session' : 'On break';
 
-  const darajaConnected    = !!darajaSettings?.active && !!darajaSettings?.c2bRegistered;
+  const darajaConnected = !!darajaSettings?.active && !!darajaSettings?.c2bRegistered;
   const paymentSmsSettings = schoolData?.paymentSmsSettings ?? {};
   const paymentSmsProvider = paymentSmsSettings.provider ?? (schoolData?.mpesaTillNumber ? 'mpesa' : 'auto');
-  const paymentSmsPhone    = paymentSmsSettings.phoneNumber ?? schoolData?.mpesaTillNumber;
+  const paymentSmsPhone = paymentSmsSettings.phoneNumber ?? schoolData?.mpesaTillNumber;
   const pendingDeactivation = schoolData?.deactivationRequest?.status === 'pending';
 
   const startEditingInfo = () => { setInfoForm({ principalName: data?.principalName ?? '', motto: data?.motto ?? '', physicalAddress: data?.physicalAddress ?? '', currentAcademicYear: data?.currentAcademicYear ?? String(new Date().getFullYear()) }); setEditingInfo(true); };
@@ -208,11 +208,11 @@ export default function SettingsPage() {
   // ── Nav sections ───────────────────────────────────────────────────────────
 
   const navItems = [
-    { id: 'general',  label: 'General',  icon: Building2,    visible: true },
-    { id: 'academic', label: 'Academic', icon: BookOpen,      visible: true },
-    { id: 'events',   label: 'Events',   icon: CalendarDays,  visible: true },
-    { id: 'payments', label: 'Payments', icon: CreditCard,    visible: canViewPaymentsSms },
-    { id: 'location', label: 'Location', icon: MapPin,        visible: canEdit },
+    { id: 'general', label: 'General', icon: Building2, visible: true },
+    { id: 'academic', label: 'Academic', icon: BookOpen, visible: true },
+    { id: 'events', label: 'Events', icon: CalendarDays, visible: true },
+    { id: 'payments', label: 'Payments', icon: CreditCard, visible: canViewPaymentsSms },
+    { id: 'location', label: 'Location', icon: MapPin, visible: canEdit },
   ];
 
   if (isLoading) {
@@ -264,12 +264,12 @@ export default function SettingsPage() {
           {editingProfile && profileForm ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
               {[
-                { id: 'prof-name',  label: 'School Name',      key: 'name',               placeholder: 'Green Hills Academy' },
-                { id: 'prof-phone', label: 'Phone',            key: 'phone',              placeholder: '+254 700 000000' },
-                { id: 'prof-county',label: 'County',           key: 'county',             placeholder: 'Nairobi' },
-                { id: 'prof-const', label: 'Constituency',     key: 'constituency',       placeholder: 'Westlands' },
-                { id: 'prof-regno', label: 'MOE Reg. No.',     key: 'registrationNumber', placeholder: 'NRB/001/2024' },
-                { id: 'prof-addr',  label: 'Physical Address', key: 'address',            placeholder: 'P.O Box 123, Nairobi' },
+                { id: 'prof-name', label: 'School Name', key: 'name', placeholder: 'Green Hills Academy' },
+                { id: 'prof-phone', label: 'Phone', key: 'phone', placeholder: '+254 700 000000' },
+                { id: 'prof-county', label: 'County', key: 'county', placeholder: 'Nairobi' },
+                { id: 'prof-const', label: 'Constituency', key: 'constituency', placeholder: 'Westlands' },
+                { id: 'prof-regno', label: 'MOE Reg. No.', key: 'registrationNumber', placeholder: 'NRB/001/2024' },
+                { id: 'prof-addr', label: 'Physical Address', key: 'address', placeholder: 'P.O Box 123, Nairobi' },
               ].map(({ id, label, key, placeholder }) => (
                 <div key={key} className="space-y-1.5">
                   <Label htmlFor={id}>{label}</Label>
@@ -279,12 +279,12 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="divide-y rounded-lg border bg-card px-4">
-              <InfoRow label="Name"         value={schoolData?.name} />
-              <InfoRow label="Phone"        value={schoolData?.phone} />
-              <InfoRow label="County"       value={schoolData?.county} />
+              <InfoRow label="Name" value={schoolData?.name} />
+              <InfoRow label="Phone" value={schoolData?.phone} />
+              <InfoRow label="County" value={schoolData?.county} />
               <InfoRow label="Constituency" value={schoolData?.constituency} />
-              <InfoRow label="Reg. Number"  value={schoolData?.registrationNumber} />
-              <InfoRow label="Address"      value={schoolData?.address} />
+              <InfoRow label="Reg. Number" value={schoolData?.registrationNumber} />
+              <InfoRow label="Address" value={schoolData?.address} />
             </div>
           )}
         </div>
@@ -325,9 +325,9 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="divide-y rounded-lg border bg-card px-4">
-              <InfoRow label="Principal"     value={data?.principalName} />
-              <InfoRow label="Motto"         value={data?.motto} />
-              <InfoRow label="Address"       value={data?.physicalAddress} />
+              <InfoRow label="Principal" value={data?.principalName} />
+              <InfoRow label="Motto" value={data?.motto} />
+              <InfoRow label="Address" value={data?.physicalAddress} />
               <InfoRow label="Academic Year" value={data?.currentAcademicYear ? <Badge variant="secondary" className="font-mono">{data.currentAcademicYear}</Badge> : null} />
             </div>
           )}
@@ -373,9 +373,9 @@ export default function SettingsPage() {
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Calendar Status</p>
           <div className="divide-y rounded-lg border bg-card px-4">
             <InfoRow label="Academic Year" value={data?.currentAcademicYear ? <Badge variant="secondary" className="font-mono">{data.currentAcademicYear}</Badge> : null} />
-            <InfoRow label="Current Term"  value={currentTerm?.name ? <Badge variant="secondary">{currentTerm.name}</Badge> : <span className="text-muted-foreground/50 text-xs">No active term</span>} />
-            <InfoRow label="Next Term"     value={nextTerm?.startDate ? formatDate(nextTerm.startDate) : <span className="text-muted-foreground/50 text-xs">Not set</span>} />
-            <InfoRow label="Today"         value={<Badge variant={todayHoliday ? 'destructive' : 'secondary'}>{schoolDayStatus}</Badge>} />
+            <InfoRow label="Current Term" value={currentTerm?.name ? <Badge variant="secondary">{currentTerm.name}</Badge> : <span className="text-muted-foreground/50 text-xs">No active term</span>} />
+            <InfoRow label="Next Term" value={nextTerm?.startDate ? formatDate(nextTerm.startDate) : <span className="text-muted-foreground/50 text-xs">Not set</span>} />
+            <InfoRow label="Today" value={<Badge variant={todayHoliday ? 'destructive' : 'secondary'}>{schoolDayStatus}</Badge>} />
           </div>
         </div>
 
@@ -384,9 +384,9 @@ export default function SettingsPage() {
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">Term Calendar</p>
           <div className="flex rounded-lg border overflow-hidden divide-x">
             {['Term 1', 'Term 2', 'Term 3'].map((name) => {
-              const term   = (data?.terms ?? []).find((t) => t.name === name);
-              const s      = term?.startDate ? String(term.startDate).slice(0, 10) : null;
-              const e      = term?.endDate   ? String(term.endDate).slice(0, 10)   : null;
+              const term = (data?.terms ?? []).find((t) => t.name === name);
+              const s = term?.startDate ? String(term.startDate).slice(0, 10) : null;
+              const e = term?.endDate ? String(term.endDate).slice(0, 10) : null;
               const active = s && e && todayIso >= s && todayIso <= e;
               return (
                 <div key={name} className={cn('flex-1 px-3 py-2.5', active && 'bg-ok/5')}>
@@ -530,8 +530,8 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="divide-y rounded-lg border bg-card px-4">
-              <InfoRow label="Paybill"      value={darajaSettings?.paybill} />
-              <InfoRow label="Connection"   value={<Badge variant={darajaConnected ? 'secondary' : 'outline'}>{darajaConnected ? 'Connected' : 'Not connected'}</Badge>} />
+              <InfoRow label="Paybill" value={darajaSettings?.paybill} />
+              <InfoRow label="Connection" value={<Badge variant={darajaConnected ? 'secondary' : 'outline'}>{darajaConnected ? 'Connected' : 'Not connected'}</Badge>} />
               <InfoRow label="Authorization" value={<Badge variant={darajaSettings?.authorized ? 'secondary' : 'outline'}>{darajaSettings?.authorized ? 'Confirmed' : 'Pending'}</Badge>} />
               {darajaSettings?.c2bRegisteredAt && <InfoRow label="Registered" value={formatDate(darajaSettings.c2bRegisteredAt)} />}
             </div>
@@ -597,7 +597,7 @@ export default function SettingsPage() {
           ) : (
             <div className="divide-y rounded-lg border bg-card px-4">
               <InfoRow label="Auto-recording" value={<Badge variant={paymentSmsSettings.enabled || schoolData?.mpesaTillNumber ? 'secondary' : 'outline'}>{paymentSmsSettings.enabled || schoolData?.mpesaTillNumber ? 'Enabled' : 'Disabled'}</Badge>} />
-              <InfoRow label="Source"          value={paymentSmsProvider === 'auto' ? 'Auto-detect' : paymentSmsProvider === 'bank' ? 'Bank SMS' : 'M-Pesa SMS'} />
+              <InfoRow label="Source" value={paymentSmsProvider === 'auto' ? 'Auto-detect' : paymentSmsProvider === 'bank' ? 'Bank SMS' : 'M-Pesa SMS'} />
               <InfoRow label="Receiving Number" value={paymentSmsPhone} />
               {paymentSmsProvider === 'bank' && <InfoRow label="Bank" value={paymentSmsSettings.bankName} />}
             </div>
@@ -719,7 +719,7 @@ export default function SettingsPage() {
         <div className="flex items-start gap-2 rounded-md border px-3 py-2.5">
           <AlertTriangle className="h-3.5 w-3.5 text-warn mt-0.5 shrink-0" />
           <p className="text-xs text-muted-foreground">
-            Diraschool does not allow instant self-service deletion from this screen. Superadmin review prevents accidental lockouts and gives both sides time to resolve billing or data-export needs.
+            Diraschool does not allow instant self-service deletion from this screen. Diraschool admin review prevents accidental lockouts and gives both sides time to resolve billing or data-export needs.
           </p>
         </div>
       </div>

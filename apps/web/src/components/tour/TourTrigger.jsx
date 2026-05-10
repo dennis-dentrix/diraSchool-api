@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Rocket, X, PlayCircle, Sparkles } from 'lucide-react';
+import { Rocket, X, PlayCircle } from 'lucide-react';
 import { useTourContext } from './TourProvider';
 import { Button } from '@/components/ui/button';
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -32,41 +32,31 @@ export function TourBanner() {
   }
 
   return (
-    <div className="relative flex items-center gap-4 rounded-2xl border border-blue-200/80 bg-gradient-to-r from-blue-50 via-indigo-50/60 to-purple-50/40 px-4 py-3.5 shadow-sm overflow-hidden">
-      {/* Decorative blob */}
-      <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-indigo-100/50 blur-2xl" />
-
-      {/* Icon */}
-      <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shrink-0 shadow-md shadow-blue-200">
-        <Rocket className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+    <div className="relative flex flex-col gap-3 rounded-lg border bg-card px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100">
+        <Rocket className="h-[18px] w-[18px]" />
       </div>
 
-      {/* Text */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <p className="font-semibold text-blue-900 text-sm leading-tight">
-            Getting started with Diraschool
-          </p>
-          <Sparkles className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-        </div>
-        <p className="text-blue-700/70 text-xs mt-0.5 hidden sm:block">
+        <p className="text-sm font-semibold leading-tight text-foreground">
+          Getting started with Diraschool
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
           A quick 2-minute tour — we'll show you exactly what matters for your role.
         </p>
       </div>
 
-      {/* CTA */}
       <Button
         size="sm"
-        className="shrink-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white h-8 px-3.5 text-xs font-semibold shadow-sm shadow-blue-200 transition-all"
+        className="h-8 w-full shrink-0 gap-1.5 px-3.5 text-xs font-semibold sm:w-auto"
         onClick={launchTour}
       >
-        <PlayCircle className="h-3.5 w-3.5 mr-1.5" />
+        <PlayCircle className="h-3.5 w-3.5" />
         Start tour
       </Button>
 
-      {/* Dismiss */}
       <button
-        className="shrink-0 text-blue-300 hover:text-blue-500 p-1 rounded-md transition-colors"
+        className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:static sm:shrink-0"
         onClick={handleDismiss}
         aria-label="Dismiss"
       >
