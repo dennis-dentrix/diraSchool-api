@@ -195,6 +195,9 @@ export default function SettingsPage() {
   const paymentSmsSettings = schoolData?.paymentSmsSettings ?? {};
   const paymentSmsProvider = paymentSmsSettings.provider ?? (schoolData?.mpesaTillNumber ? 'mpesa' : 'auto');
   const paymentSmsPhone = paymentSmsSettings.phoneNumber ?? schoolData?.mpesaTillNumber;
+  const smsSettings = schoolData?.smsSettings ?? {};
+  const currentSenderId = smsSettings.senderIdApproved;
+  const senderIdStatus = smsSettings.senderIdStatus;
   const pendingDeactivation = schoolData?.deactivationRequest?.status === 'pending';
 
   const startEditingInfo = () => { setInfoForm({ principalName: data?.principalName ?? '', motto: data?.motto ?? '', physicalAddress: data?.physicalAddress ?? '', currentAcademicYear: data?.currentAcademicYear ?? String(new Date().getFullYear()) }); setEditingInfo(true); };
@@ -609,8 +612,22 @@ export default function SettingsPage() {
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">SMS Sender ID</p>
             <div className="divide-y rounded-lg border bg-card px-4 mb-3">
-              <InfoRow label="Current Sender ID" value={schoolData?.smsSenderId ?? <span className="text-muted-foreground/50 text-xs">Default (SAFARICOM)</span>} />
+              <InfoRow
+                label="Current Sender ID"
+                value={currentSenderId ?? <span className="text-muted-foreground/50 text-xs">DiraSchool / provider default</span>}
+              />
+              <InfoRow
+                label="Status"
+                value={
+                  <Badge variant={senderIdStatus === 'approved' ? 'secondary' : 'outline'}>
+                    {senderIdStatus ?? 'Optional'}
+                  </Badge>
+                }
+              />
             </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              SMS can be sent before a custom Sender ID is approved. Until then, messages use the DiraSchool platform sender and automatically include your school name in the message body.
+            </p>
             <div className="flex gap-2 items-end">
               <div className="space-y-1.5 flex-1">
                 <Label>Request Custom Sender ID</Label>

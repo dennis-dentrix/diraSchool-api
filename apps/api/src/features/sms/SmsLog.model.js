@@ -13,7 +13,7 @@ const SmsLogSchema = new mongoose.Schema(
     },
     target: {
       type: String,
-      enum: ['single', 'class_parents', 'all_parents', 'all_staff'],
+      enum: ['single', 'class_parents', 'all_parents', 'all_staff', 'fee_balances'],
       required: true,
     },
     classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class' },

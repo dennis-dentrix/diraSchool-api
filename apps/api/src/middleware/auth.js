@@ -15,7 +15,12 @@ import { attachAutoAudit } from '../utils/auditLogger.js';
 const SCHOOL_RATE_LIMIT = parseInt(process.env.SCHOOL_RATE_LIMIT, 10) || 300; // req / min
 
 const checkSchoolRateLimit = async (schoolId) => {
-  const redis = getRedis();
+  let redis;
+  try {
+    redis = getRedis();
+  } catch {
+    return false;
+  }
   if (!redis) return false; // Redis not available in test env — skip limiting
 
   // Key rotates every 60 seconds: one counter per school per minute

@@ -78,29 +78,50 @@ export const createBullMQConnection = () =>
 
 // ── Client accessor ───────────────────────────────────────────────────────────
 export const getRedis = () => {
-  if (!redisClient) {
-    if (process.env.NODE_ENV === 'test') return null;
-    throw new Error('Redis client not initialised. Call connectRedis() first.');
-  }
+  if (!redisClient || redisClient.status !== 'ready') return null;
   return redisClient;
 };
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 
 export const cacheGet = async (key) => {
-  const value = await getRedis().get(key);
-  return value ? JSON.parse(value) : null;
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const value = await redis.get(key);
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
 };
 
 export const cacheSet = async (key, value, ttlSeconds) => {
-  await getRedis().set(key, JSON.stringify(value), 'EX', ttlSeconds);
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+  } catch {
+    // Cache is optional. Ignore Redis failures and keep request handling alive.
+  }
 };
 
 export const cacheDel = async (key) => {
-  await getRedis().del(key);
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.del(key);
+  } catch {
+    // Cache is optional. Ignore Redis failures and keep request handling alive.
+  }
 };
 
 export const cacheDelPattern = async (pattern) => {
-  const keys = await getRedis().keys(pattern);
-  if (keys.length > 0) await getRedis().del(...keys);
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    const keys = await redis.keys(pattern);
+    if (keys.length > 0) await redis.del(...keys);
+  } catch {
+    // Cache is optional. Ignore Redis failures and keep request handling alive.
+  }
 };

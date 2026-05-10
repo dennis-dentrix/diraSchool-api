@@ -16,7 +16,7 @@
  * deduct from the school's purchasedRemaining credit balance atomically.
  * Phones that are capped with no purchased credits are skipped (status: capped).
  *
- * Test mode: CELCOM_TEST_NUMBERS redirects all sends to those numbers.
+ * Test mode: AT_TEST_NUMBERS redirects all sends to those numbers.
  */
 import AfricasTalking from 'africastalking';
 import { env } from '../../config/env.js';
@@ -86,6 +86,21 @@ async function deductCredits(schoolId, n) {
   return !!updated;
 }
 
+const normaliseText = (value) =>
+  String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+function addSchoolNameIfNeeded(message, schoolName) {
+  const safeMessage = String(message ?? '').trim();
+  const safeSchoolName = String(schoolName ?? '').trim();
+  if (!safeSchoolName) return safeMessage;
+
+  const lowerMessage = normaliseText(safeMessage);
+  const lowerSchool = normaliseText(safeSchoolName);
+  if (lowerMessage.includes(lowerSchool)) return safeMessage;
+
+  return `${safeSchoolName}: ${safeMessage}`;
+}
+
 export const processSmsJob = async (job) => {
   const { to, message, schoolId, trigger, smsLogId, term: jobTerm, academicYear: jobYear } = job.data;
 
@@ -113,14 +128,25 @@ export const processSmsJob = async (job) => {
     return { sent: 0, failed: 0, capped: 0 };
   }
 
-  // ── Sender ID ────────────────────────────────────────────────────────────────
-  let senderId = env.AT_SENDER_ID || null;
+  // ── Sender ID and school attribution ────────────────────────────────────────
+  let senderId = env.SMS_PLATFORM_SENDER_ID || null;
+  let schoolName = 'Your school';
+  let hasSchoolSenderId = false;
+
   try {
     const school = await School.findById(schoolId).select('name smsSettings smsCredits').lean();
-    if (school?.smsSettings?.senderIdApproved) senderId = school.smsSettings.senderIdApproved;
+    schoolName = school?.name ?? schoolName;
+    if (school?.smsSettings?.senderIdApproved) {
+      senderId = school.smsSettings.senderIdApproved;
+      hasSchoolSenderId = true;
+    }
   } catch (err) {
     logger.warn('[SMS] Could not fetch school sender ID', { err: err.message, schoolId });
   }
+
+  const outboundMessage = hasSchoolSenderId
+    ? message
+    : addSchoolNameIfNeeded(message, schoolName);
 
   // ── Per-parent term cap ───────────────────────────────────────────────────
   const schoolObjId = (await import('mongoose')).default.Types.ObjectId.createFromHexString
@@ -194,7 +220,7 @@ export const processSmsJob = async (job) => {
   let atResults = [];
   try {
     const sms = getClient();
-    const params = { to: toSend, message };
+    const params = { to: toSend, message: outboundMessage };
     if (senderId) params.from = senderId;
     const result = await sms.send(params);
     atResults = result?.SMSMessageData?.Recipients ?? [];

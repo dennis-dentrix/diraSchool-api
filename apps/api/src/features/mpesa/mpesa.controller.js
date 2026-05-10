@@ -21,7 +21,6 @@ import {
   emitPaymentUpdates,
   getFinanceSummary,
   processConfirmationPayload,
-  queuePaymentSms,
   queueReceiptPdf,
   registerC2BUrls,
   resolveActivePeriod,
@@ -284,13 +283,6 @@ export const allocateUnallocatedPayment = asyncHandler(async (req, res) => {
   notification.reason = notes || `Allocated to ${studentName(student)} (${student.admissionNumber})`;
   await notification.save();
 
-  await queuePaymentSms({
-    school,
-    student,
-    payment,
-    to: notification.senderPhone,
-    balance: balance.balance,
-  });
   await emitPaymentUpdates({ school, student, payment, balance });
 
   logAction(req, {

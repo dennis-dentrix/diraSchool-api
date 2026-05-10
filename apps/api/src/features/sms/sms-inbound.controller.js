@@ -17,7 +17,7 @@ import PaymentNotification from '../fees/PaymentNotification.model.js';
 import SchoolSettings from '../settings/SchoolSettings.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess } from '../../utils/response.js';
-import { receiptQueue, smsQueue } from '../../jobs/queues.js';
+import { receiptQueue } from '../../jobs/queues.js';
 import logger from '../../config/logger.js';
 import { normalisePhone as normaliseKenyanPhone } from '../../utils/phone.js';
 import {
@@ -25,7 +25,6 @@ import {
   PAYMENT_STATUSES,
   PAYMENT_SOURCE,
   PAYMENT_SMS_PROVIDERS,
-  SMS_TRIGGER_TYPES,
   JOB_NAMES,
   STUDENT_STATUSES,
 } from '../../constants/index.js';
@@ -243,26 +242,6 @@ const resolveStudentMatch = async ({ schoolId, parsed, text }) => {
   }
 
   return { status: 'unmatched', reason: 'No student matched by account reference or guardian phone' };
-};
-
-const queueReceiptSms = async ({ school, student, payment, to }) => {
-  if (!isValidKenyanPhone(to)) return;
-
-  const receiptMsg =
-    `${school.name}: Payment KES ${payment.amount.toLocaleString()} received for ` +
-    `${student.firstName} ${student.lastName}. ` +
-    `Receipt: ${payment.receiptNumber}. Thank you.`;
-
-  try {
-    await smsQueue.add(JOB_NAMES.SEND_SMS, {
-      to,
-      message: receiptMsg,
-      schoolId: school._id.toString(),
-      trigger: SMS_TRIGGER_TYPES.PAYMENT_RECEIPT,
-    });
-  } catch (err) {
-    logger.error('[SMS-INBOUND] Failed to queue receipt SMS', { err: err.message });
-  }
 };
 
 // ── POST /api/v1/sms/inbound ──────────────────────────────────────────────────

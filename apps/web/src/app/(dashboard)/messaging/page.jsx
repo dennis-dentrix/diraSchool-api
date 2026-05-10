@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   MessageSquare, Send, Users, User, Clock,
   CheckCircle2, AlertCircle, Loader2, School, Search, X, FlaskConical,
-  Sparkles, ArrowRight,
+  Sparkles, Wallet,
 } from 'lucide-react';
 import { smsApi, classesApi, studentsApi, usersApi, getErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
@@ -395,6 +395,162 @@ function BroadcastTab() {
   );
 }
 
+// ── Fee reminders tab ────────────────────────────────────────────────────────
+function FeeReminderTab() {
+  const [form, setForm] = useState({
+    target: 'all_students',
+    classId: '',
+    includeParentName: true,
+    includeStudentName: true,
+    includeAdmissionNumber: true,
+    note: 'Kindly clear the balance as soon as possible. Thank you.',
+  });
+  const queryClient = useQueryClient();
+
+  const { data: classes = [] } = useQuery({
+    queryKey: ['classes-list'],
+    queryFn: async () => {
+      const res = await classesApi.list();
+      return res.data?.classes ?? [];
+    },
+  });
+
+  const { mutate: send, isPending } = useMutation({
+    mutationFn: () => smsApi.feeReminders({
+      target: form.target,
+      ...(form.target === 'class_students' && form.classId ? { classId: form.classId } : {}),
+      includeParentName: form.includeParentName,
+      includeStudentName: form.includeStudentName,
+      includeAdmissionNumber: form.includeAdmissionNumber,
+      note: form.note.trim() || undefined,
+    }),
+    onSuccess: (res) => {
+      const recipientCount = res.data?.recipientCount ?? 0;
+      const studentsWithBalance = res.data?.studentsWithBalance ?? 0;
+      toast.success(`Fee reminders queued for ${recipientCount} SMS covering ${studentsWithBalance} student${studentsWithBalance !== 1 ? 's' : ''}`);
+      queryClient.invalidateQueries({ queryKey: ['sms-history'] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const needsClass = form.target === 'class_students';
+  const valid = !needsClass || form.classId;
+  const sampleParent = form.includeParentName ? 'Dear Mary,' : 'Dear Parent,';
+  const sampleStudent = [
+    form.includeStudentName ? 'Brian Otieno' : null,
+    form.includeAdmissionNumber ? 'Adm 1024' : null,
+  ].filter(Boolean).join(' ') || 'Fee balance';
+  const preview = `${sampleParent} Green View Academy: Fee balance reminder. ${sampleStudent}: KES 8,500.${form.note ? ` ${form.note}` : ''}`;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <Wallet className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-base">Fee Balance Reminders</CardTitle>
+        </div>
+        <CardDescription>
+          The system calculates each active student's current term balance and creates a simple personalized SMS.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-1.5">
+          <Label>Students to Remind</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {[
+              { value: 'all_students', label: 'All Students', desc: 'Every active student with an outstanding balance' },
+              { value: 'class_students', label: 'One Class', desc: 'Only active students in the selected class' },
+            ].map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => setForm((p) => ({ ...p, target: item.value, classId: '' }))}
+                className={`text-left rounded-lg border p-3 transition-all ${form.target === item.value
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border hover:border-primary/40 hover:bg-muted/50'
+                }`}
+              >
+                <p className="text-sm font-medium">{item.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {needsClass && (
+          <div className="space-y-1.5">
+            <Label>Select Class</Label>
+            <Select value={form.classId} onValueChange={(value) => setForm((p) => ({ ...p, classId: value }))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a class..." />
+              </SelectTrigger>
+              <SelectContent>
+                {classes.map((c) => (
+                  <SelectItem key={c._id} value={c._id}>{c.name}{c.stream ? ` ${c.stream}` : ''}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Include in Message</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.includeParentName}
+              onChange={(event) => setForm((p) => ({ ...p, includeParentName: event.target.checked }))}
+            />
+            Parent or guardian name
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.includeStudentName}
+              onChange={(event) => setForm((p) => ({ ...p, includeStudentName: event.target.checked }))}
+            />
+            Student name
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.includeAdmissionNumber}
+              onChange={(event) => setForm((p) => ({ ...p, includeAdmissionNumber: event.target.checked }))}
+            />
+            Admission number
+          </label>
+          <p className="text-xs text-muted-foreground">The fee balance is always included.</p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Optional Note</Label>
+          <Textarea
+            rows={2}
+            maxLength={160}
+            value={form.note}
+            onChange={(event) => setForm((p) => ({ ...p, note: event.target.value }))}
+            placeholder="Kindly clear the balance as soon as possible."
+          />
+          <p className="text-xs text-muted-foreground text-right">{form.note.length}/160</p>
+        </div>
+
+        <div className="rounded-lg border bg-card p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Preview</p>
+          <p className="text-sm text-foreground">{preview}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            If one parent has several students with balances, their balances are grouped into fewer SMS messages where possible.
+          </p>
+        </div>
+
+        <Button onClick={() => send()} disabled={!valid || isPending}>
+          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {isPending ? 'Queuing...' : 'Send Fee Reminders'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── History tab ───────────────────────────────────────────────────────────────
 function HistoryTab() {
   const { data, isLoading } = useQuery({
@@ -412,6 +568,7 @@ function HistoryTab() {
     class_parents: 'Class Parents',
     all_parents: 'All Parents',
     all_staff: 'All Staff',
+    fee_balances: 'Fee Balances',
   };
 
   if (isLoading) {
@@ -478,7 +635,7 @@ function HistoryTab() {
   );
 }
 
-const MESSAGING_ENABLED = process.env.NEXT_PUBLIC_MESSAGING_ENABLED === 'true';
+const MESSAGING_ENABLED = process.env.NEXT_PUBLIC_MESSAGING_ENABLED !== 'false';
 const TEST_NUMBERS = process.env.NEXT_PUBLIC_SMS_TEST_NUMBERS;
 
 // ── Coming Soon ───────────────────────────────────────────────────────────────
@@ -530,11 +687,21 @@ export default function MessagingPage() {
     <div className="space-y-6 max-w-3xl">
       <PageHeader
         title="Messaging"
-        description="Send SMS messages to parents and staff"
+        description="Send SMS messages to parents and staff. A custom Sender ID is optional."
         overline="SMS"
       />
 
-      {/* {TEST_NUMBERS && (
+      <div className="flex items-start gap-3 rounded-lg border bg-card p-4">
+        <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" aria-hidden />
+        <div>
+          <p className="text-sm font-semibold">Sender ID is not required to send SMS</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Messages use the DiraSchool platform Sender ID when available. If your school has not purchased its own Sender ID, the school name is automatically added inside the message.
+          </p>
+        </div>
+      </div>
+
+      {TEST_NUMBERS && (
         <div className="flex items-start gap-3 rounded-xl border border-warn/30 bg-warn/5 p-4">
           <FlaskConical className="h-4 w-4 text-warn mt-0.5 shrink-0" aria-hidden />
           <div>
@@ -544,15 +711,18 @@ export default function MessagingPage() {
             </p>
           </div>
         </div>
-      )} */}
+      )}
 
       <Tabs defaultValue="single">
-        <TabsList className="grid grid-cols-3 w-full max-w-sm">
+        <TabsList className="grid grid-cols-4 w-full max-w-xl">
           <TabsTrigger value="single">
             <User className="h-3.5 w-3.5 mr-1.5" /> Single
           </TabsTrigger>
           <TabsTrigger value="broadcast">
             <Users className="h-3.5 w-3.5 mr-1.5" /> Broadcast
+          </TabsTrigger>
+          <TabsTrigger value="fees">
+            <Wallet className="h-3.5 w-3.5 mr-1.5" /> Fees
           </TabsTrigger>
           <TabsTrigger value="history">
             <Clock className="h-3.5 w-3.5 mr-1.5" /> History
@@ -564,6 +734,9 @@ export default function MessagingPage() {
         </TabsContent>
         <TabsContent value="broadcast" className="mt-4">
           <BroadcastTab />
+        </TabsContent>
+        <TabsContent value="fees" className="mt-4">
+          <FeeReminderTab />
         </TabsContent>
         <TabsContent value="history" className="mt-4">
           <HistoryTab />

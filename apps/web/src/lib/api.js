@@ -105,6 +105,7 @@ export const usersApi = {
 export const smsApi = {
   send: (data) => api.post('/sms/send', data),
   broadcast: (data) => api.post('/sms/broadcast', data),
+  feeReminders: (data) => api.post('/sms/fee-reminders', data),
   history: (params) => api.get('/sms/history', { params }),
   requestSenderId: (senderIdRequested) =>
     api.post('/schools/me/sms-sender-id-request', { senderIdRequested }),

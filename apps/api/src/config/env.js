@@ -84,6 +84,7 @@ export const env = {
   // Africa's Talking — optional until SMS feature is activated
   AT_USERNAME: process.env.AT_USERNAME,
   AT_API_KEY: process.env.AT_API_KEY,
+  SMS_PLATFORM_SENDER_ID: process.env.SMS_PLATFORM_SENDER_ID || process.env.AT_SENDER_ID || null,
   AT_SENDER_ID: process.env.AT_SENDER_ID || null,
   // Comma-separated E.164 numbers. When set, ALL SMS (including broadcasts) are
   // redirected to only these numbers — use during development/QA to avoid spamming.

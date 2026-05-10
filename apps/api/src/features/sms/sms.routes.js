@@ -5,6 +5,7 @@ import { handleInboundSms } from './sms-inbound.controller.js';
 import {
   sendSingle,
   broadcastSms,
+  sendFeeReminders,
   smsHistory,
   smsDeliveries,
   smsStats,
@@ -13,7 +14,7 @@ import {
   handleDlr,
   testSendDirect,
 } from './sms.controller.js';
-import { validateSend, validateBroadcast } from './sms.validator.js';
+import { validateSend, validateBroadcast, validateFeeReminder } from './sms.validator.js';
 
 const router = Router();
 
@@ -35,6 +36,7 @@ const canSms = authorize(
 
 router.post('/send',               canSms, validateSend,      sendSingle);
 router.post('/broadcast',          canSms, validateBroadcast, broadcastSms);
+router.post('/fee-reminders',      canSms, validateFeeReminder, sendFeeReminders);
 router.get('/history',             canSms,                    smsHistory);
 router.get('/deliveries',          canSms,                    smsDeliveries);
 router.get('/stats',               canSms,                    smsStats);

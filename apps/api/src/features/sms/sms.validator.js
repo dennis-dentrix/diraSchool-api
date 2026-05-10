@@ -27,5 +27,23 @@ const broadcastSchema = z
     { message: 'classId is required when target is class_parents', path: ['classId'] }
   );
 
+const feeReminderSchema = z
+  .object({
+    target: z.enum(['all_students', 'class_students'], {
+      errorMap: () => ({ message: 'target must be all_students or class_students' }),
+    }),
+    classId: z.string().optional(),
+    includeParentName: z.boolean().default(true),
+    includeStudentName: z.boolean().default(true),
+    includeAdmissionNumber: z.boolean().default(true),
+    note: z.string().max(160, 'Note exceeds 160 characters').trim().optional(),
+  })
+  .strict()
+  .refine(
+    (d) => d.target !== 'class_students' || !!d.classId,
+    { message: 'classId is required when target is class_students', path: ['classId'] }
+  );
+
 export const validateSend = validate(sendSchema);
 export const validateBroadcast = validate(broadcastSchema);
+export const validateFeeReminder = validate(feeReminderSchema);

@@ -26,6 +26,7 @@ import {
   validateUpdateProfile,
 } from './auth.validator.js';
 import { protect, blockIfMustChangePassword } from '../../middleware/auth.js';
+import { RedisRateLimitStore } from '../../middleware/rateLimitStore.js';
 
 const router = express.Router();
 
@@ -37,6 +38,8 @@ const authLimiter =
     : rateLimit({
         windowMs: 15 * 60 * 1000,
         max: 20,
+        store: new RedisRateLimitStore({ prefix: 'rl:auth' }),
+        passOnStoreError: true,
         message: { message: 'Too many attempts. Please try again in 15 minutes.' },
         standardHeaders: true,
         legacyHeaders: false,
@@ -46,10 +49,10 @@ const authLimiter =
 router.post('/register', authLimiter, validateRegisterSchool, registerSchool);
 router.post('/login', authLimiter, validateLogin, login);
 router.post('/forgot-password', authLimiter, validateForgotPassword, forgotPassword);
-router.post('/reset-password/:token', validateResetPassword, resetPassword);
-router.post('/accept-invite/:token', validateAcceptInvite, acceptInvite);
+router.post('/reset-password/:token', authLimiter, validateResetPassword, resetPassword);
+router.post('/accept-invite/:token', authLimiter, validateAcceptInvite, acceptInvite);
 router.post('/verify-email', authLimiter, validateVerifyEmail, verifyEmail);
-router.get('/verify-email/:token', verifyEmailByToken);
+router.get('/verify-email/:token', authLimiter, verifyEmailByToken);
 router.post('/resend-verification', authLimiter, validateResendVerification, resendVerification);
 
 // ── Protected routes ──────────────────────────────────────────────────────────

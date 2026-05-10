@@ -4,7 +4,7 @@ import Payment from '../fees/Payment.model.js';
 import PaymentNotification from '../fees/PaymentNotification.model.js';
 import FeeStructure from '../fees/FeeStructure.model.js';
 import SchoolSettings from '../settings/SchoolSettings.model.js';
-import { receiptQueue, smsQueue } from '../../jobs/queues.js';
+import { receiptQueue } from '../../jobs/queues.js';
 import { emitToSchool } from '../../config/socket.js';
 import { getRedis } from '../../config/redis.js';
 import { env } from '../../config/env.js';
@@ -15,7 +15,6 @@ import {
   PAYMENT_SMS_PROVIDERS,
   PAYMENT_SOURCE,
   PAYMENT_STATUSES,
-  SMS_TRIGGER_TYPES,
   STUDENT_STATUSES,
 } from '../../constants/index.js';
 import { normalisePhone } from '../../utils/phone.js';
@@ -161,27 +160,6 @@ export const queueReceiptPdf = async ({ paymentId, schoolId }) => {
     });
   } catch (err) {
     logger.error('[M-PESA] Failed to queue receipt PDF', { paymentId, err: err.message });
-  }
-};
-
-export const queuePaymentSms = async ({ school, student, payment, to, balance }) => {
-  const phone = normalisePhone(to);
-  if (!/^\+254\d{9}$/.test(String(phone ?? ''))) return;
-
-  const message =
-    `${school.name}: Payment of KES ${payment.amount.toLocaleString()} for ` +
-    `${student.firstName} ${student.lastName} confirmed. ` +
-    `Balance: KES ${balance.toLocaleString()}. Ref: ${payment.reference}.`;
-
-  try {
-    await smsQueue.add(JOB_NAMES.SEND_SMS, {
-      to: phone,
-      message,
-      schoolId: String(school._id),
-      trigger: SMS_TRIGGER_TYPES.PAYMENT_RECEIPT,
-    });
-  } catch (err) {
-    logger.error('[M-PESA] Failed to queue receipt SMS', { paymentId: payment._id, err: err.message });
   }
 };
 

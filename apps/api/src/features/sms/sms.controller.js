@@ -10,25 +10,44 @@
 import Student from '../students/Student.model.js';
 import User from '../users/User.model.js';
 import School from '../schools/School.model.js';
+import FeeStructure from '../fees/FeeStructure.model.js';
+import Payment from '../fees/Payment.model.js';
 import SmsLog from './SmsLog.model.js';
 import SmsDelivery from './SmsDelivery.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { smsQueue } from '../../jobs/queues.js';
 import { env } from '../../config/env.js';
+import { getRedis } from '../../config/redis.js';
 import logger from '../../config/logger.js';
 import {
   SMS_TRIGGER_TYPES, JOB_NAMES, STUDENT_STATUSES,
-  SMS_DELIVERY_STATUS, SMS_CREDIT_PACKS,
+  SMS_DELIVERY_STATUS, SMS_CREDIT_PACKS, PAYMENT_STATUSES,
 } from '../../constants/index.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone, isValidKenyanPhone } from './sms-inbound.controller.js';
 import { getCurrentTermAndYear } from '../../utils/term.js';
 
 const AT_CHUNK_SIZE = 200; // Africa's Talking recommended batch size
+const MAX_SMS_CHARS = 480;
 
 function atConfigured() {
   return !!(env.AT_USERNAME && env.AT_API_KEY);
+}
+
+const normaliseText = (value) =>
+  String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+function addSchoolNameIfNeeded(message, schoolName) {
+  const safeMessage = String(message ?? '').trim();
+  const safeSchoolName = String(schoolName ?? '').trim();
+  if (!safeSchoolName) return safeMessage;
+
+  if (normaliseText(safeMessage).includes(normaliseText(safeSchoolName))) {
+    return safeMessage;
+  }
+
+  return `${safeSchoolName}: ${safeMessage}`;
 }
 
 function collectGuardianPhones(students) {
@@ -42,10 +61,32 @@ function collectGuardianPhones(students) {
   return [...phones];
 }
 
+async function queueSmsPayload(payload) {
+  const redisReady = !!getRedis();
+  if (redisReady) {
+    try {
+      await smsQueue.add(JOB_NAMES.SEND_SMS, payload);
+      return;
+    } catch (err) {
+      logger.error('[SMS-OUTBOUND] Queue unavailable; falling back to direct send', {
+        schoolId: payload.schoolId,
+        smsLogId: payload.smsLogId,
+        err: err.message,
+      });
+    }
+  }
+
+  const { processSmsJob } = await import('../../jobs/workers/sms.worker.js');
+  await processSmsJob({
+    id: `direct-${payload.smsLogId ?? Date.now()}`,
+    data: payload,
+  });
+}
+
 async function queueChunked({ to, message, schoolId, trigger, smsLogId }) {
   const recipients = Array.isArray(to) ? to : [to];
   for (let i = 0; i < recipients.length; i += AT_CHUNK_SIZE) {
-    await smsQueue.add(JOB_NAMES.SEND_SMS, {
+    await queueSmsPayload({
       to: recipients.slice(i, i + AT_CHUNK_SIZE),
       message,
       schoolId,
@@ -53,6 +94,51 @@ async function queueChunked({ to, message, schoolId, trigger, smsLogId }) {
       smsLogId,
     });
   }
+}
+
+const money = (amount) => `KES ${Math.round(amount).toLocaleString('en-KE')}`;
+
+const fullName = (person) =>
+  `${person?.firstName ?? ''} ${person?.lastName ?? ''}`.trim();
+
+function buildStudentFeeLine(student, balance, options) {
+  const parts = [];
+  if (options.includeStudentName) parts.push(fullName(student) || 'Student');
+  if (options.includeAdmissionNumber) parts.push(`Adm ${student.admissionNumber}`);
+
+  const label = parts.length ? parts.join(' ') : 'Fee balance';
+  return `${label}: ${money(balance)}`;
+}
+
+function clipMessage(message) {
+  if (message.length <= MAX_SMS_CHARS) return message;
+  return `${message.slice(0, MAX_SMS_CHARS - 3)}...`;
+}
+
+function buildFeeReminderMessages({ schoolName, parentName, lines, note, includeParentName }) {
+  const greeting = includeParentName && parentName ? `Dear ${parentName}, ` : 'Dear Parent, ';
+  const intro = `${greeting}${schoolName}: Fee balance reminder. `;
+  const suffix = note ? ` ${note}` : '';
+  const messages = [];
+  let currentLines = [];
+
+  for (const line of lines) {
+    const candidateLines = [...currentLines, line];
+    const candidate = `${intro}${candidateLines.join('; ')}.${suffix}`.trim();
+
+    if (candidate.length > MAX_SMS_CHARS && currentLines.length > 0) {
+      messages.push(clipMessage(`${intro}${currentLines.join('; ')}.${suffix}`.trim()));
+      currentLines = [line];
+    } else {
+      currentLines = candidateLines;
+    }
+  }
+
+  if (currentLines.length) {
+    messages.push(clipMessage(`${intro}${currentLines.join('; ')}.${suffix}`.trim()));
+  }
+
+  return messages;
 }
 
 /**
@@ -159,6 +245,166 @@ export const broadcastSms = asyncHandler(async (req, res) => {
 });
 
 /**
+ * POST /api/v1/sms/fee-reminders
+ * Sends personalized fee balance reminders to parents/guardians.
+ * Body: { target: 'all_students'|'class_students', classId?, includeParentName?, includeStudentName?, includeAdmissionNumber?, note? }
+ */
+export const sendFeeReminders = asyncHandler(async (req, res) => {
+  if (!atConfigured()) {
+    return sendError(res, 'SMS service is not configured on this server.', 503);
+  }
+
+  const {
+    target,
+    classId,
+    includeParentName = true,
+    includeStudentName = true,
+    includeAdmissionNumber = true,
+    note,
+  } = req.body;
+  const schoolId = req.user.schoolId;
+  const { term, academicYear } = getCurrentTermAndYear();
+
+  const school = await School.findById(schoolId).select('name').lean();
+  if (!school) return sendError(res, 'School not found.', 404);
+
+  const studentFilter = {
+    schoolId,
+    status: STUDENT_STATUSES.ACTIVE,
+    ...(target === 'class_students' ? { classId } : {}),
+  };
+
+  const students = await Student.find(studentFilter)
+    .select('firstName lastName admissionNumber classId guardians')
+    .lean();
+
+  if (!students.length) {
+    return sendError(res, 'No active students found for the selected target.', 422);
+  }
+
+  const classIds = [...new Set(students.map((student) => String(student.classId)))];
+  const studentIds = students.map((student) => student._id);
+
+  const [structures, paidRows] = await Promise.all([
+    FeeStructure.find({
+      schoolId,
+      classId: { $in: classIds },
+      academicYear,
+      term,
+    }).select('classId totalAmount').lean(),
+    Payment.aggregate([
+      {
+        $match: {
+          schoolId,
+          studentId: { $in: studentIds },
+          academicYear,
+          term,
+          status: PAYMENT_STATUSES.COMPLETED,
+        },
+      },
+      { $group: { _id: '$studentId', totalPaid: { $sum: '$amount' } } },
+    ]),
+  ]);
+
+  const expectedByClass = new Map(
+    structures.map((structure) => [String(structure.classId), Number(structure.totalAmount) || 0])
+  );
+  const paidByStudent = new Map(
+    paidRows.map((row) => [String(row._id), Number(row.totalPaid) || 0])
+  );
+
+  const recipients = new Map();
+  let studentsWithBalance = 0;
+
+  for (const student of students) {
+    const expected = expectedByClass.get(String(student.classId)) ?? 0;
+    if (expected <= 0) continue;
+
+    const paid = paidByStudent.get(String(student._id)) ?? 0;
+    const balance = Math.max(0, expected - paid);
+    if (balance <= 0) continue;
+
+    studentsWithBalance += 1;
+    const line = buildStudentFeeLine(student, balance, { includeStudentName, includeAdmissionNumber });
+
+    for (const guardian of (student.guardians ?? [])) {
+      const phone = normalisePhone(guardian.phone);
+      if (!phone || !isValidKenyanPhone(phone)) continue;
+
+      const existing = recipients.get(phone) ?? {
+        phone,
+        parentName: fullName(guardian),
+        lines: [],
+      };
+      if (!existing.parentName) existing.parentName = fullName(guardian);
+      existing.lines.push(line);
+      recipients.set(phone, existing);
+    }
+  }
+
+  if (!studentsWithBalance) {
+    return sendError(res, 'No outstanding fee balances found for the selected students.', 422);
+  }
+
+  if (!recipients.size) {
+    return sendError(res, 'Students with balances were found, but none have valid guardian phone numbers.', 422);
+  }
+
+  const messages = [];
+  for (const recipient of recipients.values()) {
+    const parentMessages = buildFeeReminderMessages({
+      schoolName: school.name,
+      parentName: recipient.parentName,
+      lines: recipient.lines,
+      note,
+      includeParentName,
+    });
+    for (const message of parentMessages) {
+      messages.push({ to: recipient.phone, message });
+    }
+  }
+
+  const log = await SmsLog.create({
+    schoolId,
+    trigger: SMS_TRIGGER_TYPES.FEE_REMINDER,
+    target: 'fee_balances',
+    classId: target === 'class_students' ? classId : undefined,
+    message: note ? `Fee balance reminder. ${note}` : 'Fee balance reminder',
+    recipientCount: messages.length,
+    sentByUserId: req.user._id,
+    status: 'queued',
+    term,
+    academicYear,
+  });
+
+  for (const item of messages) {
+    await queueSmsPayload({
+      to: item.to,
+      message: item.message,
+      schoolId: schoolId.toString(),
+      trigger: SMS_TRIGGER_TYPES.FEE_REMINDER,
+      smsLogId: log._id.toString(),
+      term,
+      academicYear,
+    });
+  }
+
+  logger.info('[SMS-OUTBOUND] Fee reminders queued', {
+    schoolId,
+    target,
+    classId,
+    studentsWithBalance,
+    recipientCount: messages.length,
+  });
+
+  return sendSuccess(res, {
+    smsLogId: log._id,
+    recipientCount: messages.length,
+    studentsWithBalance,
+  });
+});
+
+/**
  * POST /api/v1/sms/test-direct
  * Sends via Africa's Talking synchronously (no queue) and returns the raw AT response.
  * Use this to verify credentials and diagnose delivery failures.
@@ -180,15 +426,30 @@ export const testSendDirect = asyncHandler(async (req, res) => {
     ? env.AT_TEST_NUMBERS
     : [phone];
 
-  logger.info('[SMS-TEST] Direct send', { recipients, from: env.AT_SENDER_ID ?? '(none)' });
+  let senderId = env.SMS_PLATFORM_SENDER_ID || null;
+  let outboundMessage = message;
+
+  try {
+    const school = await School.findById(req.user.schoolId).select('name smsSettings').lean();
+    if (school?.smsSettings?.senderIdApproved) {
+      senderId = school.smsSettings.senderIdApproved;
+    } else {
+      outboundMessage = addSchoolNameIfNeeded(message, school?.name ?? 'Your school');
+    }
+  } catch (err) {
+    logger.warn('[SMS-TEST] Could not resolve school sender details', { err: err.message });
+    outboundMessage = addSchoolNameIfNeeded(message, 'Your school');
+  }
+
+  logger.info('[SMS-TEST] Direct send', { recipients, from: senderId ?? '(provider default)' });
 
   let atResult, atError;
   try {
     const AfricasTalking = (await import('africastalking')).default ?? await import('africastalking');
     const AT = AfricasTalking({ username: env.AT_USERNAME, apiKey: env.AT_API_KEY });
     const sms = AT.SMS;
-    const params = { to: recipients, message };
-    if (env.AT_SENDER_ID) params.from = env.AT_SENDER_ID;
+    const params = { to: recipients, message: outboundMessage };
+    if (senderId) params.from = senderId;
     atResult = await sms.send(params);
   } catch (err) {
     atError = err.message;
@@ -198,11 +459,12 @@ export const testSendDirect = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     config: {
       username: env.AT_USERNAME,
-      senderId: env.AT_SENDER_ID ?? null,
+      senderId,
       testMode: !!(env.AT_TEST_NUMBERS?.length),
       testNumbers: env.AT_TEST_NUMBERS ?? null,
       recipients,
     },
+    message: outboundMessage,
     atResult: atResult ?? null,
     atError: atError ?? null,
   });

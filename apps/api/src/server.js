@@ -19,6 +19,7 @@ import { corsOptions } from './config/cors.js';
 import logger from './config/logger.js';
 import errorHandler from './middleware/errorHandler.js';
 import { csrf } from './middleware/csrf.js';
+import { RedisRateLimitStore } from './middleware/rateLimitStore.js';
 import authRoutes from './features/auth/auth.routes.js';
 import userRoutes from './features/users/users.routes.js';
 import classRoutes from './features/classes/classes.routes.js';
@@ -92,6 +93,8 @@ const globalLimiter =
     : rateLimit({
         windowMs: 60 * 1000,
         max: 200,
+        store: new RedisRateLimitStore({ prefix: 'rl:global' }),
+        passOnStoreError: true,
         standardHeaders: true,
         legacyHeaders: false,
         message: { message: 'Too many requests. Please slow down.' },
