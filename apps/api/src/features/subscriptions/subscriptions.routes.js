@@ -23,9 +23,16 @@ const canManageSubscription = authorize(
   ROLES.HEADTEACHER
 );
 
+const canViewSubscriptionInvoice = authorize(
+  ROLES.SCHOOL_ADMIN,
+  ROLES.DIRECTOR,
+  ROLES.HEADTEACHER,
+  ROLES.SUPERADMIN
+);
+
 router.post('/paystack/checkout', canManageSubscription, validateCreateCheckout, createPaystackCheckout);
 router.get('/pricing', canManageSubscription, getSubscriptionPricing);
-router.get('/paystack/status/:merchantReference', canManageSubscription, getPaystackStatus);
+router.get('/paystack/status/:merchantReference', canViewSubscriptionInvoice, getPaystackStatus);
 router.get('/payments', canManageSubscription, listPayments);
 
 export default router;

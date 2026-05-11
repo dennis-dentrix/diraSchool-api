@@ -10,6 +10,7 @@ import {
   AUDIT_ACTIONS,
   AUDIT_RESOURCES,
   PLAN_TIERS,
+  ROLES,
   SUBSCRIPTION_STATUSES,
 } from '../../constants/index.js';
 import { logAction } from '../../utils/auditLogger.js';
@@ -260,10 +261,13 @@ export const getSubscriptionPricing = asyncHandler(async (req, res) => {
  * Verifies the transaction with Paystack and syncs the payment record.
  */
 export const getPaystackStatus = asyncHandler(async (req, res) => {
-  const payment = await SubscriptionPayment.findOne({
-    schoolId: req.user.schoolId,
-    merchantReference: req.params.merchantReference,
-  });
+  const paymentFilter = req.user.role === ROLES.SUPERADMIN
+    ? { merchantReference: req.params.merchantReference }
+    : {
+      schoolId: req.user.schoolId,
+      merchantReference: req.params.merchantReference,
+    };
+  const payment = await SubscriptionPayment.findOne(paymentFilter);
   if (!payment) return sendError(res, 'Subscription payment not found.', 404);
 
   if (payment.status !== 'completed') {
@@ -298,8 +302,10 @@ export const getPaystackStatus = asyncHandler(async (req, res) => {
     }
   }
 
-  const school = await School.findById(req.user.schoolId).select(
-    'subscriptionStatus planTier trialExpiry name'
+  const school = await School.findById(
+    req.user.role === ROLES.SUPERADMIN ? payment.schoolId : req.user.schoolId
+  ).select(
+    'subscriptionStatus planTier trialExpiry name email phone address county registrationNumber'
   );
 
   return sendSuccess(res, {

@@ -77,6 +77,12 @@ const TAX_LABELS = {
   other: 'Other tax',
 };
 
+const PAYMENT_CYCLE_MONTHS = {
+  'per-term': 4,
+  annual: 12,
+  'multi-year': 36,
+};
+
 const bustSchoolSubCache = async (schoolId) => {
   try {
     const redis = getRedis();
@@ -138,6 +144,17 @@ const dateRangeFilter = (field, query) => {
   if (query.from) range.$gte = new Date(query.from);
   if (query.to) range.$lte = new Date(query.to);
   return Object.keys(range).length ? { [field]: range } : {};
+};
+
+const estimateNextPaymentDate = (payment) => {
+  if (payment.paymentType && payment.paymentType !== 'subscription') return null;
+  const baseDate = payment.paidAt || payment.invoiceSnapshot?.paidAt || payment.createdAt;
+  if (!baseDate) return null;
+
+  const next = new Date(baseDate);
+  const months = PAYMENT_CYCLE_MONTHS[payment.billingCycle] ?? PAYMENT_CYCLE_MONTHS['per-term'];
+  next.setMonth(next.getMonth() + months);
+  return next;
 };
 
 const parseOptionalDate = (value, fallback) => {
@@ -1143,6 +1160,7 @@ export const listFinancePayments = asyncHandler(async (req, res) => {
   const filter = {};
   if (req.query.status) filter.status = req.query.status;
   if (req.query.schoolId) filter.schoolId = req.query.schoolId;
+  if (req.query.paymentType) filter.paymentType = req.query.paymentType;
   Object.assign(filter, dateRangeFilter(req.query.status === 'completed' ? 'paidAt' : 'createdAt', req.query));
 
   const total = await SubscriptionPayment.countDocuments(filter);
@@ -1153,11 +1171,17 @@ export const listFinancePayments = asyncHandler(async (req, res) => {
     .skip(skip)
     .limit(limit)
     .select('-paystackRawResponse')
-    .populate('schoolId', 'name email county groupId')
+    .populate('schoolId', 'name email county groupId subscriptionStatus planTier trialExpiry')
     .populate('initiatedByUserId', 'firstName lastName email')
     .lean();
 
-  return sendSuccess(res, { payments, meta });
+  return sendSuccess(res, {
+    payments: payments.map((payment) => ({
+      ...payment,
+      nextPaymentDate: estimateNextPaymentDate(payment),
+    })),
+    meta,
+  });
 });
 
 /**

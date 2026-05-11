@@ -9,6 +9,7 @@ import {
   ClipboardList,
   Landmark,
   Plus,
+  Printer,
   Receipt,
   Trash2,
   Scale,
@@ -24,10 +25,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
 const fmt = (n) => `KES ${Math.round(Number(n) || 0).toLocaleString('en-KE')}`;
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const fmtCycle = (c) => ({ 'per-term': 'Per term', annual: 'Annual', 'multi-year': 'Multi-year' }[c] ?? c ?? 'Subscription');
 
 const EXPENSE_CATEGORIES = [
   ['hosting', 'Hosting'],
@@ -82,14 +85,41 @@ const statusColor = {
   cancelled: 'bg-muted text-muted-foreground border-border',
 };
 
-function Metric({ label, value, icon: Icon, tone }) {
+function Metric({ label, value, icon: Icon, tone, href }) {
+  const Comp = href ? 'a' : 'div';
   return (
-    <div className="rounded-lg border bg-card px-4 py-3.5">
+    <Comp href={href} className="block rounded-lg border bg-card px-4 py-3.5 transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</p>
         <Icon className={cn('h-4 w-4', tone)} />
       </div>
       <p className="mt-2 font-mono text-2xl font-semibold tabular-nums">{value}</p>
+    </Comp>
+  );
+}
+
+function FinanceNav() {
+  const items = [
+    ['#payments', 'Subscription payments'],
+    ['#taxes', 'Taxes due'],
+    ['#margin', 'Final margin'],
+    ['#expenses', 'Expenses'],
+    ['#records', 'Tax records'],
+  ];
+
+  return (
+    <div className="sticky top-0 z-20 -mx-1 overflow-x-auto bg-background/95 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+      <div className="flex min-w-max gap-2 px-1">
+        {items.map(([href, label]) => (
+          <a
+            key={href}
+            href={href}
+            className="rounded-md border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {label}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
@@ -391,6 +421,86 @@ function TaxForm() {
   );
 }
 
+function SubscriptionPaymentsTable({ payments, isLoading }) {
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-md" />)}
+      </div>
+    );
+  }
+
+  if (payments.length === 0) {
+    return <p className="py-10 text-center text-sm text-muted-foreground">No subscription payments recorded yet.</p>;
+  }
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="min-w-[220px]">School</TableHead>
+            <TableHead className="min-w-[180px]">Subscription Payment</TableHead>
+            <TableHead className="text-right">Amount Paid</TableHead>
+            <TableHead className="text-right">VAT</TableHead>
+            <TableHead className="min-w-[130px]">Date Paid</TableHead>
+            <TableHead className="min-w-[150px]">Next Payment Date</TableHead>
+            <TableHead className="text-right">Invoice</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {payments.map((payment) => {
+            const invoice = payment.invoiceSnapshot;
+            const schoolName = payment.schoolId?.name ?? invoice?.school?.name ?? 'School';
+            const paidAt = payment.paidAt ?? invoice?.paidAt ?? payment.createdAt;
+            const vatAmount = payment.vatAmount ?? invoice?.vatAmount ?? 0;
+            const invoiceHref = `/billing/invoice/${payment.merchantReference}`;
+
+            return (
+              <TableRow key={payment._id}>
+                <TableCell>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{schoolName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{payment.schoolId?.email ?? invoice?.school?.email ?? 'No email'}</p>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">{fmtCycle(payment.billingCycle)}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge variant="outline" className={cn('text-[10px] capitalize', statusColor[payment.status])}>
+                        {payment.status}
+                      </Badge>
+                      {payment.pricingSource && payment.pricingSource !== 'standard' && (
+                        <Badge variant="outline" className="text-[10px] border-ok/30 text-ok bg-ok/5">
+                          {payment.pricingSource} pricing
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="font-mono text-[11px] text-muted-foreground">{payment.merchantReference}</p>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-mono font-semibold">{fmt(payment.amount)}</TableCell>
+                <TableCell className="text-right font-mono">{fmt(vatAmount)}</TableCell>
+                <TableCell>{fmtDate(paidAt)}</TableCell>
+                <TableCell>{fmtDate(payment.nextPaymentDate)}</TableCell>
+                <TableCell className="text-right">
+                  <Button asChild size="sm" variant="outline">
+                    <a href={invoiceHref} target="_blank" rel="noreferrer">
+                      <Printer className="h-4 w-4" />
+                      Print
+                    </a>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 export default function SuperadminFinancePage() {
   const qc = useQueryClient();
 
@@ -405,7 +515,7 @@ export default function SuperadminFinancePage() {
   const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
     queryKey: ['admin-finance', 'payments'],
     queryFn: async () => {
-      const res = await adminApi.financePayments({ limit: 25 });
+      const res = await adminApi.financePayments({ limit: 100, status: 'completed', paymentType: 'subscription' });
       return res.data?.payments ?? res.data?.data ?? [];
     },
   });
@@ -449,11 +559,12 @@ export default function SuperadminFinancePage() {
   const margins = summaryData?.margins ?? {};
   const taxRows = Array.isArray(taxes.taxRows) ? taxes.taxRows : [];
   const payments = Array.isArray(paymentsData) ? paymentsData : [];
+  const subscriptionPayments = payments.filter((payment) => (payment.paymentType ?? 'subscription') === 'subscription');
   const expenses = Array.isArray(expensesData) ? expensesData : [];
   const taxRecords = Array.isArray(taxesData) ? taxesData : [];
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-0 space-y-6 pb-8">
       <PageHeader
         title="Financial Management"
         description="Track DiraSchool revenue, paid school invoices, operating expenses, and tax liabilities."
@@ -465,16 +576,33 @@ export default function SuperadminFinancePage() {
           Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)
         ) : (
           <>
-            <Metric label="Collected revenue" value={fmt(summary.revenue)} icon={ArrowUpRight} tone="text-ok" />
-            <Metric label="Expenses paid" value={fmt(summary.expenses)} icon={ArrowDownLeft} tone="text-bad" />
-            <Metric label="Taxes due" value={fmt(taxes.totalTaxDue)} icon={Scale} tone={taxes.totalTaxDue > 0 ? 'text-warn' : 'text-ok'} />
-            <Metric label="Final margin" value={fmt(margins.finalMarginAfterTaxes)} icon={Landmark} tone={margins.finalMarginAfterTaxes >= 0 ? 'text-ok' : 'text-bad'} />
+            <Metric href="#payments" label="Collected revenue" value={fmt(summary.revenue)} icon={ArrowUpRight} tone="text-ok" />
+            <Metric href="#expenses" label="Expenses paid" value={fmt(summary.expenses)} icon={ArrowDownLeft} tone="text-bad" />
+            <Metric href="#taxes" label="Taxes due" value={fmt(taxes.totalTaxDue)} icon={Scale} tone={taxes.totalTaxDue > 0 ? 'text-warn' : 'text-ok'} />
+            <Metric href="#margin" label="Final margin" value={fmt(margins.finalMarginAfterTaxes)} icon={Landmark} tone={margins.finalMarginAfterTaxes >= 0 ? 'text-ok' : 'text-bad'} />
           </>
         )}
       </div>
 
+      <FinanceNav />
+
+      <Card id="payments" className="scroll-mt-20">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-primary" />
+            Subscription Payments and Printable Invoices
+          </CardTitle>
+          <CardDescription>
+            Each row shows the school, paid amount, VAT, payment date, estimated next payment date, and printable invoice copy.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SubscriptionPaymentsTable payments={subscriptionPayments} isLoading={paymentsLoading} />
+        </CardContent>
+      </Card>
+
       <div className="grid gap-5 xl:grid-cols-2">
-        <Card>
+        <Card id="taxes" className="scroll-mt-20">
           <CardHeader>
             <CardTitle className="text-base">Taxes Due</CardTitle>
             <CardDescription>VAT is calculated from invoices; other statutory taxes come from recorded tax entries.</CardDescription>
@@ -522,7 +650,7 @@ export default function SuperadminFinancePage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="margin" className="scroll-mt-20">
           <CardHeader>
             <CardTitle className="text-base">Final Margin</CardTitle>
             <CardDescription>Margin after VAT, estimated corporation tax, and recorded margin-impacting taxes.</CardDescription>
@@ -576,120 +704,65 @@ export default function SuperadminFinancePage() {
         <TaxForm />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-primary" />
-            School Payments and Invoice Copies
-          </CardTitle>
-          <CardDescription>Completed subscription payments retain an immutable invoice snapshot.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {paymentsLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-md" />)}
-            </div>
-          ) : payments.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">No school subscription payments yet.</p>
-          ) : (
-            <div className="divide-y">
-              {payments.map((payment) => {
-                const invoice = payment.invoiceSnapshot;
-                return (
-                  <div key={payment._id} className="py-3 flex items-start justify-between gap-4">
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card id="expenses" className="scroll-mt-20">
+          <CardHeader>
+            <CardTitle className="text-base">Expense Records</CardTitle>
+            <CardDescription>Business expenses recorded by the DiraSchool team.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {expensesLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-md" />)}
+              </div>
+            ) : expenses.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">No expenses recorded yet.</p>
+            ) : (
+              <div className="divide-y">
+                {expenses.map((expense) => (
+                  <div key={expense._id} className="py-3 flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold truncate">{payment.schoolId?.name ?? invoice?.school?.name ?? 'School'}</p>
-                        <Badge variant="outline" className={cn('text-[10px] capitalize', statusColor[payment.status])}>
-                          {payment.status}
+                        <p className="text-sm font-semibold truncate">{expense.title}</p>
+                        <Badge variant="outline" className={cn('text-[10px] capitalize', statusColor[expense.status])}>
+                          {expense.status}
                         </Badge>
-                        {payment.pricingSource && payment.pricingSource !== 'standard' && (
-                          <Badge variant="outline" className="text-[10px] border-ok/30 text-ok bg-ok/5">
-                            {payment.pricingSource} pricing
-                          </Badge>
-                        )}
-                        {payment.paymentType === 'sms_credits' && (
-                          <Badge variant="outline" className="text-[10px] border-primary/30 text-primary bg-primary/5">
-                            SMS credits
-                          </Badge>
-                        )}
+                        <Badge variant="outline" className="text-[10px] capitalize">
+                          {expense.category.replace(/_/g, ' ')}
+                        </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {invoice?.invoiceNumber ?? `INV-${String(payment._id).slice(-8).toUpperCase()}`} · {fmtDate(payment.paidAt ?? payment.createdAt)}
-                        {payment.paymentType === 'sms_credits'
-                          ? ` · ${payment.metadata?.credits ?? invoice?.metadata?.credits ?? '—'} SMS credits`
-                          : ` · ${payment.studentCount} students`}
+                        {expense.vendor || 'No vendor'} · {fmtDate(expense.paymentDate)}
+                        {expense.reference ? ` · ${expense.reference}` : ''}
                       </p>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">{payment.merchantReference}</p>
+                      {expense.vatAmount > 0 && (
+                        <p className="text-xs text-muted-foreground mt-0.5">VAT: {fmt(expense.vatAmount)}</p>
+                      )}
+                      {expense.receiptUrl && (
+                        <a href={expense.receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline underline-offset-2">
+                          Receipt or invoice
+                        </a>
+                      )}
                     </div>
-                    <p className="font-mono text-sm font-semibold shrink-0">{fmt(payment.amount)}</p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Expense Records</CardTitle>
-          <CardDescription>Business expenses recorded by the DiraSchool team.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {expensesLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-md" />)}
-            </div>
-          ) : expenses.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">No expenses recorded yet.</p>
-          ) : (
-            <div className="divide-y">
-              {expenses.map((expense) => (
-                <div key={expense._id} className="py-3 flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold truncate">{expense.title}</p>
-                      <Badge variant="outline" className={cn('text-[10px] capitalize', statusColor[expense.status])}>
-                        {expense.status}
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px] capitalize">
-                        {expense.category.replace(/_/g, ' ')}
-                      </Badge>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <p className="font-mono text-sm font-semibold">{fmt(expense.amount)}</p>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => deleteExpense.mutate(expense._id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {expense.vendor || 'No vendor'} · {fmtDate(expense.paymentDate)}
-                      {expense.reference ? ` · ${expense.reference}` : ''}
-                    </p>
-                    {expense.vatAmount > 0 && (
-                      <p className="text-xs text-muted-foreground mt-0.5">VAT: {fmt(expense.vatAmount)}</p>
-                    )}
-                    {expense.receiptUrl && (
-                      <a href={expense.receiptUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline underline-offset-2">
-                        Receipt or invoice
-                      </a>
-                    )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <p className="font-mono text-sm font-semibold">{fmt(expense.amount)}</p>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => deleteExpense.mutate(expense._id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-        <Card>
+        <Card id="records" className="scroll-mt-20">
           <CardHeader>
             <CardTitle className="text-base">Tax Records</CardTitle>
             <CardDescription>Recorded liabilities, prepayments, and tax credits.</CardDescription>
