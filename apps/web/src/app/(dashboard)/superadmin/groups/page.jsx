@@ -42,6 +42,16 @@ function statusColor(status) {
   }
 }
 
+const pricingToForm = (pricing = {}) => ({
+  enabled: Boolean(pricing.enabled),
+  baseFee: pricing.baseFee ?? 12000,
+  perStudentRate: pricing.perStudentRate ?? 55,
+  agreementReference: pricing.agreementReference ?? '',
+  startsAt: pricing.startsAt ? new Date(pricing.startsAt).toISOString().slice(0, 10) : '',
+  expiresAt: pricing.expiresAt ? new Date(pricing.expiresAt).toISOString().slice(0, 10) : '',
+  notes: pricing.notes ?? '',
+});
+
 // ── Group Form Dialog ─────────────────────────────────────────────────────────
 
 function UserSearchPicker({ onSelect }) {
@@ -111,11 +121,20 @@ function UserSearchPicker({ onSelect }) {
 
 function GroupFormDialog({ open, onOpenChange, initial, onSave }) {
   const [form, setForm] = useState(
-    initial ?? { name: '', notes: '', contactPerson: '', contactEmail: '' }
+    initial
+      ? { ...initial, pricingAgreement: pricingToForm(initial.pricingAgreement) }
+      : { name: '', notes: '', contactPerson: '', contactEmail: '', pricingAgreement: pricingToForm() }
   );
   const [saving, setSaving] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const setPricing = (key) => (e) => {
+    const value = key === 'enabled' ? e.target.checked : e.target.value;
+    setForm((f) => ({
+      ...f,
+      pricingAgreement: { ...f.pricingAgreement, [key]: value },
+    }));
+  };
 
   const handleUserSelect = (user) => {
     setForm((f) => ({
@@ -130,7 +149,16 @@ function GroupFormDialog({ open, onOpenChange, initial, onSave }) {
     if (!form.name.trim()) { toast.error('Group name is required'); return; }
     setSaving(true);
     try {
-      await onSave(form);
+      await onSave({
+        ...form,
+        pricingAgreement: {
+          ...form.pricingAgreement,
+          baseFee: Number(form.pricingAgreement.baseFee),
+          perStudentRate: Number(form.pricingAgreement.perStudentRate),
+          startsAt: form.pricingAgreement.startsAt || undefined,
+          expiresAt: form.pricingAgreement.expiresAt || undefined,
+        },
+      });
       onOpenChange(false);
     } finally {
       setSaving(false);
@@ -161,6 +189,34 @@ function GroupFormDialog({ open, onOpenChange, initial, onSave }) {
           <div className="space-y-1.5">
             <Label>Notes</Label>
             <Textarea value={form.notes} onChange={set('notes')} placeholder="Internal notes about this agreement…" rows={3} />
+          </div>
+          <div className="rounded-lg border p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Custom pricing</p>
+                <p className="text-xs text-muted-foreground">Applied to every school in this group unless a school has its own override.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={form.pricingAgreement.enabled}
+                onChange={setPricing('enabled')}
+                className="h-4 w-4"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Base fee</Label>
+                <Input type="number" min="0" value={form.pricingAgreement.baseFee} onChange={setPricing('baseFee')} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Per student</Label>
+                <Input type="number" min="0" value={form.pricingAgreement.perStudentRate} onChange={setPricing('perStudentRate')} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Agreement reference</Label>
+              <Input value={form.pricingAgreement.agreementReference} onChange={setPricing('agreementReference')} placeholder="e.g. GROUP-MOU-2026" />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -292,6 +348,11 @@ function GroupCard({ group, onEdit, onDelete }) {
             <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md font-mono">
               {group.schools?.length ?? 0} {group.schools?.length === 1 ? 'school' : 'schools'}
             </span>
+            {group.pricingAgreement?.enabled && (
+              <Badge variant="outline" className="text-[10px] border-ok/30 text-ok bg-ok/5">
+                Custom pricing
+              </Badge>
+            )}
           </div>
           {group.contactPerson && (
             <p className="text-xs text-muted-foreground mt-0.5">{group.contactPerson}{group.contactEmail ? ` · ${group.contactEmail}` : ''}</p>

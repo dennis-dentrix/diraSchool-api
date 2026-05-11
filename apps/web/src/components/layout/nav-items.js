@@ -14,6 +14,7 @@ import {
   UserCog,
   Home,
   Receipt,
+  Landmark,
   Image,
   MessageSquare,
   UserCheck,
@@ -86,6 +87,7 @@ export const superadminNavItems = [
   { label: 'Overview',       href: '/superadmin',              icon: LayoutDashboard },
   { label: 'Schools',        href: '/superadmin/schools',       icon: Building2 },
   { label: 'Billing Groups', href: '/superadmin/groups',        icon: Layers },
+  { label: 'Finance',        href: '/superadmin/finance',       icon: Landmark },
   { label: 'Users',          href: '/superadmin/users',         icon: UserCog },
   { label: 'Audit Logs',     href: '/superadmin/audit-logs',    icon: ShieldAlert },
 ];

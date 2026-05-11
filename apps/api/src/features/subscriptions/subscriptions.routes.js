@@ -6,6 +6,7 @@ import {
   getPaystackStatus,
   paystackWebhook,
   listPayments,
+  getSubscriptionPricing,
 } from './subscriptions.controller.js';
 import { validateCreateCheckout } from './subscriptions.validator.js';
 
@@ -23,6 +24,7 @@ const canManageSubscription = authorize(
 );
 
 router.post('/paystack/checkout', canManageSubscription, validateCreateCheckout, createPaystackCheckout);
+router.get('/pricing', canManageSubscription, getSubscriptionPricing);
 router.get('/paystack/status/:merchantReference', canManageSubscription, getPaystackStatus);
 router.get('/payments', canManageSubscription, listPayments);
 

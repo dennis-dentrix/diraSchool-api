@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const BASE_FEE = 12000;
-const PER_STUDENT = 50;
+const PER_STUDENT = 55;
+const VAT_RATE = 0.16;
 const SCHOOL_FEE_PER_STUDENT = 10000;
 
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
@@ -22,10 +23,12 @@ const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 function calcPrice(students, option) {
   const subtotal = BASE_FEE + students * PER_STUDENT;
   const multiplier = option === 'annual' ? 2.70 : option === 'multi-year' ? 2.55 : 1;
-  const total = Math.round(subtotal * multiplier);
+  const subtotalExVat = Math.round(subtotal * multiplier);
+  const vatAmount = Math.round(subtotalExVat * VAT_RATE);
+  const total = subtotalExVat + vatAmount;
   const costPerStudent = subtotal / students;
   const pctOfFee = ((subtotal / (students * SCHOOL_FEE_PER_STUDENT)) * 100);
-  return { subtotal, total, costPerStudent, pctOfFee, multiplier };
+  return { subtotal, subtotalExVat, vatAmount, total, costPerStudent, pctOfFee, multiplier };
 }
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -80,7 +83,7 @@ const FEATURES = [
 const FAQS = [
   {
     q: 'Do prices include taxes?',
-    a: 'The prices shown are the amounts schools pay for the subscription. If tax handling changes later, we will show it clearly before checkout.',
+    a: 'Pricing is shown with a clear 16% VAT breakdown. The subscription total is the VAT-inclusive amount due.',
   },
   {
     q: 'How is billing aligned with the school calendar?',
@@ -96,7 +99,7 @@ const FAQS = [
   },
   {
     q: 'What if we exceed our plan\'s student range?',
-    a: 'There are no student limits or tier penalties. You pay KES 50 per actual enrolled student every term. If you grow to 700 students, you simply pay for 700. No surprise charges or forced plan upgrades.',
+    a: 'There are no student limits or tier penalties. You pay KES 55 per actual enrolled student every term, before VAT. If you grow to 700 students, you simply pay for 700. No surprise charges or forced plan upgrades.',
   },
   {
     q: 'Does the annual discount lock us in?',
@@ -231,7 +234,7 @@ function PricingTable() {
                         {fmt(p.total)}
                       </span>
                       <p className={cn('text-xs mt-0.5', plan.highlight ? 'text-blue-200' : 'text-slate-500')}>
-                        per term · e.g. {plan.example} students
+                        per term incl. VAT · e.g. {plan.example} students
                       </p>
                     </div>
                   )}
@@ -248,10 +251,16 @@ function PricingTable() {
                       <span>Base fee</span><span>KES 12,000</span>
                     </div>
                     <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
-                      <span>{plan.example} × KES 50</span><span>{fmt(plan.example * PER_STUDENT)}</span>
+                      <span>{plan.example} × KES 55</span><span>{fmt(plan.example * PER_STUDENT)}</span>
+                    </div>
+                    <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
+                      <span>Subtotal ex VAT</span><span>{fmt(p.subtotalExVat)}</span>
+                    </div>
+                    <div className={cn('flex justify-between', plan.highlight ? 'text-blue-100' : 'text-slate-500')}>
+                      <span>VAT 16%</span><span>{fmt(p.vatAmount)}</span>
                     </div>
                     <div className={cn('flex justify-between font-semibold pt-1 border-t', plan.highlight ? 'text-white border-white/20' : 'text-slate-700 border-slate-200')}>
-                      <span>Total </span><span>{fmt(p.total)}</span>
+                      <span>Total incl. VAT</span><span>{fmt(p.total)}</span>
                     </div>
                   </div>
                 )}
@@ -280,7 +289,7 @@ function PricingTable() {
         <div className="mt-10 rounded-2xl bg-slate-50 border border-slate-200 p-6 text-center">
           <p className="text-sm text-slate-600 font-medium">The formula behind every plan</p>
           <p className="mt-2 text-slate-800 font-mono text-sm">
-            KES 12,000 base + students × KES 50 = your term cost
+            (KES 12,000 base + students × KES 55) + 16% VAT = your term cost
           </p>
           <p className="mt-2 text-xs text-slate-400">Linear scaling — no step increases, no surprises</p>
         </div>
@@ -385,7 +394,7 @@ function PriceCalculator() {
                     <span className="font-mono">KES 12,000</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>{students.toLocaleString()} × KES 50</span>
+                    <span>{students.toLocaleString()} × KES 55</span>
                     <span className="font-mono">{fmt(students * PER_STUDENT)}</span>
                   </div>
                   {option !== 'per-term' && (
@@ -397,9 +406,19 @@ function PriceCalculator() {
                 </div>
 
                 <div className="mt-5 pt-5 border-t border-white/10">
+                  <div className="space-y-2 text-sm mb-4">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Subtotal ex VAT</span>
+                      <span className="font-mono">{fmt(p.subtotalExVat)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>VAT 16%</span>
+                      <span className="font-mono">{fmt(p.vatAmount)}</span>
+                    </div>
+                  </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-white font-semibold">
-                      {option === 'per-term' ? 'Per term' : option === 'annual' ? 'Annual total' : '3-year annual'}
+                      {option === 'per-term' ? 'Per term incl. VAT' : option === 'annual' ? 'Annual total incl. VAT' : '3-year annual incl. VAT'}
                     </span>
                     <span className="text-2xl font-bold text-white font-mono">{fmt(p.total)}</span>
                   </div>
@@ -437,7 +456,7 @@ function PriceCalculator() {
         </div>
 
         <p className="text-center text-xs text-slate-600 mt-4">
-          Prices shown are the subscription amounts before any future tax changes.
+          Prices include 16% VAT and show the VAT breakdown clearly.
         </p>
       </div>
     </section>

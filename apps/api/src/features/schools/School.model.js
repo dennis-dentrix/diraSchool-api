@@ -1,6 +1,47 @@
 import mongoose from 'mongoose';
 import { SUBSCRIPTION_STATUSES, PLAN_TIERS, PAYMENT_SMS_PROVIDERS } from '../../constants/index.js';
 
+const pricingAgreementSchema = new mongoose.Schema(
+  {
+    enabled: {
+      type: Boolean,
+      default: false,
+    },
+    baseFee: {
+      type: Number,
+      min: 0,
+    },
+    perStudentRate: {
+      type: Number,
+      min: 0,
+    },
+    currency: {
+      type: String,
+      default: 'KES',
+      uppercase: true,
+      trim: true,
+    },
+    agreementReference: {
+      type: String,
+      trim: true,
+      maxlength: 80,
+    },
+    notes: {
+      type: String,
+      trim: true,
+      maxlength: 1000,
+    },
+    startsAt: Date,
+    expiresAt: Date,
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    updatedAt: Date,
+  },
+  { _id: false }
+);
+
 const schoolSchema = new mongoose.Schema(
   {
     name: {
@@ -51,6 +92,12 @@ const schoolSchema = new mongoose.Schema(
       type: String,
       enum: Object.values(PLAN_TIERS),
       default: PLAN_TIERS.TRIAL,
+    },
+    // Optional negotiated pricing for this specific school. When enabled, this
+    // overrides group pricing and the standard public pricing formula.
+    pricingAgreement: {
+      type: pricingAgreementSchema,
+      default: () => ({ enabled: false, currency: 'KES' }),
     },
     // Hard disable by superadmin — overrides subscription status
     isActive: {

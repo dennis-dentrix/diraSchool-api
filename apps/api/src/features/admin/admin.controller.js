@@ -18,6 +18,9 @@ import Student     from '../students/Student.model.js';
 import ClassModel  from '../classes/Class.model.js';
 import AuditLog    from '../audit/AuditLog.model.js';
 import SmsDelivery from '../sms/SmsDelivery.model.js';
+import SubscriptionPayment from '../subscriptions/SubscriptionPayment.model.js';
+import PlatformExpense from './PlatformExpense.model.js';
+import PlatformTaxRecord, { PLATFORM_TAX_TYPES } from './PlatformTaxRecord.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
@@ -38,6 +41,41 @@ import {
 } from '../../services/email.service.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { getCurrentTermAndYear } from '../../utils/term.js';
+import {
+  DEFAULT_BASE_FEE,
+  DEFAULT_CORPORATE_TAX_RATE,
+  DEFAULT_PER_STUDENT_RATE,
+  DEFAULT_VAT_RATE,
+} from '../subscriptions/pricing.js';
+
+const COMPUTED_TAX_TYPES = new Set(['vat', 'corporation_tax']);
+const INCOME_TAX_CREDIT_TYPES = new Set(['corporation_tax', 'installment_tax', 'withholding_tax']);
+const MARGIN_AFFECTING_TAX_TYPES = new Set([
+  'affordable_housing_levy',
+  'nssf',
+  'fringe_benefit_tax',
+  'advance_tax',
+  'excise_duty',
+  'digital_service_tax',
+  'other',
+]);
+
+const TAX_LABELS = {
+  vat: 'VAT',
+  corporation_tax: 'Corporation tax',
+  installment_tax: 'Installment tax',
+  paye: 'PAYE',
+  withholding_tax: 'Withholding tax',
+  withholding_vat: 'Withholding VAT',
+  affordable_housing_levy: 'Affordable Housing Levy',
+  nssf: 'NSSF',
+  shif: 'SHIF',
+  fringe_benefit_tax: 'Fringe benefit tax',
+  advance_tax: 'Advance tax',
+  excise_duty: 'Excise duty',
+  digital_service_tax: 'Digital service tax',
+  other: 'Other tax',
+};
 
 const bustSchoolSubCache = async (schoolId) => {
   try {
@@ -48,6 +86,161 @@ const bustSchoolSubCache = async (schoolId) => {
   } catch {
     // non-fatal
   }
+};
+
+const normalisePricingAgreement = (body, userId) => {
+  const enabled = Boolean(body.enabled);
+  const baseFee = body.baseFee === undefined || body.baseFee === ''
+    ? DEFAULT_BASE_FEE
+    : Number(body.baseFee);
+  const perStudentRate = body.perStudentRate === undefined || body.perStudentRate === ''
+    ? DEFAULT_PER_STUDENT_RATE
+    : Number(body.perStudentRate);
+
+  if (!Number.isFinite(baseFee) || baseFee < 0) {
+    return { error: 'Base fee must be a non-negative number.' };
+  }
+  if (!Number.isFinite(perStudentRate) || perStudentRate < 0) {
+    return { error: 'Per-student rate must be a non-negative number.' };
+  }
+
+  const startsAt = body.startsAt ? new Date(body.startsAt) : undefined;
+  const expiresAt = body.expiresAt ? new Date(body.expiresAt) : undefined;
+
+  if (startsAt && Number.isNaN(startsAt.getTime())) {
+    return { error: 'Invalid pricing agreement start date.' };
+  }
+  if (expiresAt && Number.isNaN(expiresAt.getTime())) {
+    return { error: 'Invalid pricing agreement expiry date.' };
+  }
+  if (startsAt && expiresAt && startsAt > expiresAt) {
+    return { error: 'Pricing agreement start date cannot be after expiry date.' };
+  }
+
+  return {
+    agreement: {
+      enabled,
+      baseFee,
+      perStudentRate,
+      currency: (body.currency || 'KES').toUpperCase(),
+      agreementReference: body.agreementReference?.trim() || undefined,
+      notes: body.notes?.trim() || undefined,
+      startsAt,
+      expiresAt,
+      updatedBy: userId,
+      updatedAt: new Date(),
+    },
+  };
+};
+
+const dateRangeFilter = (field, query) => {
+  const range = {};
+  if (query.from) range.$gte = new Date(query.from);
+  if (query.to) range.$lte = new Date(query.to);
+  return Object.keys(range).length ? { [field]: range } : {};
+};
+
+const parseOptionalDate = (value, fallback) => {
+  if (value === undefined) return fallback;
+  if (value === '' || value === null) return undefined;
+  return new Date(value);
+};
+
+const parseBoolean = (value, fallback = false) => {
+  if (value === undefined) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value === 'true' || value === '1';
+  return Boolean(value);
+};
+
+const parseExpensePayload = (body, userId, existing = {}) => {
+  const title = body.title === undefined ? existing.title : body.title?.trim();
+  const amount = body.amount === undefined || body.amount === ''
+    ? existing.amount
+    : Number(body.amount);
+  const vatAmount = body.vatAmount === undefined || body.vatAmount === ''
+    ? existing.vatAmount ?? 0
+    : Number(body.vatAmount);
+  const paymentDate = body.paymentDate ? new Date(body.paymentDate) : existing.paymentDate ?? new Date();
+
+  if (!title) return { error: 'Expense title is required.' };
+  if (!Number.isFinite(amount) || amount < 0) return { error: 'Expense amount must be a non-negative number.' };
+  if (!Number.isFinite(vatAmount) || vatAmount < 0) return { error: 'Expense VAT amount must be a non-negative number.' };
+  if (vatAmount > amount) return { error: 'Expense VAT amount cannot exceed the expense total.' };
+  if (Number.isNaN(paymentDate.getTime())) return { error: 'Invalid expense payment date.' };
+
+  return {
+    expense: {
+      title,
+      amount,
+      vatAmount,
+      paymentDate,
+      category: body.category || existing.category || 'other',
+      vendor: body.vendor?.trim() || undefined,
+      currency: (body.currency || existing.currency || 'KES').toUpperCase(),
+      status: body.status || existing.status || 'paid',
+      paymentMethod: body.paymentMethod?.trim() || undefined,
+      reference: body.reference?.trim() || undefined,
+      receiptUrl: body.receiptUrl?.trim() || undefined,
+      notes: body.notes?.trim() || undefined,
+      recordedByUserId: existing.recordedByUserId || userId,
+    },
+  };
+};
+
+const parseTaxRecordPayload = (body, userId, existing = {}) => {
+  const title = body.title === undefined ? existing.title : body.title?.trim();
+  const taxType = body.taxType || existing.taxType;
+  const treatment = body.treatment || existing.treatment || 'payable';
+  const amountDue = body.amountDue === undefined || body.amountDue === ''
+    ? existing.amountDue
+    : Number(body.amountDue);
+  const amountPaid = body.amountPaid === undefined || body.amountPaid === ''
+    ? existing.amountPaid ?? 0
+    : Number(body.amountPaid);
+  const periodStart = parseOptionalDate(body.periodStart, existing.periodStart);
+  const periodEnd = parseOptionalDate(body.periodEnd, existing.periodEnd);
+  const dueDate = parseOptionalDate(body.dueDate, existing.dueDate);
+  const paymentDate = parseOptionalDate(body.paymentDate, existing.paymentDate);
+  const affectsMarginInput = parseBoolean(
+    body.affectsMargin,
+    existing.affectsMargin ?? MARGIN_AFFECTING_TAX_TYPES.has(taxType)
+  );
+  const affectsMargin = treatment === 'credit' ? false : affectsMarginInput;
+
+  if (!title) return { error: 'Tax record title is required.' };
+  if (!PLATFORM_TAX_TYPES.includes(taxType)) return { error: 'Invalid tax type.' };
+  if (!['payable', 'credit'].includes(treatment)) return { error: 'Invalid tax treatment.' };
+  if (body.status && !['pending', 'paid', 'overdue', 'cancelled'].includes(body.status)) return { error: 'Invalid tax status.' };
+  if (!Number.isFinite(amountDue) || amountDue < 0) return { error: 'Tax amount due must be a non-negative number.' };
+  if (!Number.isFinite(amountPaid) || amountPaid < 0) return { error: 'Tax amount paid must be a non-negative number.' };
+  if (amountPaid > amountDue) return { error: 'Tax amount paid cannot exceed the amount due.' };
+  if (periodStart && Number.isNaN(periodStart.getTime())) return { error: 'Invalid tax period start date.' };
+  if (periodEnd && Number.isNaN(periodEnd.getTime())) return { error: 'Invalid tax period end date.' };
+  if (dueDate && Number.isNaN(dueDate.getTime())) return { error: 'Invalid tax due date.' };
+  if (paymentDate && Number.isNaN(paymentDate.getTime())) return { error: 'Invalid tax payment date.' };
+  if (periodStart && periodEnd && periodStart > periodEnd) return { error: 'Tax period start date cannot be after end date.' };
+
+  return {
+    taxRecord: {
+      title,
+      taxType,
+      treatment,
+      periodStart,
+      periodEnd,
+      dueDate,
+      amountDue,
+      amountPaid,
+      affectsMargin,
+      currency: (body.currency || existing.currency || 'KES').toUpperCase(),
+      status: body.status || existing.status || (amountPaid >= amountDue ? 'paid' : 'pending'),
+      paymentDate,
+      reference: body.reference?.trim() || undefined,
+      attachmentUrl: body.attachmentUrl?.trim() || undefined,
+      notes: body.notes?.trim() || undefined,
+      recordedByUserId: existing.recordedByUserId || userId,
+    },
+  };
 };
 
 // ── GET /api/v1/admin/stats ──────────────────────────────────────────────────
@@ -636,6 +829,495 @@ export const getSmsAnalytics = asyncHandler(async (req, res) => {
   return sendSuccess(res, { term, academicYear, schools: stats });
 });
 
+// ── Pricing Agreements ───────────────────────────────────────────────────────
+
+/**
+ * PATCH /api/v1/admin/schools/:id/pricing-agreement
+ * Sets or disables negotiated pricing for one school.
+ */
+export const updateSchoolPricingAgreement = asyncHandler(async (req, res) => {
+  const school = await School.findById(req.params.id);
+  if (!school) return sendError(res, 'School not found.', 404);
+
+  const parsed = normalisePricingAgreement(req.body, req.user._id);
+  if (parsed.error) return sendError(res, parsed.error, 400);
+
+  school.pricingAgreement = parsed.agreement;
+  await school.save();
+  await bustSchoolSubCache(school._id);
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.UPDATE,
+    resource: AUDIT_RESOURCES.SCHOOL,
+    resourceId: school._id,
+    meta: {
+      type: 'pricing_agreement',
+      enabled: school.pricingAgreement.enabled,
+      baseFee: school.pricingAgreement.baseFee,
+      perStudentRate: school.pricingAgreement.perStudentRate,
+    },
+  });
+
+  return sendSuccess(res, {
+    message: school.pricingAgreement.enabled
+      ? 'School pricing agreement saved.'
+      : 'School pricing agreement disabled.',
+    school,
+  });
+});
+
+/**
+ * PATCH /api/v1/admin/groups/:id/pricing-agreement
+ * Sets or disables negotiated pricing for a billing group.
+ */
+export const updateGroupPricingAgreement = asyncHandler(async (req, res) => {
+  const group = await SchoolGroup.findById(req.params.id);
+  if (!group) return sendError(res, 'Group not found.', 404);
+
+  const parsed = normalisePricingAgreement(req.body, req.user._id);
+  if (parsed.error) return sendError(res, parsed.error, 400);
+
+  group.pricingAgreement = parsed.agreement;
+  await group.save();
+
+  const schools = await School.find({ groupId: group._id }).select('_id');
+  await Promise.all(schools.map((school) => bustSchoolSubCache(school._id)));
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.UPDATE,
+    resource: 'school_group',
+    resourceId: group._id,
+    meta: {
+      type: 'pricing_agreement',
+      enabled: group.pricingAgreement.enabled,
+      baseFee: group.pricingAgreement.baseFee,
+      perStudentRate: group.pricingAgreement.perStudentRate,
+      affectedSchools: schools.length,
+    },
+  });
+
+  return sendSuccess(res, {
+    message: group.pricingAgreement.enabled
+      ? 'Group pricing agreement saved.'
+      : 'Group pricing agreement disabled.',
+    group,
+  });
+});
+
+// ── Financial Management ─────────────────────────────────────────────────────
+
+/**
+ * GET /api/v1/admin/finance/summary
+ * Platform revenue, expenses, and net position for the selected period.
+ */
+export const getFinanceSummary = asyncHandler(async (req, res) => {
+  const revenueMatch = {
+    status: 'completed',
+    ...dateRangeFilter('paidAt', req.query),
+  };
+  const pendingMatch = {
+    status: { $in: ['pending', 'processing'] },
+    ...dateRangeFilter('createdAt', req.query),
+  };
+  const expenseMatch = {
+    status: 'paid',
+    ...dateRangeFilter('paymentDate', req.query),
+  };
+  const taxMatch = {
+    status: { $ne: 'cancelled' },
+    ...dateRangeFilter('dueDate', req.query),
+  };
+
+  const [
+    revenue,
+    pendingRevenue,
+    expenses,
+    outputVat,
+    inputVat,
+    taxGroups,
+    expensesByCategory,
+    recentPayments,
+    recentExpenses,
+  ] = await Promise.all([
+    SubscriptionPayment.aggregate([
+      { $match: revenueMatch },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
+    SubscriptionPayment.aggregate([
+      { $match: pendingMatch },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
+    PlatformExpense.aggregate([
+      { $match: expenseMatch },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
+    SubscriptionPayment.aggregate([
+      { $match: revenueMatch },
+      { $group: { _id: null, total: { $sum: '$vatAmount' }, taxableSales: { $sum: '$subtotalExVat' }, count: { $sum: 1 } } },
+    ]),
+    PlatformExpense.aggregate([
+      { $match: expenseMatch },
+      { $group: { _id: null, total: { $sum: '$vatAmount' }, taxablePurchases: { $sum: { $subtract: ['$amount', '$vatAmount'] } }, count: { $sum: 1 } } },
+    ]),
+    PlatformTaxRecord.aggregate([
+      { $match: taxMatch },
+      {
+        $group: {
+          _id: {
+            taxType: '$taxType',
+            treatment: '$treatment',
+            affectsMargin: '$affectsMargin',
+          },
+          amountDue: { $sum: '$amountDue' },
+          amountPaid: { $sum: '$amountPaid' },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { '_id.taxType': 1 } },
+    ]),
+    PlatformExpense.aggregate([
+      { $match: expenseMatch },
+      { $group: { _id: '$category', total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      { $sort: { total: -1 } },
+    ]),
+    SubscriptionPayment.find(revenueMatch)
+      .sort({ paidAt: -1, createdAt: -1 })
+      .limit(8)
+      .select('-paystackRawResponse')
+      .populate('schoolId', 'name email')
+      .lean(),
+    PlatformExpense.find(expenseMatch)
+      .sort({ paymentDate: -1, createdAt: -1 })
+      .limit(8)
+      .populate('recordedByUserId', 'firstName lastName')
+      .lean(),
+  ]);
+
+  const revenueTotal = revenue[0]?.total ?? 0;
+  const expensesTotal = expenses[0]?.total ?? 0;
+  const outputVatTotal = outputVat[0]?.total ?? 0;
+  const inputVatTotal = inputVat[0]?.total ?? 0;
+  const vatDue = Math.max(0, outputVatTotal - inputVatTotal);
+  const vatCredit = Math.max(0, inputVatTotal - outputVatTotal);
+  const taxableSales = outputVat[0]?.taxableSales ?? 0;
+  const taxablePurchases = inputVat[0]?.taxablePurchases ?? 0;
+  const operatingMarginExVat = taxableSales - taxablePurchases;
+  const taxableProfitEstimate = Math.max(0, operatingMarginExVat);
+  const corporationTaxEstimate = Math.round(taxableProfitEstimate * DEFAULT_CORPORATE_TAX_RATE);
+
+  const payableTaxGroups = taxGroups.filter((group) => group._id.treatment === 'payable');
+  const creditTaxGroups = taxGroups.filter((group) => group._id.treatment === 'credit');
+  const taxCredits = creditTaxGroups.reduce((sum, group) => sum + group.amountDue, 0);
+  const incomeTaxPrepayments = payableTaxGroups.reduce((sum, group) => {
+    if (!INCOME_TAX_CREDIT_TYPES.has(group._id.taxType)) return sum;
+    return sum + group.amountPaid;
+  }, 0);
+  const corporationTaxCredits = incomeTaxPrepayments + taxCredits;
+  const corporationTaxOutstanding = Math.max(0, corporationTaxEstimate - corporationTaxCredits);
+  const recordedVatPaid = payableTaxGroups.reduce((sum, group) => (
+    group._id.taxType === 'vat' ? sum + group.amountPaid : sum
+  ), 0);
+  const recordedOtherTaxes = payableTaxGroups.filter((group) => !COMPUTED_TAX_TYPES.has(group._id.taxType));
+  const recordedOtherTaxesDue = recordedOtherTaxes.reduce((sum, group) => sum + group.amountDue, 0);
+  const recordedOtherTaxesPaid = recordedOtherTaxes.reduce((sum, group) => sum + group.amountPaid, 0);
+  const recordedOtherTaxesOutstanding = recordedOtherTaxes.reduce((sum, group) => (
+    sum + Math.max(0, group.amountDue - group.amountPaid)
+  ), 0);
+  const marginRecordedTaxesDue = recordedOtherTaxes.reduce((sum, group) => (
+    group._id.affectsMargin ? sum + group.amountDue : sum
+  ), 0);
+  const passThroughTaxesDue = recordedOtherTaxesDue - marginRecordedTaxesDue;
+  const totalTaxDue = vatDue + corporationTaxEstimate + recordedOtherTaxesDue;
+  const marginTaxDue = vatDue + corporationTaxEstimate + marginRecordedTaxesDue;
+  const finalMarginAfterVat = revenueTotal - expensesTotal - vatDue;
+  const finalMarginAfterTaxes = revenueTotal - expensesTotal - marginTaxDue;
+  const taxRows = [
+    {
+      taxType: 'vat',
+      label: TAX_LABELS.vat,
+      source: 'calculated',
+      treatment: 'payable',
+      affectsMargin: true,
+      amountDue: vatDue,
+      amountPaid: recordedVatPaid,
+      outstanding: Math.max(0, vatDue - recordedVatPaid),
+      note: 'Calculated as output VAT less input VAT.',
+    },
+    {
+      taxType: 'corporation_tax',
+      label: TAX_LABELS.corporation_tax,
+      source: 'estimated',
+      treatment: 'payable',
+      affectsMargin: true,
+      amountDue: corporationTaxEstimate,
+      amountPaid: corporationTaxCredits,
+      outstanding: corporationTaxOutstanding,
+      note: 'Estimated from operating margin ex VAT before accountant adjustments.',
+    },
+    ...recordedOtherTaxes.map((group) => ({
+      taxType: group._id.taxType,
+      label: TAX_LABELS[group._id.taxType] || group._id.taxType,
+      source: 'recorded',
+      treatment: 'payable',
+      affectsMargin: Boolean(group._id.affectsMargin),
+      amountDue: group.amountDue,
+      amountPaid: group.amountPaid,
+      outstanding: Math.max(0, group.amountDue - group.amountPaid),
+      count: group.count,
+    })),
+    ...creditTaxGroups.map((group) => ({
+      taxType: group._id.taxType,
+      label: `${TAX_LABELS[group._id.taxType] || group._id.taxType} credit`,
+      source: 'recorded',
+      treatment: 'credit',
+      affectsMargin: false,
+      amountDue: -group.amountDue,
+      amountPaid: 0,
+      outstanding: -group.amountDue,
+      count: group.count,
+    })),
+  ];
+
+  return sendSuccess(res, {
+    summary: {
+      revenue: revenueTotal,
+      revenueCount: revenue[0]?.count ?? 0,
+      pendingRevenue: pendingRevenue[0]?.total ?? 0,
+      pendingRevenueCount: pendingRevenue[0]?.count ?? 0,
+      expenses: expensesTotal,
+      expenseCount: expenses[0]?.count ?? 0,
+      net: revenueTotal - expensesTotal,
+      netAfterMarginTaxes: finalMarginAfterTaxes,
+      currency: 'KES',
+    },
+    taxes: {
+      vatRate: DEFAULT_VAT_RATE,
+      corporationTaxRate: DEFAULT_CORPORATE_TAX_RATE,
+      outputVat: outputVatTotal,
+      inputVat: inputVatTotal,
+      vatDue,
+      vatPaid: recordedVatPaid,
+      vatOutstanding: Math.max(0, vatDue - recordedVatPaid),
+      vatCredit,
+      taxableSales,
+      taxablePurchases,
+      taxableProfitEstimate,
+      corporationTaxEstimate,
+      corporationTaxCredits,
+      corporationTaxOutstanding,
+      recordedOtherTaxesDue,
+      recordedOtherTaxesPaid,
+      recordedOtherTaxesOutstanding,
+      marginRecordedTaxesDue,
+      passThroughTaxesDue,
+      totalTaxDue,
+      marginTaxDue,
+      taxRows,
+      dueDateNote: 'VAT return and payment are due by the 20th day of the following month.',
+    },
+    margins: {
+      operatingMarginExVat,
+      operatingMarginRate: taxableSales > 0
+        ? Math.round((operatingMarginExVat / taxableSales) * 10000) / 100
+        : 0,
+      finalMarginAfterVat,
+      finalMarginRate: revenueTotal > 0
+        ? Math.round((finalMarginAfterVat / revenueTotal) * 10000) / 100
+        : 0,
+      finalMarginAfterTaxes,
+      finalMarginAfterTaxesRate: revenueTotal > 0
+        ? Math.round((finalMarginAfterTaxes / revenueTotal) * 10000) / 100
+        : 0,
+    },
+    expensesByCategory,
+    recentPayments,
+    recentExpenses,
+  });
+});
+
+/**
+ * GET /api/v1/admin/finance/payments
+ * Lists platform subscription payments with frozen invoice snapshots.
+ */
+export const listFinancePayments = asyncHandler(async (req, res) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.schoolId) filter.schoolId = req.query.schoolId;
+  Object.assign(filter, dateRangeFilter(req.query.status === 'completed' ? 'paidAt' : 'createdAt', req.query));
+
+  const total = await SubscriptionPayment.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const payments = await SubscriptionPayment.find(filter)
+    .sort({ paidAt: -1, createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .select('-paystackRawResponse')
+    .populate('schoolId', 'name email county groupId')
+    .populate('initiatedByUserId', 'firstName lastName email')
+    .lean();
+
+  return sendSuccess(res, { payments, meta });
+});
+
+/**
+ * GET /api/v1/admin/finance/expenses
+ */
+export const listPlatformExpenses = asyncHandler(async (req, res) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.category) filter.category = req.query.category;
+  Object.assign(filter, dateRangeFilter('paymentDate', req.query));
+
+  const total = await PlatformExpense.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const expenses = await PlatformExpense.find(filter)
+    .sort({ paymentDate: -1, createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('recordedByUserId', 'firstName lastName email')
+    .lean();
+
+  return sendSuccess(res, { expenses, meta });
+});
+
+/**
+ * POST /api/v1/admin/finance/expenses
+ */
+export const createPlatformExpense = asyncHandler(async (req, res) => {
+  const parsed = parseExpensePayload(req.body, req.user._id);
+  if (parsed.error) return sendError(res, parsed.error, 400);
+
+  const expense = await PlatformExpense.create(parsed.expense);
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.CREATE,
+    resource: 'platform_expense',
+    resourceId: expense._id,
+    meta: { amount: expense.amount, category: expense.category, status: expense.status },
+  });
+
+  return sendSuccess(res, { expense, message: 'Expense recorded.' }, 201);
+});
+
+/**
+ * PATCH /api/v1/admin/finance/expenses/:id
+ */
+export const updatePlatformExpense = asyncHandler(async (req, res) => {
+  const existing = await PlatformExpense.findById(req.params.id);
+  if (!existing) return sendError(res, 'Expense not found.', 404);
+
+  const parsed = parseExpensePayload(req.body, req.user._id, existing);
+  if (parsed.error) return sendError(res, parsed.error, 400);
+
+  Object.assign(existing, parsed.expense);
+  await existing.save();
+
+  return sendSuccess(res, { expense: existing });
+});
+
+/**
+ * DELETE /api/v1/admin/finance/expenses/:id
+ */
+export const deletePlatformExpense = asyncHandler(async (req, res) => {
+  const expense = await PlatformExpense.findById(req.params.id);
+  if (!expense) return sendError(res, 'Expense not found.', 404);
+
+  await expense.deleteOne();
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.DELETE,
+    resource: 'platform_expense',
+    resourceId: expense._id,
+    meta: { amount: expense.amount, category: expense.category },
+  });
+
+  return sendSuccess(res, { message: 'Expense deleted.' });
+});
+
+/**
+ * GET /api/v1/admin/finance/taxes
+ */
+export const listPlatformTaxRecords = asyncHandler(async (req, res) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.taxType) filter.taxType = req.query.taxType;
+  if (req.query.treatment) filter.treatment = req.query.treatment;
+  Object.assign(filter, dateRangeFilter('dueDate', req.query));
+
+  const total = await PlatformTaxRecord.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const taxRecords = await PlatformTaxRecord.find(filter)
+    .sort({ dueDate: 1, createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('recordedByUserId', 'firstName lastName email')
+    .lean();
+
+  return sendSuccess(res, { taxRecords, meta, taxTypes: PLATFORM_TAX_TYPES });
+});
+
+/**
+ * POST /api/v1/admin/finance/taxes
+ */
+export const createPlatformTaxRecord = asyncHandler(async (req, res) => {
+  const parsed = parseTaxRecordPayload(req.body, req.user._id);
+  if (parsed.error) return sendError(res, parsed.error, 400);
+
+  const taxRecord = await PlatformTaxRecord.create(parsed.taxRecord);
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.CREATE,
+    resource: 'platform_tax_record',
+    resourceId: taxRecord._id,
+    meta: {
+      amountDue: taxRecord.amountDue,
+      taxType: taxRecord.taxType,
+      treatment: taxRecord.treatment,
+      status: taxRecord.status,
+    },
+  });
+
+  return sendSuccess(res, { taxRecord, message: 'Tax record saved.' }, 201);
+});
+
+/**
+ * PATCH /api/v1/admin/finance/taxes/:id
+ */
+export const updatePlatformTaxRecord = asyncHandler(async (req, res) => {
+  const existing = await PlatformTaxRecord.findById(req.params.id);
+  if (!existing) return sendError(res, 'Tax record not found.', 404);
+
+  const parsed = parseTaxRecordPayload(req.body, req.user._id, existing);
+  if (parsed.error) return sendError(res, parsed.error, 400);
+
+  Object.assign(existing, parsed.taxRecord);
+  await existing.save();
+
+  return sendSuccess(res, { taxRecord: existing });
+});
+
+/**
+ * DELETE /api/v1/admin/finance/taxes/:id
+ */
+export const deletePlatformTaxRecord = asyncHandler(async (req, res) => {
+  const taxRecord = await PlatformTaxRecord.findById(req.params.id);
+  if (!taxRecord) return sendError(res, 'Tax record not found.', 404);
+
+  await taxRecord.deleteOne();
+
+  logAction(req, {
+    action: AUDIT_ACTIONS.DELETE,
+    resource: 'platform_tax_record',
+    resourceId: taxRecord._id,
+    meta: { amountDue: taxRecord.amountDue, taxType: taxRecord.taxType },
+  });
+
+  return sendSuccess(res, { message: 'Tax record deleted.' });
+});
+
 // ── School Groups ─────────────────────────────────────────────────────────────
 
 /**
@@ -643,18 +1325,25 @@ export const getSmsAnalytics = asyncHandler(async (req, res) => {
  * Create a new billing group.
  */
 export const createGroup = asyncHandler(async (req, res) => {
-  const { name, notes, contactPerson, contactEmail } = req.body;
+  const { name, notes, contactPerson, contactEmail, pricingAgreement } = req.body;
   if (!name?.trim()) return sendError(res, 'Group name is required.', 400);
+
+  let parsedPricing = null;
+  if (pricingAgreement) {
+    parsedPricing = normalisePricingAgreement(pricingAgreement, req.user._id);
+    if (parsedPricing.error) return sendError(res, parsedPricing.error, 400);
+  }
 
   const group = await SchoolGroup.create({
     name: name.trim(),
     notes,
     contactPerson,
     contactEmail,
+    ...(parsedPricing ? { pricingAgreement: parsedPricing.agreement } : {}),
     createdBy: req.user._id,
   });
 
-  return sendSuccess(res, { group }, 'Group created.', 201);
+  return sendSuccess(res, { group, message: 'Group created.' }, 201);
 });
 
 /**
@@ -725,7 +1414,7 @@ export const getGroup = asyncHandler(async (req, res) => {
  * Update group metadata.
  */
 export const updateGroup = asyncHandler(async (req, res) => {
-  const { name, notes, contactPerson, contactEmail } = req.body;
+  const { name, notes, contactPerson, contactEmail, pricingAgreement } = req.body;
   const group = await SchoolGroup.findById(req.params.id);
   if (!group) return sendError(res, 'Group not found.', 404);
 
@@ -733,8 +1422,17 @@ export const updateGroup = asyncHandler(async (req, res) => {
   if (notes !== undefined) group.notes = notes;
   if (contactPerson !== undefined) group.contactPerson = contactPerson;
   if (contactEmail !== undefined) group.contactEmail = contactEmail;
+  if (pricingAgreement !== undefined) {
+    const parsedPricing = normalisePricingAgreement(pricingAgreement, req.user._id);
+    if (parsedPricing.error) return sendError(res, parsedPricing.error, 400);
+    group.pricingAgreement = parsedPricing.agreement;
+  }
 
   await group.save();
+  if (pricingAgreement !== undefined) {
+    const schools = await School.find({ groupId: group._id }).select('_id');
+    await Promise.all(schools.map((school) => bustSchoolSubCache(school._id)));
+  }
   return sendSuccess(res, { group });
 });
 

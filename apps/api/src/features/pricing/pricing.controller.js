@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { FEATURE_ADDONS, FEATURE_ADDON_PRICING } from '../../constants/index.js';
+import { DEFAULT_VAT_RATE } from '../subscriptions/pricing.js';
 
 const BASE_FEE = 12000;
-const PER_STUDENT_RATE = 50;
+const PER_STUDENT_RATE = 55;
 const SCHOOL_FEE_ASSUMPTION = 10000; // KES per student per term (for % calc)
 
 const MULTIPLIERS = {
@@ -51,7 +52,9 @@ export const calculatePrice = (req, res) => {
     0
   );
   const subtotal = BASE_FEE + students * PER_STUDENT_RATE + addOnsPerTerm;
-  const periodTotal = subtotal * multiplier;
+  const subtotalExVat = Math.round(subtotal * multiplier);
+  const vatAmount = Math.round(subtotalExVat * DEFAULT_VAT_RATE);
+  const periodTotal = subtotalExVat + vatAmount;
 
   const costPerStudentPerTerm = subtotal / students;
   const pctOfFeeIncome = (subtotal / (students * SCHOOL_FEE_ASSUMPTION)) * 100;
@@ -75,7 +78,10 @@ export const calculatePrice = (req, res) => {
         pricePerTerm: FEATURE_ADDON_PRICING[name] ?? 0,
       })),
       subtotal: Math.round(subtotal),
+      subtotalExVat,
       multiplier,
+      vatRate: DEFAULT_VAT_RATE,
+      vatAmount,
       total: Math.round(periodTotal),
     },
     insights: {

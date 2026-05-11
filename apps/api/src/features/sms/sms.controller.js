@@ -12,6 +12,7 @@ import User from '../users/User.model.js';
 import School from '../schools/School.model.js';
 import FeeStructure from '../fees/FeeStructure.model.js';
 import Payment from '../fees/Payment.model.js';
+import SubscriptionPayment from '../subscriptions/SubscriptionPayment.model.js';
 import SmsLog from './SmsLog.model.js';
 import SmsDelivery from './SmsDelivery.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
@@ -22,11 +23,12 @@ import { getRedis } from '../../config/redis.js';
 import logger from '../../config/logger.js';
 import {
   SMS_TRIGGER_TYPES, JOB_NAMES, STUDENT_STATUSES,
-  SMS_DELIVERY_STATUS, SMS_CREDIT_PACKS, PAYMENT_STATUSES,
+  SMS_DELIVERY_STATUS, SMS_CREDIT_PACKS, PAYMENT_STATUSES, PLAN_TIERS,
 } from '../../constants/index.js';
 import { paginate } from '../../utils/pagination.js';
 import { normalisePhone, isValidKenyanPhone } from './sms-inbound.controller.js';
 import { getCurrentTermAndYear } from '../../utils/term.js';
+import { DEFAULT_VAT_RATE } from '../subscriptions/pricing.js';
 
 const AT_CHUNK_SIZE = 200; // Africa's Talking recommended batch size
 const MAX_SMS_CHARS = 480;
@@ -585,19 +587,57 @@ export const buyCreditPack = asyncHandler(async (req, res) => {
 
   const reference = `SMS-${String(school._id).slice(-6).toUpperCase()}-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
   const callbackUrl = `${env.CLIENT_URL.replace(/\/+$/, '')}/billing/sms-credits?reference=${reference}`;
+  const packSubtotalExVat = Math.round(pack.amountKes / (1 + DEFAULT_VAT_RATE));
+  const packVatAmount = pack.amountKes - packSubtotalExVat;
 
-  const result = await initializeTransaction({
-    email: school.email,
-    amount: pack.amountKes * 100, // Paystack uses kobo/cents — but KES is already base unit; Paystack KES uses 1 unit = 1 KES
-    reference,
-    callbackUrl,
+  const payment = await SubscriptionPayment.create({
+    schoolId: school._id,
+    initiatedByUserId: req.user._id,
+    merchantReference: reference,
+    status: 'pending',
+    paymentType: 'sms_credits',
+    billingCycle: 'per-term',
+    studentCount: 1,
+    amount: pack.amountKes,
+    subtotalExVat: packSubtotalExVat,
+    vatAmount: packVatAmount,
+    vatRate: DEFAULT_VAT_RATE,
+    currency: 'KES',
+    selectedPlanTier: school.planTier || PLAN_TIERS.STANDARD,
+    description: `${pack.label} SMS credit top-up`,
     metadata: {
-      type:     'sms_credits',
-      packId:   pack.id,
-      credits:  pack.credits,
+      type: 'sms_credits',
+      packId: pack.id,
+      credits: pack.credits,
       schoolId: String(school._id),
     },
   });
+
+  let result;
+  try {
+    result = await initializeTransaction({
+      email: school.email,
+      amount: pack.amountKes,
+      reference,
+      callbackUrl,
+      metadata: {
+        type:     'sms_credits',
+        packId:   pack.id,
+        credits:  pack.credits,
+        schoolId: String(school._id),
+      },
+    });
+  } catch (err) {
+    payment.status = 'failed';
+    payment.paystackRawResponse = { error: err.message, payload: err.payload ?? null };
+    await payment.save();
+    return sendError(res, `Unable to initialize SMS credit checkout: ${err.message}`, 502);
+  }
+
+  payment.checkoutUrl = result.authorization_url;
+  payment.status = 'processing';
+  payment.paystackRawResponse = result;
+  await payment.save();
 
   logger.info('[SMS-CREDITS] Checkout initiated', { schoolId: school._id, packId, credits: pack.credits, amountKes: pack.amountKes });
 

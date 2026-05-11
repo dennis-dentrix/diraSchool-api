@@ -44,9 +44,9 @@ const jsonLd = {
         'Complete CBC school management system for Kenyan schools including attendance, report cards, fee management, and parent portal.',
       offers: {
         '@type': 'Offer',
-        price: '10000',
+        price: '12000',
         priceCurrency: 'KES',
-        description: 'Base fee per term plus KES 50 per enrolled student',
+        description: 'KES 12,000 base fee per term plus KES 55 per enrolled student, plus 16% VAT',
       },
       featureList: [
         'CBC Report Card Generation',
@@ -556,10 +556,10 @@ function PricingTeaser() {
           <div className="flex-1">
             <p className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">Simple pricing</p>
             <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-              KES 12,000 base +<br className="hidden sm:block" /> KES 50 per student per term
+              KES 12,000 base +<br className="hidden sm:block" /> KES 55 per student per term
             </h2>
             <p className="mt-3 text-slate-400 text-sm leading-relaxed max-w-md">
-              Under 1% of what parents pay in school fees — to run your entire school digitally. Billed 3 times a year, when you collect fees.
+              Plus 16% VAT, billed 3 times a year when you collect fees.
               Annual billing saves 10%. No hidden costs, ever.
             </p>
             <div className="mt-5 flex flex-wrap gap-3 text-xs">

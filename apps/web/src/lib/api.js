@@ -135,6 +135,7 @@ export const adminApi = {
   listSchools: (params) => api.get('/admin/schools', { params }),
   getSchool: (id) => api.get(`/admin/schools/${id}`),
   updateSchoolStatus: (id, data) => api.patch(`/admin/schools/${id}/status`, data),
+  updateSchoolPricingAgreement: (id, data) => api.patch(`/admin/schools/${id}/pricing-agreement`, data),
   reviewDeactivationRequest: (id, data) => api.patch(`/admin/schools/${id}/deactivation-request`, data),
   createSchool: (data) => api.post('/schools', data),
   auditLogs: (params) => api.get('/admin/audit-logs', { params }),
@@ -147,8 +148,19 @@ export const adminApi = {
   createGroup: (data) => api.post('/admin/groups', data),
   updateGroup: (id, data) => api.patch(`/admin/groups/${id}`, data),
   deleteGroup: (id) => api.delete(`/admin/groups/${id}`),
+  updateGroupPricingAgreement: (id, data) => api.patch(`/admin/groups/${id}/pricing-agreement`, data),
   addSchoolToGroup: (groupId, schoolId) => api.post(`/admin/groups/${groupId}/schools`, { schoolId }),
   removeSchoolFromGroup: (groupId, schoolId) => api.delete(`/admin/groups/${groupId}/schools/${schoolId}`),
+  financeSummary: (params) => api.get('/admin/finance/summary', { params }),
+  financePayments: (params) => api.get('/admin/finance/payments', { params }),
+  financeExpenses: (params) => api.get('/admin/finance/expenses', { params }),
+  createFinanceExpense: (data) => api.post('/admin/finance/expenses', data),
+  updateFinanceExpense: (id, data) => api.patch(`/admin/finance/expenses/${id}`, data),
+  deleteFinanceExpense: (id) => api.delete(`/admin/finance/expenses/${id}`),
+  financeTaxes: (params) => api.get('/admin/finance/taxes', { params }),
+  createFinanceTax: (data) => api.post('/admin/finance/taxes', data),
+  updateFinanceTax: (id, data) => api.patch(`/admin/finance/taxes/${id}`, data),
+  deleteFinanceTax: (id) => api.delete(`/admin/finance/taxes/${id}`),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────
@@ -328,6 +340,7 @@ export const pricingApi = {
 // ─── Subscription checkout ───────────────────────────────────────────────────
 export const subscriptionsApi = {
   createCheckout: (data) => api.post('/subscriptions/paystack/checkout', data),
+  getPricing: (params) => api.get('/subscriptions/pricing', { params }),
   getStatus: (merchantReference) => api.get(`/subscriptions/paystack/status/${merchantReference}`),
   listPayments: (params) => api.get('/subscriptions/payments', { params }),
 };

@@ -43,9 +43,16 @@ export default function InvoicePage() {
   );
 
   const { payment, school } = data;
-  const schoolName = school?.name ?? user?.school?.name ?? 'John Doe';
+  const invoice = payment.invoiceSnapshot;
+  const invoiceSchool = invoice?.school;
+  const schoolName = invoiceSchool?.name ?? school?.name ?? user?.school?.name ?? 'John Doe';
   const contactName = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || 'John Doe' : 'John Doe';
-  const invoiceNumber = `INV-${String(payment._id ?? reference).slice(-8).toUpperCase()}`;
+  const invoiceNumber = invoice?.invoiceNumber ?? `INV-${String(payment._id ?? reference).slice(-8).toUpperCase()}`;
+  const pricing = invoice?.pricing ?? payment.pricingAgreementSnapshot;
+  const isSmsCredits = (invoice?.paymentType ?? payment.paymentType) === 'sms_credits';
+  const subtotalExVat = invoice?.subtotalExVat ?? payment.subtotalExVat ?? payment.amount;
+  const vatAmount = invoice?.vatAmount ?? payment.vatAmount ?? 0;
+  const vatRate = invoice?.vatRate ?? payment.vatRate ?? 0.16;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -68,8 +75,8 @@ export default function InvoicePage() {
           <div className="text-right">
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1">Invoice</p>
             <p className="text-xl font-bold text-slate-900">{invoiceNumber}</p>
-            {payment.paidAt && (
-              <p className="text-xs text-slate-500 mt-1">{fmtDate(payment.paidAt)}</p>
+            {(invoice?.paidAt || payment.paidAt) && (
+              <p className="text-xs text-slate-500 mt-1">{fmtDate(invoice?.paidAt ?? payment.paidAt)}</p>
             )}
           </div>
         </div>
@@ -79,9 +86,9 @@ export default function InvoicePage() {
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Bill to</p>
           <p className="font-semibold text-slate-900">{schoolName}</p>
           <p className="text-sm text-slate-600">Attn: {contactName}</p>
-          {school?.email && <p className="text-sm text-slate-500">{school.email}</p>}
-          {school?.phone && <p className="text-sm text-slate-500">{school.phone}</p>}
-          {school?.address && <p className="text-sm text-slate-500">{school.address}</p>}
+          {(invoiceSchool?.email || school?.email) && <p className="text-sm text-slate-500">{invoiceSchool?.email ?? school.email}</p>}
+          {(invoiceSchool?.phone || school?.phone) && <p className="text-sm text-slate-500">{invoiceSchool?.phone ?? school.phone}</p>}
+          {(invoiceSchool?.address || school?.address) && <p className="text-sm text-slate-500">{invoiceSchool?.address ?? school.address}</p>}
         </div>
 
         {/* Line items */}
@@ -89,23 +96,40 @@ export default function InvoicePage() {
           <thead>
             <tr className="border-b-2 border-slate-200">
               <th className="text-left py-2 pr-4 font-semibold text-slate-600 text-xs uppercase tracking-wide">Description</th>
-              <th className="text-right py-2 font-semibold text-slate-600 text-xs uppercase tracking-wide">Amount</th>
+              <th className="text-right py-2 font-semibold text-slate-600 text-xs uppercase tracking-wide">Amount ex VAT</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             <tr>
               <td className="py-3 pr-4">
-                <p className="font-medium text-slate-900">DiraSchool Platform Subscription</p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {fmtCycle(payment.billingCycle)} · {payment.studentCount ?? '—'} enrolled students
+                <p className="font-medium text-slate-900">
+                  {isSmsCredits ? 'DiraSchool SMS Credit Top-up' : 'DiraSchool Platform Subscription'}
                 </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {isSmsCredits
+                    ? `${invoice?.metadata?.credits ?? payment.metadata?.credits ?? '—'} SMS credits`
+                    : `${fmtCycle(payment.billingCycle)} · ${payment.studentCount ?? '—'} enrolled students`}
+                </p>
+                {pricing?.source && pricing.source !== 'standard' && (
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Custom pricing: {fmt(pricing.baseFee)} base + {fmt(pricing.perStudentRate)} per student
+                  </p>
+                )}
               </td>
-              <td className="py-3 text-right font-mono text-slate-900">{fmt(payment.amount)}</td>
+              <td className="py-3 text-right font-mono text-slate-900">{fmt(subtotalExVat)}</td>
             </tr>
           </tbody>
           <tfoot>
+            <tr className="border-t border-slate-200">
+              <td className="pt-3 pr-4 text-slate-600">Subtotal ex VAT</td>
+              <td className="pt-3 text-right font-mono text-slate-900">{fmt(subtotalExVat)}</td>
+            </tr>
+            <tr>
+              <td className="pt-2 pr-4 text-slate-600">VAT ({Math.round(vatRate * 100)}%)</td>
+              <td className="pt-2 text-right font-mono text-slate-900">{fmt(vatAmount)}</td>
+            </tr>
             <tr className="border-t-2 border-slate-900">
-              <td className="pt-3 pr-4 font-bold text-slate-900">Total paid</td>
+              <td className="pt-3 pr-4 font-bold text-slate-900">Total paid incl. VAT</td>
               <td className="pt-3 text-right font-bold font-mono text-slate-900 text-base">{fmt(payment.amount)} {payment.currency ?? 'KES'}</td>
             </tr>
           </tfoot>

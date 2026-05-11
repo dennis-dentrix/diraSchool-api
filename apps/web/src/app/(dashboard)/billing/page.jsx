@@ -25,15 +25,20 @@ const BILLING_ROLES = ['school_admin', 'director', 'headteacher'];
 
 // ── Pricing constants (must match apps/api/src/features/subscriptions/subscriptions.controller.js)
 const BASE_FEE = 12000;
-const PER_STUDENT = 50;
+const PER_STUDENT = 55;
+const VAT_RATE = 0.16;
 const MULTIPLIERS = { 'per-term': 1, annual: 2.70, 'multi-year': 2.55 };
 const fmt = (n) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
 
-function calcBill(students, option = 'per-term') {
-  const subtotal = BASE_FEE + students * PER_STUDENT;
+function calcBill(students, option = 'per-term', terms = {}) {
+  const baseFee = Number(terms.baseFee ?? BASE_FEE);
+  const perStudentRate = Number(terms.perStudentRate ?? PER_STUDENT);
+  const subtotal = baseFee + students * perStudentRate;
   const multiplier = MULTIPLIERS[option] ?? 1;
-  const total = Math.round(subtotal * multiplier);
-  return { subtotal, total, multiplier };
+  const subtotalExVat = Math.round(subtotal * multiplier);
+  const vatAmount = Math.round(subtotalExVat * VAT_RATE);
+  const total = subtotalExVat + vatAmount;
+  return { subtotal, subtotalExVat, vatAmount, vatRate: VAT_RATE, total, multiplier, baseFee, perStudentRate };
 }
 
 // ── Status config ────────────────────────────────────────────────────────────
@@ -80,12 +85,12 @@ function StatusBadge({ status }) {
 }
 
 // ── Mini Calculator ──────────────────────────────────────────────────────────
-function BillingCalculator({ currentStudents }) {
+function BillingCalculator({ currentStudents, pricingTerms }) {
   const [students, setStudents] = useState(currentStudents || 100);
   const [option, setOption] = useState('per-term');
 
-  const p = calcBill(students, option);
-  const perTermBaseline = calcBill(students, 'per-term').total;
+  const p = calcBill(students, option, pricingTerms);
+  const perTermBaseline = calcBill(students, 'per-term', pricingTerms).total;
   const saving = option !== 'per-term' ? Math.round(perTermBaseline * 3 - p.total) : null;
 
   return (
@@ -139,20 +144,28 @@ function BillingCalculator({ currentStudents }) {
         {/* Breakdown */}
         <div className="rounded-lg bg-muted/50 p-4 space-y-2 text-sm">
           <div className="flex justify-between text-muted-foreground">
-            <span>Base fee</span><span className="font-mono">KES 12,000</span>
+            <span>Base fee</span><span className="font-mono">{fmt(p.baseFee)}</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
-            <span>{students.toLocaleString()} × KES 50</span>
-            <span className="font-mono">{fmt(students * PER_STUDENT)}</span>
+            <span>{students.toLocaleString()} × {fmt(p.perStudentRate)}</span>
+            <span className="font-mono">{fmt(students * p.perStudentRate)}</span>
           </div>
           {option !== 'per-term' && (
             <div className="flex justify-between text-muted-foreground text-xs pt-1 border-t">
               <span>× {MULTIPLIERS[option]} ({option === 'annual' ? '3 terms, −10%' : '3 terms, −15%'})</span>
-              <span className="font-mono">{fmt(p.total)}</span>
+              <span className="font-mono">{fmt(p.subtotalExVat)}</span>
             </div>
           )}
+          <div className="flex justify-between text-muted-foreground">
+            <span>Subtotal ex VAT</span>
+            <span className="font-mono">{fmt(p.subtotalExVat)}</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>VAT 16%</span>
+            <span className="font-mono">{fmt(p.vatAmount)}</span>
+          </div>
           <div className="flex justify-between font-bold text-base pt-2 border-t">
-            <span>{option === 'per-term' ? 'Per term total' : option === 'annual' ? 'Annual total' : '3-year total'}</span>
+            <span>{option === 'per-term' ? 'Per term total incl. VAT' : option === 'annual' ? 'Annual total incl. VAT' : '3-year total incl. VAT'}</span>
             <span className="font-mono text-primary">{fmt(p.total)}</span>
           </div>
           {saving > 0 && (
@@ -162,7 +175,7 @@ function BillingCalculator({ currentStudents }) {
 
         <div className="flex items-center justify-between pt-1">
           <p className="text-xs text-muted-foreground">
-            Cost per student: <span className="font-semibold text-foreground">{fmt((BASE_FEE + students * PER_STUDENT) / students)}/term</span>
+            Cost per student ex VAT: <span className="font-semibold text-foreground">{fmt(p.subtotal / students)}/term</span>
           </p>
           <Button asChild variant="outline" size="sm">
             <Link href="/pricing" target="_blank">Full pricing guide <ArrowRight className="h-3 w-3 ml-1" /></Link>
@@ -239,9 +252,14 @@ function PaymentHistory() {
                         <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border', cfg.color)}>
                           {cfg.label}
                         </span>
-                        <span className="text-xs text-muted-foreground">{fmtCycle(p.billingCycle)}</span>
-                        {p.studentCount && (
+                        <span className="text-xs text-muted-foreground">
+                          {p.paymentType === 'sms_credits' ? 'SMS Credits' : fmtCycle(p.billingCycle)}
+                        </span>
+                        {p.paymentType !== 'sms_credits' && p.studentCount && (
                           <span className="text-xs text-muted-foreground">· {p.studentCount} students</span>
+                        )}
+                        {p.paymentType === 'sms_credits' && p.metadata?.credits && (
+                          <span className="text-xs text-muted-foreground">· {p.metadata.credits} credits</span>
                         )}
                       </div>
                       <div className="flex items-center gap-4">
@@ -305,13 +323,37 @@ export default function BillingPage() {
 
   const school = schoolData;
   const studentCount = studentsData?.meta?.total ?? studentsData?.pagination?.total ?? 0;
+
+  const { data: pricingData } = useQuery({
+    queryKey: ['billing', 'pricing', studentCount],
+    queryFn: async () => {
+      const r = await subscriptionsApi.getPricing({
+        billingCycle: 'per-term',
+        studentCount: Math.max(studentCount || 0, 1),
+      });
+      return r.data?.data ?? r.data;
+    },
+    enabled: !!school,
+  });
+
+  const pricingTerms = pricingData?.terms ?? {};
+  const effectiveStudentCount = pricingData?.studentCount ?? studentCount;
   const status = school?.subscriptionStatus ?? 'trial';
   const statusCfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.trial;
   const trialExpiry = school?.trialExpiry ? new Date(school.trialExpiry) : null;
   const daysLeft = trialExpiry ? differenceInDays(trialExpiry, new Date()) : null;
   const planTier = school?.planTier ?? 'trial';
 
-  const bill = studentCount > 0 ? calcBill(studentCount, 'per-term') : null;
+  const bill = pricingData?.quote
+    ? {
+        total: pricingData.quote.total,
+        subtotal: pricingData.quote.subtotalPerTerm,
+        subtotalExVat: pricingData.quote.subtotalExVat,
+        vatAmount: pricingData.quote.vatAmount,
+        baseFee: pricingData.quote.baseFee,
+        perStudentRate: pricingData.quote.perStudentRate,
+      }
+    : studentCount > 0 ? calcBill(studentCount, 'per-term', pricingTerms) : null;
   const merchantReference = useMemo(
     () => searchParams.get('reference') || searchParams.get('merchantReference'),
     [searchParams]
@@ -321,7 +363,7 @@ export default function BillingPage() {
     mutationFn: async () => {
       const response = await subscriptionsApi.createCheckout({
         billingCycle: 'per-term',
-        studentCount: Math.max(studentCount || 0, 1),
+        studentCount: Math.max(effectiveStudentCount || studentCount || 0, 1),
         planTier: planTier === 'trial' ? 'standard' : planTier,
       });
       return response.data?.checkout ?? response.data?.data?.checkout;
@@ -449,11 +491,13 @@ export default function BillingPage() {
         {/* Estimated cost */}
         <div className="relative rounded-lg border bg-card pl-5 pr-4 py-3.5 overflow-hidden">
           <div className="absolute left-0 inset-y-0 w-[3px] rounded-l-lg bg-primary" />
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Est. Per Term</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Est. Per Term Incl. VAT</p>
           {bill ? (
             <>
               <p className="font-mono text-2xl font-semibold tabular-nums leading-none text-primary">{fmt(bill.total)}</p>
-              <p className="text-[11px] text-muted-foreground mt-1">{studentCount} students</p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {effectiveStudentCount} students · VAT {fmt(bill.vatAmount ?? 0)}
+              </p>
             </>
           ) : (
             <p className="text-sm text-muted-foreground mt-1">Enroll students to see estimate</p>
@@ -461,9 +505,21 @@ export default function BillingPage() {
         </div>
       </div>
 
+      {pricingTerms.source && pricingTerms.source !== 'standard' && (
+        <div className="rounded-xl border border-ok/25 bg-ok/5 px-4 py-3 text-sm">
+          <p className="font-semibold text-foreground">
+            Custom pricing agreement active
+          </p>
+          <p className="text-muted-foreground mt-0.5">
+            Your invoice uses {fmt(pricingTerms.baseFee)} base + {fmt(pricingTerms.perStudentRate)} per student per term, before 16% VAT
+            {pricingTerms.source === 'group' && pricingTerms.groupName ? ` under ${pricingTerms.groupName}.` : '.'}
+          </p>
+        </div>
+      )}
+
       {/* ── Main content grid ─────────────────────────────────────────────── */}
       <div className="grid gap-5 lg:grid-cols-2">
-        <BillingCalculator currentStudents={studentCount || 100} />
+        <BillingCalculator currentStudents={effectiveStudentCount || 100} pricingTerms={pricingTerms} />
 
         {/* Billing schedule + contact */}
         <div className="space-y-5">
@@ -598,7 +654,7 @@ export default function BillingPage() {
             <div>
               <p className="text-sm font-semibold">How your bill is calculated</p>
               <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                ( KES 12,000 base + students × KES 50 ) × cycle multiplier
+                ( {fmt(pricingTerms.baseFee ?? BASE_FEE)} base + students × {fmt(pricingTerms.perStudentRate ?? PER_STUDENT)} ) × cycle multiplier + 16% VAT
               </p>
             </div>
             <div className="sm:ml-auto flex gap-2 shrink-0">

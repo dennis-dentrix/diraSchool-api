@@ -50,6 +50,31 @@ export const validateEnv = () => {
     // Non-fatal — warn but don't exit, so the server can still start
   }
 
+  if (process.env.NODE_ENV === 'production' && process.env.AT_TEST_NUMBERS) {
+    writeStderr(
+      '\n[ENV ERROR] AT_TEST_NUMBERS must not be set in production.\n' +
+      'It redirects every SMS, including broadcasts, to the test phone numbers.\n'
+    );
+    process.exit(1);
+  }
+
+  if (
+    process.env.NODE_ENV === 'production' &&
+    String(process.env.AT_USERNAME ?? '').toLowerCase() === 'sandbox'
+  ) {
+    writeStderr('\n[ENV ERROR] AT_USERNAME must be your live Africa\'s Talking username in production, not sandbox.\n');
+    process.exit(1);
+  }
+
+  const productionSenderId = process.env.SMS_PLATFORM_SENDER_ID || process.env.AT_SENDER_ID;
+  if (
+    process.env.NODE_ENV === 'production' &&
+    String(productionSenderId ?? '').toLowerCase() === 'sandbox'
+  ) {
+    writeStderr('\n[ENV ERROR] Production SMS sender ID cannot be sandbox. Leave it blank or use an approved sender ID.\n');
+    process.exit(1);
+  }
+
   // DO Spaces — partial config is always a mistake
   const spacesVars = ['DO_SPACES_KEY', 'DO_SPACES_SECRET', 'DO_SPACES_BUCKET', 'DO_SPACES_REGION'];
   const configuredSpacesVars = spacesVars.filter((key) => !!process.env[key]);

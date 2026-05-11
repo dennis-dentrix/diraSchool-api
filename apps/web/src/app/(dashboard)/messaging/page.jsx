@@ -636,7 +636,8 @@ function HistoryTab() {
 }
 
 const MESSAGING_ENABLED = process.env.NEXT_PUBLIC_MESSAGING_ENABLED !== 'false';
-const TEST_NUMBERS = process.env.NEXT_PUBLIC_SMS_TEST_NUMBERS;
+const SHOW_TEST_MODE_BANNER = process.env.NODE_ENV !== 'production';
+const TEST_NUMBERS = SHOW_TEST_MODE_BANNER ? process.env.NEXT_PUBLIC_SMS_TEST_NUMBERS : null;
 
 // ── Coming Soon ───────────────────────────────────────────────────────────────
 function ComingSoon() {

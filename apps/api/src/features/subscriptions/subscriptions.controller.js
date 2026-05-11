@@ -16,21 +16,12 @@ import { logAction } from '../../utils/auditLogger.js';
 import { initializeTransaction, verifyTransaction } from './paystack.service.js';
 import { sendSubscriptionConfirmationEmail } from '../../services/email.service.js';
 import logger from '../../config/logger.js';
-
-const BASE_FEE = 12000;
-const PER_STUDENT_RATE = 50;
-const MULTIPLIERS = {
-  'per-term': 1,
-  annual: 2.70,      // 3 terms × 0.90 = 10% off
-  'multi-year': 2.55, // 3 terms × 0.85 = 15% off per year
-};
-
-const calcAmount = ({ studentCount, billingCycle }) => {
-  const subtotal = BASE_FEE + studentCount * PER_STUDENT_RATE;
-  const multiplier = MULTIPLIERS[billingCycle] ?? 1;
-  const total = Math.round(subtotal * multiplier);
-  return { subtotalExVat: total, vatAmount: 0, total };
-};
+import {
+  calculateSubscriptionAmount,
+  DEFAULT_VAT_RATE,
+  pricingAgreementSnapshot,
+  resolvePricingTermsForSchool,
+} from './pricing.js';
 
 const merchantRef = (schoolId) =>
   `DS-${schoolId.toString().slice(-6).toUpperCase()}-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -45,26 +36,55 @@ const bustSchoolSubCache = async (schoolId) => {
   }
 };
 
-const buildInvoiceSnapshot = (payment, school) => ({
-  invoiceNumber: `INV-${String(payment._id).slice(-8).toUpperCase()}`,
-  issuedAt: payment.paidAt || new Date(),
-  school: {
-    name: school.name,
-    email: school.email,
-    phone: school.phone,
-    address: school.address || null,
-    county: school.county || null,
-    registrationNumber: school.registrationNumber || null,
-  },
-  billingCycle: payment.billingCycle,
-  studentCount: payment.studentCount,
-  subtotalExVat: payment.subtotalExVat,
-  vatAmount: payment.vatAmount,
-  total: payment.amount,
-  currency: payment.currency || 'KES',
-  merchantReference: payment.merchantReference,
-  description: payment.description,
-});
+const buildInvoiceSnapshot = (payment, school) => {
+  const pricing = payment.pricingAgreementSnapshot || {
+    source: payment.pricingSource || 'standard',
+  };
+
+  const isSmsCredits = payment.paymentType === 'sms_credits';
+
+  return {
+    invoiceNumber: `INV-${String(payment._id).slice(-8).toUpperCase()}`,
+    issuedAt: payment.paidAt || new Date(),
+    paidAt: payment.paidAt || null,
+    school: {
+      id: school._id,
+      name: school.name,
+      email: school.email,
+      phone: school.phone,
+      address: school.address || null,
+      county: school.county || null,
+      registrationNumber: school.registrationNumber || null,
+      groupId: school.groupId || null,
+    },
+    billingCycle: payment.billingCycle,
+    studentCount: isSmsCredits ? null : payment.studentCount,
+    subtotalExVat: payment.subtotalExVat,
+    vatAmount: payment.vatAmount,
+    vatRate: payment.vatRate ?? DEFAULT_VAT_RATE,
+    total: payment.amount,
+    currency: payment.currency || 'KES',
+    merchantReference: payment.merchantReference,
+    description: payment.description,
+    paymentType: payment.paymentType || 'subscription',
+    metadata: payment.metadata || {},
+    pricing,
+    payment: {
+      provider: 'paystack',
+      status: payment.status,
+      reference: payment.merchantReference,
+    },
+  };
+};
+
+async function countBillableStudents(school) {
+  if (school.groupId) {
+    const groupSchools = await School.find({ groupId: school.groupId }).select('_id');
+    const groupSchoolIds = groupSchools.map((s) => s._id);
+    return Student.countDocuments({ schoolId: { $in: groupSchoolIds }, status: 'active' });
+  }
+  return Student.countDocuments({ schoolId: school._id, status: 'active' });
+}
 
 const activateSchool = async (payment) => {
   const school = await School.findById(payment.schoolId);
@@ -131,7 +151,9 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
     studentCount = await Student.countDocuments({ schoolId: { $in: groupSchoolIds }, status: 'active' });
   }
 
-  const amounts = calcAmount({ studentCount, billingCycle });
+  const pricingTerms = await resolvePricingTermsForSchool(school);
+  const pricingSnapshot = pricingAgreementSnapshot(pricingTerms);
+  const amounts = calculateSubscriptionAmount({ studentCount, billingCycle, terms: pricingTerms });
   const reference = merchantRef(school._id);
 
   const callbackUrl = `${env.CLIENT_URL.replace(/\/+$/, '')}/billing?reference=${reference}`;
@@ -146,8 +168,11 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
     amount: amounts.total,
     subtotalExVat: amounts.subtotalExVat,
     vatAmount: amounts.vatAmount,
-    currency: 'KES',
+    vatRate: amounts.vatRate,
+    currency: amounts.currency,
     selectedPlanTier: planTier || school.planTier || PLAN_TIERS.STANDARD,
+    pricingSource: pricingTerms.source,
+    pricingAgreementSnapshot: pricingSnapshot,
     description: description || `DiraSchool subscription (${billingCycle})`,
   });
 
@@ -162,6 +187,8 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
         schoolName: school.name,
         billingCycle,
         studentCount,
+        pricingSource: pricingTerms.source,
+        agreementReference: pricingTerms.agreementReference || undefined,
       },
     });
 
@@ -200,6 +227,35 @@ export const createPaystackCheckout = asyncHandler(async (req, res) => {
 });
 
 /**
+ * GET /api/v1/subscriptions/pricing
+ * Returns the authenticated school's effective subscription pricing.
+ */
+export const getSubscriptionPricing = asyncHandler(async (req, res) => {
+  const school = await School.findById(req.user.schoolId);
+  if (!school) return sendError(res, 'School not found.', 404);
+
+  const billingCycle = ['per-term', 'annual', 'multi-year'].includes(req.query.billingCycle)
+    ? req.query.billingCycle
+    : 'per-term';
+
+  let studentCount = parseInt(req.query.studentCount, 10);
+  if (!studentCount || studentCount < 1 || school.groupId) {
+    studentCount = await countBillableStudents(school);
+  }
+  studentCount = Math.max(studentCount || 1, 1);
+
+  const terms = await resolvePricingTermsForSchool(school);
+  const quote = calculateSubscriptionAmount({ studentCount, billingCycle, terms });
+
+  return sendSuccess(res, {
+    billingCycle,
+    studentCount,
+    terms,
+    quote,
+  });
+});
+
+/**
  * GET /api/v1/subscriptions/paystack/status/:merchantReference
  * Verifies the transaction with Paystack and syncs the payment record.
  */
@@ -217,10 +273,20 @@ export const getPaystackStatus = asyncHandler(async (req, res) => {
 
       const paystackStatus = result?.status;
       if (paystackStatus === 'success') {
-        payment.status = 'completed';
-        if (!payment.paidAt) payment.paidAt = new Date();
-        await payment.save();
-        await activateSchool(payment);
+        if (payment.paymentType === 'sms_credits') {
+          if (!payment.paidAt) payment.paidAt = new Date();
+          await payment.save();
+          await handleSmsCreditTopUp({
+            reference: payment.merchantReference,
+            meta: payment.metadata ?? result?.metadata ?? {},
+            data: result,
+          });
+        } else {
+          payment.status = 'completed';
+          if (!payment.paidAt) payment.paidAt = new Date();
+          await payment.save();
+          await activateSchool(payment);
+        }
       } else if (['failed', 'abandoned'].includes(paystackStatus)) {
         payment.status = 'failed';
         await payment.save();
@@ -312,7 +378,7 @@ export const paystackWebhook = asyncHandler(async (req, res) => {
   // SMS credit top-up — handled separately from subscription payments
   const meta = data?.metadata ?? {};
   if (meta.type === 'sms_credits') {
-    await handleSmsCreditTopUp({ reference, meta });
+    await handleSmsCreditTopUp({ reference, meta, data });
     return;
   }
 
@@ -327,16 +393,34 @@ export const paystackWebhook = asyncHandler(async (req, res) => {
   await activateSchool(payment);
 });
 
-async function handleSmsCreditTopUp({ reference, meta }) {
+async function handleSmsCreditTopUp({ reference, meta, data }) {
   const { schoolId, credits, packId } = meta;
   if (!schoolId || !credits) return;
   try {
-    await School.findByIdAndUpdate(schoolId, {
+    const payment = await SubscriptionPayment.findOne({ merchantReference: reference });
+    if (payment?.status === 'completed') {
+      logger.info('[SMS-CREDITS] Duplicate completed top-up skipped', { schoolId, packId, credits, reference });
+      return;
+    }
+
+    const school = await School.findByIdAndUpdate(schoolId, {
       $inc: {
         'smsCredits.purchasedRemaining': Number(credits),
         'smsCredits.totalPurchased':     Number(credits),
       },
-    });
+    }, { new: true });
+
+    if (payment) {
+      payment.status = 'completed';
+      if (!payment.paidAt) payment.paidAt = new Date();
+      payment.paystackRawResponse = data ?? payment.paystackRawResponse;
+      payment.metadata = { ...(payment.metadata ?? {}), ...meta };
+      if (school && !payment.invoiceSnapshot) {
+        payment.invoiceSnapshot = buildInvoiceSnapshot(payment, school);
+      }
+      await payment.save();
+    }
+
     logger.info('[SMS-CREDITS] Top-up applied', { schoolId, packId, credits, reference });
   } catch (err) {
     logger.error('[SMS-CREDITS] Failed to apply top-up', { schoolId, reference, err: err.message });

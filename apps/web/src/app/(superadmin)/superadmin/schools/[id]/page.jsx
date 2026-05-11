@@ -40,12 +40,23 @@ function InfoRow({ label, value }) {
   );
 }
 
+const pricingToForm = (pricing = {}) => ({
+  enabled: Boolean(pricing.enabled),
+  baseFee: pricing.baseFee ?? 12000,
+  perStudentRate: pricing.perStudentRate ?? 55,
+  agreementReference: pricing.agreementReference ?? '',
+  startsAt: pricing.startsAt ? new Date(pricing.startsAt).toISOString().slice(0, 10) : '',
+  expiresAt: pricing.expiresAt ? new Date(pricing.expiresAt).toISOString().slice(0, 10) : '',
+  notes: pricing.notes ?? '',
+});
+
 export default function SchoolDetailPage() {
   const params = useParams();
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id;
   const router = useRouter();
   const queryClient = useQueryClient();
   const [subForm, setSubForm] = useState(null);
+  const [pricingForm, setPricingForm] = useState(pricingToForm());
   const [deactivationReviewNote, setDeactivationReviewNote] = useState('');
 
   // Use the admin endpoint — returns staff breakdown too
@@ -59,6 +70,7 @@ export default function SchoolDetailPage() {
         subscriptionStatus: s?.subscriptionStatus ?? 'active',
         trialExpiry: s?.trialExpiry ? new Date(s.trialExpiry).toISOString().slice(0, 10) : '',
       });
+      setPricingForm(pricingToForm(s?.pricingAgreement));
       return s;
     },
     enabled: !!id,
@@ -77,6 +89,16 @@ export default function SchoolDetailPage() {
     mutationFn: (data) => adminApi.updateSchoolStatus(id, data),
     onSuccess: () => {
       toast.success('Subscription updated');
+      queryClient.invalidateQueries({ queryKey: ['sa-school', id] });
+      queryClient.invalidateQueries({ queryKey: ['sa-schools-list'] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: updatePricing, isPending: pricingPending } = useMutation({
+    mutationFn: (data) => adminApi.updateSchoolPricingAgreement(id, data),
+    onSuccess: () => {
+      toast.success('Pricing agreement updated');
       queryClient.invalidateQueries({ queryKey: ['sa-school', id] });
       queryClient.invalidateQueries({ queryKey: ['sa-schools-list'] });
     },
@@ -288,54 +310,144 @@ export default function SchoolDetailPage() {
 
         {/* ── Subscription ──────────────────────────────────────────────────── */}
         <TabsContent value="subscription">
-          <Card className="max-w-sm">
-            <CardHeader><CardTitle className="text-base">Update Subscription</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              {subForm && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label>Plan Tier</Label>
-                    <Select value={subForm.planTier} onValueChange={(v) => setSubForm((p) => ({ ...p, planTier: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="trial">Trial</SelectItem>
-                        <SelectItem value="basic">Basic</SelectItem>
-                        <SelectItem value="standard">Standard</SelectItem>
-                        <SelectItem value="premium">Premium</SelectItem>
-                      </SelectContent>
-                    </Select>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader><CardTitle className="text-base">Update Subscription</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                {subForm && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label>Plan Tier</Label>
+                      <Select value={subForm.planTier} onValueChange={(v) => setSubForm((p) => ({ ...p, planTier: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="trial">Trial</SelectItem>
+                          <SelectItem value="basic">Basic</SelectItem>
+                          <SelectItem value="standard">Standard</SelectItem>
+                          <SelectItem value="premium">Premium</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Subscription Status</Label>
+                      <Select value={subForm.subscriptionStatus} onValueChange={(v) => setSubForm((p) => ({ ...p, subscriptionStatus: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="trial">Trial</SelectItem>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="suspended">Suspended</SelectItem>
+                          <SelectItem value="expired">Expired</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Trial Expiry Date</Label>
+                      <input
+                        type="date"
+                        value={subForm.trialExpiry}
+                        onChange={(e) => setSubForm((p) => ({ ...p, trialExpiry: e.target.value }))}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                    </div>
+                    <Button
+                      onClick={() => updateSub({ planTier: subForm.planTier, subscriptionStatus: subForm.subscriptionStatus, trialExpiry: subForm.trialExpiry || undefined })}
+                      disabled={isPending}
+                    >
+                      Save Changes
+                    </Button>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Custom Pricing Agreement</CardTitle>
+                <CardDescription>School-specific pricing overrides group pricing and public pricing.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">Agreement active</p>
+                    <p className="text-xs text-muted-foreground">Use negotiated terms for future invoices.</p>
                   </div>
+                  <input
+                    type="checkbox"
+                    checked={pricingForm.enabled}
+                    onChange={(e) => setPricingForm((p) => ({ ...p, enabled: e.target.checked }))}
+                    className="h-4 w-4"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Subscription Status</Label>
-                    <Select value={subForm.subscriptionStatus} onValueChange={(v) => setSubForm((p) => ({ ...p, subscriptionStatus: v }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="trial">Trial</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="suspended">Suspended</SelectItem>
-                        <SelectItem value="expired">Expired</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Trial Expiry Date</Label>
-                    <input
-                      type="date"
-                      value={subForm.trialExpiry}
-                      onChange={(e) => setSubForm((p) => ({ ...p, trialExpiry: e.target.value }))}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    <Label>Base fee per term</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={pricingForm.baseFee}
+                      onChange={(e) => setPricingForm((p) => ({ ...p, baseFee: e.target.value }))}
                     />
                   </div>
-                  <Button
-                    onClick={() => updateSub({ planTier: subForm.planTier, subscriptionStatus: subForm.subscriptionStatus, trialExpiry: subForm.trialExpiry || undefined })}
-                    disabled={isPending}
-                  >
-                    Save Changes
-                  </Button>
-                </>
-              )}
-            </CardContent>
-          </Card>
+                  <div className="space-y-1.5">
+                    <Label>Per student per term</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={pricingForm.perStudentRate}
+                      onChange={(e) => setPricingForm((p) => ({ ...p, perStudentRate: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Agreement reference</Label>
+                  <Input
+                    value={pricingForm.agreementReference}
+                    onChange={(e) => setPricingForm((p) => ({ ...p, agreementReference: e.target.value }))}
+                    placeholder="e.g. MOU-2026-001"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Starts</Label>
+                    <Input
+                      type="date"
+                      value={pricingForm.startsAt}
+                      onChange={(e) => setPricingForm((p) => ({ ...p, startsAt: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Expires</Label>
+                    <Input
+                      type="date"
+                      value={pricingForm.expiresAt}
+                      onChange={(e) => setPricingForm((p) => ({ ...p, expiresAt: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Internal notes</Label>
+                  <Textarea
+                    rows={3}
+                    value={pricingForm.notes}
+                    onChange={(e) => setPricingForm((p) => ({ ...p, notes: e.target.value }))}
+                    placeholder="Record the commercial terms or approval context."
+                  />
+                </div>
+                <Button
+                  onClick={() => updatePricing({
+                    ...pricingForm,
+                    baseFee: Number(pricingForm.baseFee),
+                    perStudentRate: Number(pricingForm.perStudentRate),
+                    startsAt: pricingForm.startsAt || undefined,
+                    expiresAt: pricingForm.expiresAt || undefined,
+                  })}
+                  disabled={pricingPending}
+                >
+                  {pricingPending ? 'Saving…' : 'Save pricing agreement'}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* ── SMS Sender ID ─────────────────────────────────────────────────── */}

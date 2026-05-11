@@ -1,11 +1,11 @@
 export const metadata = {
   title: 'Pricing — DiraSchool CBC School Management System',
   description:
-    'Transparent per-term pricing for Kenyan CBC schools. KES 8,500 base fee plus KES 40 per enrolled student per term. No hidden fees, no tier cliffs. 30-day free trial.',
+    'Transparent per-term pricing for Kenyan CBC schools. KES 12,000 base fee plus KES 55 per enrolled student per term, plus 16% VAT. 30-day free trial.',
   openGraph: {
     title: 'DiraSchool Pricing — Fair, Transparent & CBC-Aligned',
     description:
-      'KES 8,500 base + KES 40 per student per term. Annual billing saves 15%. Calculate your exact price instantly.',
+      'KES 12,000 base + KES 55 per student per term, plus 16% VAT. Annual billing saves 10%. Calculate your exact price instantly.',
     url: 'https://diraschool.com/pricing',
   },
   alternates: { canonical: 'https://diraschool.com/pricing' },
@@ -27,23 +27,23 @@ const jsonLd = {
       {
         '@type': 'Offer',
         name: 'Starter — 100 to 250 students',
-        price: '10000',
+        price: '20300',
         priceCurrency: 'KES',
-        description: 'KES 8,500/term base fee + KES 40 per student. Full CBC features for emerging schools.',
+        description: 'KES 12,000/term base fee + KES 55 per student, plus 16% VAT. Full CBC features for emerging schools.',
       },
       {
         '@type': 'Offer',
         name: 'Growth — 250 to 600 students',
-        price: '10000',
+        price: '29900',
         priceCurrency: 'KES',
-        description: 'KES 8,500/term base fee + KES 40 per student. Most popular plan for expanding Kenyan schools.',
+        description: 'KES 12,000/term base fee + KES 55 per student, plus 16% VAT. Most popular plan for expanding Kenyan schools.',
       },
       {
         '@type': 'Offer',
         name: 'Pro — 600+ students',
-        price: '10000',
+        price: '52200',
         priceCurrency: 'KES',
-        description: 'KES 8,500/term base fee + KES 40 per student. Priority support and advanced analytics for large schools.',
+        description: 'KES 12,000/term base fee + KES 55 per student, plus 16% VAT. Priority support and advanced analytics for large schools.',
       },
     ],
   },
