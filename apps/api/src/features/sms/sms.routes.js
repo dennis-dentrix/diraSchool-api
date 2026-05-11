@@ -18,9 +18,9 @@ import { validateSend, validateBroadcast, validateFeeReminder } from './sms.vali
 
 const router = Router();
 
-// ── Public — Africa's Talking webhooks (no JWT) ───────────────────────────────
+// ── Public — SMS provider webhooks (no JWT) ──────────────────────────────────
 router.post('/inbound', handleInboundSms);
-router.post('/dlr',     handleDlr);       // Delivery report callback from AT
+router.post('/dlr',     handleDlr);       // Delivery report callback from provider
 
 // ── Protected ─────────────────────────────────────────────────────────────────
 router.use(protect, blockIfMustChangePassword);

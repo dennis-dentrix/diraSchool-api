@@ -116,7 +116,7 @@ export default function TermsPage() {
           <p>
             Each school subscription includes a cap of <strong>5 SMS messages per parent per term</strong>.
             This allowance is intended for fee balance reminders and important announcements. SMS messages
-            sent via DiraSchool are delivered through Africa's Talking.
+            sent via DiraSchool are delivered through Celcom Africa or another configured SMS gateway.
           </p>
           <p>
             Schools that require additional SMS messages beyond the included cap may purchase SMS credit

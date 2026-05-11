@@ -16,31 +16,24 @@
  * deduct from the school's purchasedRemaining credit balance atomically.
  * Phones that are capped with no purchased credits are skipped (status: capped).
  *
- * Test mode: AT_TEST_NUMBERS redirects all sends to those numbers.
+ * Test mode: SMS_TEST_NUMBERS redirects all sends to those numbers.
  */
-import AfricasTalking from 'africastalking';
 import { env } from '../../config/env.js';
 import logger from '../../config/logger.js';
 import School from '../../features/schools/School.model.js';
 import SmsLog from '../../features/sms/SmsLog.model.js';
 import SmsDelivery from '../../features/sms/SmsDelivery.model.js';
 import {
+  sendViaConfiguredSmsProvider,
+  smsProviderConfigured,
+  smsProviderName,
+} from '../../features/sms/sms-provider.service.js';
+import {
   SMS_CAP_PER_PARENT_PER_TERM,
   SMS_DELIVERY_STATUS,
   SMS_CREDIT_TYPE,
 } from '../../constants/index.js';
 import { getCurrentTermAndYear } from '../../utils/term.js';
-
-let _smsClient = null;
-function getClient() {
-  if (_smsClient) return _smsClient;
-  if (!env.AT_USERNAME || !env.AT_API_KEY) {
-    throw new Error("Africa's Talking not configured (AT_USERNAME / AT_API_KEY missing).");
-  }
-  const AT = AfricasTalking({ username: env.AT_USERNAME, apiKey: env.AT_API_KEY });
-  _smsClient = AT.SMS;
-  return _smsClient;
-}
 
 async function updateLog(smsLogId, update) {
   if (!smsLogId) return;
@@ -104,9 +97,9 @@ function addSchoolNameIfNeeded(message, schoolName) {
 export const processSmsJob = async (job) => {
   const { to, message, schoolId, trigger, smsLogId, term: jobTerm, academicYear: jobYear } = job.data;
 
-  if (!env.AT_USERNAME || !env.AT_API_KEY) {
+  if (!smsProviderConfigured()) {
     await updateLog(smsLogId, { status: 'failed' });
-    throw new Error("Africa's Talking not configured.");
+    throw new Error(`SMS provider not configured: ${smsProviderName()}.`);
   }
 
   const { term, academicYear } = jobTerm
@@ -116,11 +109,11 @@ export const processSmsJob = async (job) => {
   let allRecipients = Array.isArray(to) ? to : [to];
 
   // ── Test-number redirect ────────────────────────────────────────────────────
-  if (env.AT_TEST_NUMBERS?.length) {
+  if (env.SMS_TEST_NUMBERS?.length) {
     logger.warn('[SMS] TEST MODE — redirecting to test numbers', {
-      originalCount: allRecipients.length, testNumbers: env.AT_TEST_NUMBERS,
+      originalCount: allRecipients.length, testNumbers: env.SMS_TEST_NUMBERS,
     });
-    allRecipients = env.AT_TEST_NUMBERS;
+    allRecipients = env.SMS_TEST_NUMBERS;
   }
 
   if (allRecipients.length === 0) {
@@ -216,16 +209,21 @@ export const processSmsJob = async (job) => {
     return { sent: 0, failed: 0, capped: capped.length };
   }
 
-  // ── Send to Africa's Talking ─────────────────────────────────────────────
-  let atResults = [];
+  // ── Send through configured SMS provider ─────────────────────────────────
+  let providerResults = [];
+  let providerName = smsProviderName();
   try {
-    const sms = getClient();
-    const params = { to: toSend, message: outboundMessage };
-    if (senderId) params.from = senderId;
-    const result = await sms.send(params);
-    atResults = result?.SMSMessageData?.Recipients ?? [];
+    const result = await sendViaConfiguredSmsProvider({
+      recipients: toSend,
+      message: outboundMessage,
+      senderId,
+    });
+    providerName = result.provider;
+    providerResults = result.recipients ?? [];
   } catch (err) {
-    logger.error("[SMS] Africa's Talking send failed", { jobId: job.id, err: err.message, schoolId });
+    logger.error('[SMS] Provider send failed', {
+      jobId: job.id, provider: providerName, err: err.message, schoolId,
+    });
     await updateLog(smsLogId, {
       status: 'failed', sentCount: 0, failedCount: toSend.length,
       cappedCount: capped.length, term, academicYear,
@@ -234,8 +232,8 @@ export const processSmsJob = async (job) => {
   }
 
   // ── Persist SmsDelivery per recipient ────────────────────────────────────
-  const deliveryDocs = atResults.map((r) => {
-    const success = r.statusCode === 101;
+  const deliveryDocs = providerResults.map((r) => {
+    const success = r.statusCode === 101 || r.statusCode === 200;
     const phone = toSend.find((p) => p === r.number) ?? r.number;
     return {
       schoolId: schoolObjId,
@@ -257,14 +255,15 @@ export const processSmsJob = async (job) => {
     await SmsDelivery.insertMany(deliveryDocs, { ordered: false });
   }
 
-  const sentCount   = atResults.filter((r) => r.statusCode === 101).length;
-  const failedCount = atResults.length - sentCount;
+  const sentCount = providerResults.filter((r) => r.statusCode === 101 || r.statusCode === 200).length;
+  const failedCount = providerResults.length - sentCount;
 
   if (failedCount > 0) {
-    logger.warn('[SMS] Some recipients failed at AT', {
+    logger.warn('[SMS] Some recipients failed at provider', {
       jobId: job.id,
-      failed: atResults
-        .filter((r) => r.statusCode !== 101)
+      provider: providerName,
+      failed: providerResults
+        .filter((r) => r.statusCode !== 101 && r.statusCode !== 200)
         .map((r) => ({ number: r.number, status: r.status })),
     });
   }
@@ -273,7 +272,7 @@ export const processSmsJob = async (job) => {
   await updateLog(smsLogId, { status, sentCount, failedCount, cappedCount: capped.length, term, academicYear });
 
   logger.info('[SMS] Job completed', {
-    jobId: job.id, sent: sentCount, failed: failedCount, capped: capped.length,
+    jobId: job.id, provider: providerName, sent: sentCount, failed: failedCount, capped: capped.length,
   });
 
   return { sent: sentCount, failed: failedCount, capped: capped.length };

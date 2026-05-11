@@ -10,7 +10,6 @@
  *   - Max 5 verify attempts before the OTP is invalidated
  */
 import crypto from 'node:crypto';
-import AfricasTalking from 'africastalking';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { getRedis } from '../../config/redis.js';
@@ -19,6 +18,11 @@ import logger from '../../config/logger.js';
 import User from '../users/User.model.js';
 import { ROLES } from '../../constants/index.js';
 import { normalisePhone, isValidKenyanPhone } from '../sms/sms-inbound.controller.js';
+import {
+  sendViaConfiguredSmsProvider,
+  smsProviderConfigured,
+  smsProviderName,
+} from '../sms/sms-provider.service.js';
 
 const OTP_TTL_SECONDS    = 10 * 60;   // 10 minutes
 const MAX_SEND_ATTEMPTS  = 3;
@@ -30,17 +34,6 @@ function verifyRateKey(phone)  { return `otp:verify_rate:${phone}`; }
 
 function generateOtp() {
   return String(crypto.randomInt(100000, 999999));
-}
-
-let _smsClient = null;
-function getSmsClient() {
-  if (_smsClient) return _smsClient;
-  if (!env.AT_USERNAME || !env.AT_API_KEY) {
-    throw new Error("Africa's Talking not configured.");
-  }
-  const AT = AfricasTalking({ username: env.AT_USERNAME, apiKey: env.AT_API_KEY });
-  _smsClient = AT.SMS;
-  return _smsClient;
 }
 
 /**
@@ -77,18 +70,20 @@ export const sendOtp = asyncHandler(async (req, res) => {
   const otp = generateOtp();
   await redis.setex(otpKey(phone), OTP_TTL_SECONDS, JSON.stringify({ otp, attempts: 0 }));
 
-  // Send via AT SMS
+  if (!smsProviderConfigured()) {
+    return sendError(res, `SMS provider is not configured on this server (${smsProviderName()}).`, 503);
+  }
+
+  // Send via configured SMS provider
   try {
-    const sms = getSmsClient();
-    const params = {
-      to: [phone],
+    await sendViaConfiguredSmsProvider({
+      recipients: [phone],
       message: `Your Diraschool verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`,
-    };
-    if (env.AT_SENDER_ID) params.from = env.AT_SENDER_ID;
-    await sms.send(params);
-    logger.info('[OTP] Sent', { phone, userId: req.user._id });
+      senderId: env.SMS_PLATFORM_SENDER_ID,
+    });
+    logger.info('[OTP] Sent', { phone, provider: smsProviderName(), userId: req.user._id });
   } catch (err) {
-    logger.error('[OTP] AT send failed', { phone, err: err.message });
+    logger.error('[OTP] SMS send failed', { phone, provider: smsProviderName(), err: err.message });
     return sendError(res, 'Failed to send OTP. Please try again.', 502);
   }
 

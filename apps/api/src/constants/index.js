@@ -121,7 +121,7 @@ export const SMS_CREDIT_TYPE = {
   PURCHASED: 'purchased',
 };
 
-// Self-serve SMS top-up packs (priced at ~2× AT cost of KES 0.80)
+// Self-serve SMS top-up packs.
 export const SMS_CREDIT_PACKS = [
   { id: 'sms_200',  credits: 200,  amountKes: 300,  label: '200 SMS'   },
   { id: 'sms_500',  credits: 500,  amountKes: 700,  label: '500 SMS'   },

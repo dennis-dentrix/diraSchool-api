@@ -29,13 +29,15 @@ import { paginate } from '../../utils/pagination.js';
 import { normalisePhone, isValidKenyanPhone } from './sms-inbound.controller.js';
 import { getCurrentTermAndYear } from '../../utils/term.js';
 import { DEFAULT_VAT_RATE } from '../subscriptions/pricing.js';
+import {
+  sendViaConfiguredSmsProvider,
+  smsProviderConfigured,
+  smsProviderConfigSummary,
+  smsProviderName,
+} from './sms-provider.service.js';
 
-const AT_CHUNK_SIZE = 200; // Africa's Talking recommended batch size
+const SMS_CHUNK_SIZE = 200;
 const MAX_SMS_CHARS = 480;
-
-function atConfigured() {
-  return !!(env.AT_USERNAME && env.AT_API_KEY);
-}
 
 const normaliseText = (value) =>
   String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -87,9 +89,9 @@ async function queueSmsPayload(payload) {
 
 async function queueChunked({ to, message, schoolId, trigger, smsLogId }) {
   const recipients = Array.isArray(to) ? to : [to];
-  for (let i = 0; i < recipients.length; i += AT_CHUNK_SIZE) {
+  for (let i = 0; i < recipients.length; i += SMS_CHUNK_SIZE) {
     await queueSmsPayload({
-      to: recipients.slice(i, i + AT_CHUNK_SIZE),
+      to: recipients.slice(i, i + SMS_CHUNK_SIZE),
       message,
       schoolId,
       trigger,
@@ -148,8 +150,8 @@ function buildFeeReminderMessages({ schoolName, parentName, lines, note, include
  * Body: { to: string, message: string }
  */
 export const sendSingle = asyncHandler(async (req, res) => {
-  if (!atConfigured()) {
-    return sendError(res, 'SMS service is not configured on this server.', 503);
+  if (!smsProviderConfigured()) {
+    return sendError(res, `SMS provider is not configured on this server (${smsProviderName()}).`, 503);
   }
 
   const { to, message } = req.body;
@@ -187,8 +189,8 @@ export const sendSingle = asyncHandler(async (req, res) => {
  * Body: { target: 'class_parents'|'all_parents'|'all_staff', classId?: string, message: string }
  */
 export const broadcastSms = asyncHandler(async (req, res) => {
-  if (!atConfigured()) {
-    return sendError(res, 'SMS service is not configured on this server.', 503);
+  if (!smsProviderConfigured()) {
+    return sendError(res, `SMS provider is not configured on this server (${smsProviderName()}).`, 503);
   }
 
   const { target, classId, message } = req.body;
@@ -252,8 +254,8 @@ export const broadcastSms = asyncHandler(async (req, res) => {
  * Body: { target: 'all_students'|'class_students', classId?, includeParentName?, includeStudentName?, includeAdmissionNumber?, note? }
  */
 export const sendFeeReminders = asyncHandler(async (req, res) => {
-  if (!atConfigured()) {
-    return sendError(res, 'SMS service is not configured on this server.', 503);
+  if (!smsProviderConfigured()) {
+    return sendError(res, `SMS provider is not configured on this server (${smsProviderName()}).`, 503);
   }
 
   const {
@@ -408,13 +410,13 @@ export const sendFeeReminders = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/sms/test-direct
- * Sends via Africa's Talking synchronously (no queue) and returns the raw AT response.
+ * Sends via the configured SMS provider synchronously (no queue) and returns the raw provider response.
  * Use this to verify credentials and diagnose delivery failures.
  * Body: { to: string, message: string }
  */
 export const testSendDirect = asyncHandler(async (req, res) => {
-  if (!atConfigured()) {
-    return sendError(res, 'AT_USERNAME / AT_API_KEY not set in server env.', 503);
+  if (!smsProviderConfigured()) {
+    return sendError(res, `SMS provider is not configured on this server (${smsProviderName()}).`, 503);
   }
 
   const { to, message = 'Test SMS from Diraschool' } = req.body;
@@ -424,8 +426,8 @@ export const testSendDirect = asyncHandler(async (req, res) => {
     return sendError(res, `Cannot normalise phone: ${to}`, 400);
   }
 
-  const recipients = env.AT_TEST_NUMBERS?.length
-    ? env.AT_TEST_NUMBERS
+  const recipients = env.SMS_TEST_NUMBERS?.length
+    ? env.SMS_TEST_NUMBERS
     : [phone];
 
   let senderId = env.SMS_PLATFORM_SENDER_ID || null;
@@ -443,32 +445,27 @@ export const testSendDirect = asyncHandler(async (req, res) => {
     outboundMessage = addSchoolNameIfNeeded(message, 'Your school');
   }
 
-  logger.info('[SMS-TEST] Direct send', { recipients, from: senderId ?? '(provider default)' });
+  logger.info('[SMS-TEST] Direct send', {
+    provider: smsProviderName(), recipients, from: senderId ?? '(provider default)',
+  });
 
-  let atResult, atError;
+  let providerResult, providerError;
   try {
-    const AfricasTalking = (await import('africastalking')).default ?? await import('africastalking');
-    const AT = AfricasTalking({ username: env.AT_USERNAME, apiKey: env.AT_API_KEY });
-    const sms = AT.SMS;
-    const params = { to: recipients, message: outboundMessage };
-    if (senderId) params.from = senderId;
-    atResult = await sms.send(params);
+    providerResult = await sendViaConfiguredSmsProvider({
+      recipients,
+      message: outboundMessage,
+      senderId,
+    });
   } catch (err) {
-    atError = err.message;
+    providerError = err.message;
     logger.error('[SMS-TEST] Direct send failed', { err: err.message });
   }
 
   return sendSuccess(res, {
-    config: {
-      username: env.AT_USERNAME,
-      senderId,
-      testMode: !!(env.AT_TEST_NUMBERS?.length),
-      testNumbers: env.AT_TEST_NUMBERS ?? null,
-      recipients,
-    },
+    config: { ...smsProviderConfigSummary(), senderId, recipients },
     message: outboundMessage,
-    atResult: atResult ?? null,
-    atError: atError ?? null,
+    providerResult: providerResult ?? null,
+    providerError: providerError ?? null,
   });
 });
 
@@ -654,19 +651,31 @@ export const buyCreditPack = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/sms/dlr
- * Africa's Talking delivery report webhook (public — no JWT).
- * AT sends: { id, status, phoneNumber, networkCode, failureReason, retryCount }
+ * SMS delivery report webhook (public — no JWT).
+ * Africa's Talking sends: { id, status, phoneNumber, failureReason }
+ * Celcom sends: { messageId, status, recipient, status_code, timestamp }
  */
 export const handleDlr = asyncHandler(async (req, res) => {
   // Acknowledge immediately
   res.status(200).end();
 
-  const { id: messageId, status, phoneNumber, failureReason } = req.body;
+  const {
+    id,
+    messageId: celcomMessageId,
+    messageid,
+    status,
+    phoneNumber,
+    recipient,
+    mobile,
+    failureReason,
+  } = req.body;
+  const messageId = id || celcomMessageId || messageid;
   if (!messageId) return;
 
-  const deliveryStatus = status === 'Success'
+  const normalizedStatus = String(status ?? '').toLowerCase();
+  const deliveryStatus = normalizedStatus === 'success' || normalizedStatus === 'delivered'
     ? SMS_DELIVERY_STATUS.DELIVERED
-    : status === 'Rejected'
+    : normalizedStatus === 'rejected'
       ? SMS_DELIVERY_STATUS.REJECTED
       : SMS_DELIVERY_STATUS.FAILED;
 
@@ -675,7 +684,9 @@ export const handleDlr = asyncHandler(async (req, res) => {
       { messageId },
       { deliveryStatus, ...(failureReason ? { failureReason } : {}) }
     );
-    logger.info('[SMS-DLR] Delivery status updated', { messageId, phoneNumber, status, deliveryStatus });
+    logger.info('[SMS-DLR] Delivery status updated', {
+      messageId, phoneNumber: phoneNumber || recipient || mobile, status, deliveryStatus,
+    });
   } catch (err) {
     logger.error('[SMS-DLR] Failed to update delivery status', { messageId, err: err.message });
   }

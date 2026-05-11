@@ -118,7 +118,7 @@ export default function PrivacyPage() {
             <li>Providing, maintaining, and improving the DiraSchool platform.</li>
             <li>Generating and publishing CBC-compliant report cards and attendance records.</li>
             <li>Processing fee payments and generating receipts.</li>
-            <li>Sending SMS notifications to parents and guardians via Africa's Talking (see Section 5).</li>
+            <li>Sending SMS notifications to parents and guardians via Celcom Africa or another configured SMS gateway (see Section 5).</li>
             <li>Sending transactional emails (account creation, password reset, subscription alerts).</li>
             <li>Auditing all administrative actions for accountability within your school.</li>
             <li>Responding to support requests.</li>
@@ -134,8 +134,8 @@ export default function PrivacyPage() {
           <p>We share data with the following sub-processors only to the extent necessary to deliver the service:</p>
           <ul className="list-disc pl-5 space-y-2 mt-2">
             <li>
-              <strong>Africa's Talking (SMS)</strong> — Phone numbers are transmitted to send parent
-              notifications and OTP verification messages. Africa's Talking operates under their own
+              <strong>Celcom Africa (SMS)</strong> — Phone numbers are transmitted to send parent
+              notifications and OTP verification messages. Celcom Africa operates under their own
               Privacy Policy and is compliant with applicable Kenyan telecoms regulations.
             </li>
             <li>

@@ -245,7 +245,7 @@ const resolveStudentMatch = async ({ schoolId, parsed, text }) => {
 };
 
 // ── POST /api/v1/sms/inbound ──────────────────────────────────────────────────
-// Africa's Talking sends form-encoded data; simple SMS forwarders often send JSON.
+// Some providers send form-encoded data; simple SMS forwarders often send JSON.
 export const handleInboundSms = asyncHandler(async (req, res) => {
   const payload = {
     from: req.body.from ?? req.body.sender ?? req.body.originator,

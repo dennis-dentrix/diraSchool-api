@@ -10,7 +10,7 @@ const required = [
   'JWT_SECRET',
   'CLIENT_URL',
   'REDIS_URL',
-  // AT_USERNAME / AT_API_KEY are optional until the SMS feature is activated
+  // SMS provider credentials are optional until the SMS feature is activated
 ];
 
 const writeStderr = (message) => {
@@ -50,9 +50,14 @@ export const validateEnv = () => {
     // Non-fatal — warn but don't exit, so the server can still start
   }
 
-  if (process.env.NODE_ENV === 'production' && process.env.AT_TEST_NUMBERS) {
+  const smsProvider = (process.env.SMS_PROVIDER || 'celcom').toLowerCase();
+
+  if (
+    process.env.NODE_ENV === 'production' &&
+    (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS)
+  ) {
     writeStderr(
-      '\n[ENV ERROR] AT_TEST_NUMBERS must not be set in production.\n' +
+      '\n[ENV ERROR] SMS_TEST_NUMBERS / AT_TEST_NUMBERS must not be set in production.\n' +
       'It redirects every SMS, including broadcasts, to the test phone numbers.\n'
     );
     process.exit(1);
@@ -60,6 +65,7 @@ export const validateEnv = () => {
 
   if (
     process.env.NODE_ENV === 'production' &&
+    smsProvider === 'africastalking' &&
     String(process.env.AT_USERNAME ?? '').toLowerCase() === 'sandbox'
   ) {
     writeStderr('\n[ENV ERROR] AT_USERNAME must be your live Africa\'s Talking username in production, not sandbox.\n');
@@ -69,6 +75,7 @@ export const validateEnv = () => {
   const productionSenderId = process.env.SMS_PLATFORM_SENDER_ID || process.env.AT_SENDER_ID;
   if (
     process.env.NODE_ENV === 'production' &&
+    smsProvider === 'africastalking' &&
     String(productionSenderId ?? '').toLowerCase() === 'sandbox'
   ) {
     writeStderr('\n[ENV ERROR] Production SMS sender ID cannot be sandbox. Leave it blank or use an approved sender ID.\n');
@@ -106,10 +113,19 @@ export const env = {
   CLIENT_URL: process.env.CLIENT_URL,
   CLIENT_URL_STAGING: process.env.CLIENT_URL_STAGING,
   REDIS_URL: process.env.REDIS_URL,
-  // Africa's Talking — optional until SMS feature is activated
+  // SMS provider — optional until SMS feature is activated
+  SMS_PROVIDER: (process.env.SMS_PROVIDER || 'celcom').toLowerCase(),
+  SMS_TEST_NUMBERS: (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS)
+    ? (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS).split(',').map((n) => n.trim()).filter(Boolean)
+    : null,
+  CELCOM_API_KEY: process.env.CELCOM_API_KEY,
+  CELCOM_PARTNER_ID: process.env.CELCOM_PARTNER_ID,
+  CELCOM_SHORTCODE: process.env.CELCOM_SHORTCODE || process.env.SMS_PLATFORM_SENDER_ID || null,
+  CELCOM_SEND_URL: process.env.CELCOM_SEND_URL || 'https://isms.celcomafrica.com/api/services/sendsms/',
+  // Africa's Talking — legacy fallback
   AT_USERNAME: process.env.AT_USERNAME,
   AT_API_KEY: process.env.AT_API_KEY,
-  SMS_PLATFORM_SENDER_ID: process.env.SMS_PLATFORM_SENDER_ID || process.env.AT_SENDER_ID || null,
+  SMS_PLATFORM_SENDER_ID: process.env.SMS_PLATFORM_SENDER_ID || process.env.CELCOM_SHORTCODE || process.env.AT_SENDER_ID || null,
   AT_SENDER_ID: process.env.AT_SENDER_ID || null,
   // Comma-separated E.164 numbers. When set, ALL SMS (including broadcasts) are
   // redirected to only these numbers — use during development/QA to avoid spamming.

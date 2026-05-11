@@ -415,7 +415,7 @@ export const updateSubscription = asyncHandler(async (req, res) => {
  * Example: { "senderIdRequested": "NYERI_GIRLS" }
  *
  * Returns: school with updated smsSettings and status 'pending'.
- * Admin will approve/reject after reviewing with Africa's Talking.
+ * Admin will approve/reject after reviewing with the configured SMS provider.
  */
 export const requestSmsSenderId = asyncHandler(async (req, res) => {
   const { senderIdRequested } = req.body;

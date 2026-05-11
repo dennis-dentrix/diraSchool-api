@@ -12,7 +12,7 @@ const SmsDeliverySchema = new mongoose.Schema(
     phone: {
       type: String, required: true,
     },
-    // AT message ID returned after a successful send — used to match DLR callbacks
+    // Provider message ID returned after a successful send — used to match DLR callbacks
     messageId: {
       type: String, index: true, sparse: true,
     },

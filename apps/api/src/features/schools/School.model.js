@@ -141,7 +141,7 @@ const schoolSchema = new mongoose.Schema(
       default: null,
     },
     // M-Pesa till/paybill number that receives parent payments.
-    // Africa's Talking monitors SMS to this number and forwards to the inbound webhook.
+    // SMS forwarders can post payment notifications to the inbound webhook.
     mpesaTillNumber: {
       type: String,
       trim: true,

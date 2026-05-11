@@ -708,7 +708,7 @@ export default function MessagingPage() {
           <div>
             <p className="text-sm font-semibold">Test mode active</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              All SMS (including broadcasts) are redirected to: <strong>{TEST_NUMBERS}</strong>. Remove <code>AT_TEST_NUMBERS</code> from the server env to send to real recipients.
+              All SMS (including broadcasts) are redirected to: <strong>{TEST_NUMBERS}</strong>. Remove <code>SMS_TEST_NUMBERS</code> from the server env to send to real recipients.
             </p>
           </div>
         </div>

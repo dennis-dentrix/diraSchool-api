@@ -53,7 +53,7 @@ Use this line first. It anchors everything that follows.
 - Automatic SMS when a student is absent.
 - Fee payment confirmation sent to parent's phone.
 - Exam results notifications.
-- Powered by Africa's Talking — reliable Kenyan SMS gateway.
+- Powered by Celcom Africa — reliable Kenyan SMS gateway.
 
 ### 3.6 Cloud-Based & Secure
 - Data stored securely; no risk of losing records if a laptop is stolen or crashes.
@@ -194,7 +194,7 @@ End every presentation with one of these:
 | CBC Report Cards | Auto-generated PDFs; bulk publish; cloud storage |
 | Exams & Results | Exam creation; result entry; CBC grading thresholds |
 | Timetable | Lesson scheduling; teacher assignments |
-| SMS Alerts | Fees, attendance, results — via Africa's Talking |
+| SMS Alerts | Fees, attendance, results — via Celcom Africa |
 | Parent Portal | Parent login to view child's fees, results, report cards |
 | Payroll | Salary grades; payroll runs for staff |
 | Library | Book catalog; loan tracking with due dates |
