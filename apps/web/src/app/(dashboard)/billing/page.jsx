@@ -38,7 +38,7 @@ function calcBill(students, option = 'per-term', terms = {}) {
   const subtotalExVat = Math.round(subtotal * multiplier);
   const vatAmount = Math.round(subtotalExVat * VAT_RATE);
   const total = subtotalExVat + vatAmount;
-  return { subtotal, subtotalExVat, vatAmount, vatRate: VAT_RATE, total, multiplier, baseFee, perStudentRate };
+  return { subtotal, subtotalExVat, vatAmount, total, multiplier, baseFee, perStudentRate };
 }
 
 // ── Status config ────────────────────────────────────────────────────────────
@@ -156,12 +156,8 @@ function BillingCalculator({ currentStudents, pricingTerms }) {
               <span className="font-mono">{fmt(p.subtotalExVat)}</span>
             </div>
           )}
-          <div className="flex justify-between text-muted-foreground">
-            <span>Subtotal ex VAT</span>
-            <span className="font-mono">{fmt(p.subtotalExVat)}</span>
-          </div>
-          <div className="flex justify-between text-muted-foreground">
-            <span>VAT 16%</span>
+          <div className="flex justify-between text-muted-foreground text-xs pt-1 border-t">
+            <span>VAT (16%)</span>
             <span className="font-mono">{fmt(p.vatAmount)}</span>
           </div>
           <div className="flex justify-between font-bold text-base pt-2 border-t">
@@ -175,7 +171,7 @@ function BillingCalculator({ currentStudents, pricingTerms }) {
 
         <div className="flex items-center justify-between pt-1">
           <p className="text-xs text-muted-foreground">
-            Cost per student ex VAT: <span className="font-semibold text-foreground">{fmt(p.subtotal / students)}/term</span>
+            Cost per student: <span className="font-semibold text-foreground">{fmt(p.subtotal / students)}/term</span>
           </p>
           <Button asChild variant="outline" size="sm">
             <Link href="/pricing" target="_blank">Full pricing guide <ArrowRight className="h-3 w-3 ml-1" /></Link>
@@ -348,8 +344,8 @@ export default function BillingPage() {
     ? {
         total: pricingData.quote.total,
         subtotal: pricingData.quote.subtotalPerTerm,
-        subtotalExVat: pricingData.quote.subtotalExVat,
-        vatAmount: pricingData.quote.vatAmount,
+        subtotalExVat: pricingData.quote.subtotalExVat ?? pricingData.quote.total,
+        vatAmount: pricingData.quote.vatAmount ?? 0,
         baseFee: pricingData.quote.baseFee,
         perStudentRate: pricingData.quote.perStudentRate,
       }

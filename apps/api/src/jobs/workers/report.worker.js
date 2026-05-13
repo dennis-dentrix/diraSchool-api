@@ -29,7 +29,17 @@ export const processReportJob = async (job) => {
   const { reportCardId, schoolId, requestedByUserId } = job.data;
   try {
     logger.info('[Report] Starting PDF generation', { jobId: job.id, reportCardId });
-    await ReportCard.updateOne({ _id: reportCardId }, { pdfStatus: 'processing', pdfError: undefined });
+
+    // Atomic check-and-set: only proceed if not already being processed
+    const updated = await ReportCard.findOneAndUpdate(
+      { _id: reportCardId, pdfStatus: { $nin: ['processing', 'ready'] } },
+      { $set: { pdfStatus: 'processing', pdfError: undefined } },
+      { new: false }
+    );
+    if (!updated) {
+      logger.info('[Report] Skipping duplicate job — already processing or ready', { jobId: job.id, reportCardId });
+      return { reportCardId, status: 'skipped' };
+    }
 
     // 1. Fetch report card with all populated refs
     const reportCard = await ReportCard.findOne({ _id: reportCardId, schoolId })

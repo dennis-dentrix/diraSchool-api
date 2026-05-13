@@ -1,9 +1,19 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { toast } from 'sonner';
 import { notificationsApi } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import { useAuthStore } from '@/store/auth.store';
+
+const showNotificationToast = (notification) => {
+  const { type, title, message } = notification;
+  const opts = { description: message || undefined };
+  if (type === 'success') toast.success(title, opts);
+  else if (type === 'error') toast.error(title, opts);
+  else if (type === 'warning') toast.warning(title, opts);
+  else toast.info(title, opts);
+};
 
 /**
  * Replaces the two polling useQuery calls in the header.
@@ -53,6 +63,7 @@ export function useSocketNotifications({ enabled = true, listLimit = 8 } = {}) {
     const onNew = ({ notification, unreadCount: count }) => {
       setNotifications((prev) => [notification, ...prev].slice(0, listLimit));
       setUnreadCount(count);
+      showNotificationToast(notification);
     };
 
     const onCount = ({ count }) => setUnreadCount(count);

@@ -12,7 +12,7 @@ const FAQS = [
   },
   {
     q: 'How does pricing work?',
-    a: 'You pay KES 12,000 base fee plus KES 55 per enrolled student per term, plus 16% VAT. Annual billing saves 10% and multi-year billing saves 15%. Schools with signed agreements can have custom pricing terms.',
+    a: 'You pay KES 12,000 base fee plus KES 55 per enrolled student per term, plus 16% VAT. Annual billing saves 10% and multi-year billing saves 15%. No hidden charges beyond the published formula. Schools with signed agreements can have custom pricing terms.',
   },
   {
     q: 'Can parents see their children\'s results and fees?',
@@ -28,7 +28,7 @@ const FAQS = [
   },
   {
     q: 'Is the 30-day trial really free?',
-    a: 'Yes — full access to every feature, up to 50 students, no credit card required. At the end of your trial, your data is retained for 14 days while you decide to continue.',
+    a: 'Yes — full access to every feature, unlimited students, no credit card required. At the end of your trial, your data is retained for 14 days while you decide to continue.',
   },
 ];
 

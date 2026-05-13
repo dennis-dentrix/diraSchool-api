@@ -34,6 +34,7 @@ import {
   SMS_CREDIT_TYPE,
 } from '../../constants/index.js';
 import { getCurrentTermAndYear } from '../../utils/term.js';
+import { notifyUser } from '../../utils/notify.js';
 
 async function updateLog(smsLogId, update) {
   if (!smsLogId) return;
@@ -95,7 +96,7 @@ function addSchoolNameIfNeeded(message, schoolName) {
 }
 
 export const processSmsJob = async (job) => {
-  const { to, message, schoolId, trigger, smsLogId, term: jobTerm, academicYear: jobYear } = job.data;
+  const { to, message, schoolId, trigger, smsLogId, term: jobTerm, academicYear: jobYear, requestedByUserId } = job.data;
 
   if (!smsProviderConfigured()) {
     await updateLog(smsLogId, { status: 'failed' });
@@ -122,7 +123,7 @@ export const processSmsJob = async (job) => {
   }
 
   // ── Sender ID and school attribution ────────────────────────────────────────
-  let senderId = env.SMS_PLATFORM_SENDER_ID || null;
+  let senderId = env.AT_SENDER_ID || null;
   let schoolName = 'Your school';
   let hasSchoolSenderId = false;
 
@@ -228,12 +229,22 @@ export const processSmsJob = async (job) => {
       status: 'failed', sentCount: 0, failedCount: toSend.length,
       cappedCount: capped.length, term, academicYear,
     });
+    if (requestedByUserId && schoolId) {
+      await notifyUser({
+        schoolId,
+        userId: requestedByUserId,
+        type: 'error',
+        title: 'SMS Failed',
+        message: err.message || 'SMS could not be sent. Check your Africa\'s Talking configuration.',
+        link: '/messaging',
+      });
+    }
     throw err;
   }
 
   // ── Persist SmsDelivery per recipient ────────────────────────────────────
   const deliveryDocs = providerResults.map((r) => {
-    const success = r.statusCode === 101 || r.statusCode === 200;
+    const success = r.statusCode === 101;
     const phone = toSend.find((p) => p === r.number) ?? r.number;
     return {
       schoolId: schoolObjId,
@@ -255,7 +266,7 @@ export const processSmsJob = async (job) => {
     await SmsDelivery.insertMany(deliveryDocs, { ordered: false });
   }
 
-  const sentCount = providerResults.filter((r) => r.statusCode === 101 || r.statusCode === 200).length;
+  const sentCount = providerResults.filter((r) => r.statusCode === 101).length;
   const failedCount = providerResults.length - sentCount;
 
   if (failedCount > 0) {
@@ -274,6 +285,38 @@ export const processSmsJob = async (job) => {
   logger.info('[SMS] Job completed', {
     jobId: job.id, provider: providerName, sent: sentCount, failed: failedCount, capped: capped.length,
   });
+
+  // In-app notification to the user who triggered the send
+  if (requestedByUserId && schoolId) {
+    if (status === 'sent') {
+      await notifyUser({
+        schoolId,
+        userId: requestedByUserId,
+        type: 'success',
+        title: 'SMS Delivered',
+        message: `${sentCount} message${sentCount !== 1 ? 's' : ''} sent successfully.`,
+        link: '/messaging',
+      });
+    } else if (status === 'partial') {
+      await notifyUser({
+        schoolId,
+        userId: requestedByUserId,
+        type: 'warning',
+        title: 'SMS Partially Sent',
+        message: `${sentCount} delivered, ${failedCount} failed${capped.length ? `, ${capped.length} capped` : ''}.`,
+        link: '/messaging',
+      });
+    } else {
+      await notifyUser({
+        schoolId,
+        userId: requestedByUserId,
+        type: 'error',
+        title: 'SMS Failed',
+        message: `All ${failedCount} message${failedCount !== 1 ? 's' : ''} failed to send. Check your AT account balance and settings.`,
+        link: '/messaging',
+      });
+    }
+  }
 
   return { sent: sentCount, failed: failedCount, capped: capped.length };
 };

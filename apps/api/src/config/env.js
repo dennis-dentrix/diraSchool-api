@@ -50,8 +50,7 @@ export const validateEnv = () => {
     // Non-fatal — warn but don't exit, so the server can still start
   }
 
-  const smsProvider = (process.env.SMS_PROVIDER || 'celcom').toLowerCase();
-
+  // Africa's Talking — sandbox guard (production only)
   if (
     process.env.NODE_ENV === 'production' &&
     (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS)
@@ -65,20 +64,18 @@ export const validateEnv = () => {
 
   if (
     process.env.NODE_ENV === 'production' &&
-    smsProvider === 'africastalking' &&
     String(process.env.AT_USERNAME ?? '').toLowerCase() === 'sandbox'
   ) {
-    writeStderr('\n[ENV ERROR] AT_USERNAME must be your live Africa\'s Talking username in production, not sandbox.\n');
+    writeStderr('\n[ENV ERROR] AT_USERNAME must be your live Africa\'s Talking username in production — not "sandbox".\n');
     process.exit(1);
   }
 
-  const productionSenderId = process.env.SMS_PLATFORM_SENDER_ID || process.env.AT_SENDER_ID;
+  const productionSenderId = process.env.AT_SENDER_ID;
   if (
     process.env.NODE_ENV === 'production' &&
-    smsProvider === 'africastalking' &&
     String(productionSenderId ?? '').toLowerCase() === 'sandbox'
   ) {
-    writeStderr('\n[ENV ERROR] Production SMS sender ID cannot be sandbox. Leave it blank or use an approved sender ID.\n');
+    writeStderr('\n[ENV ERROR] AT_SENDER_ID cannot be "sandbox" in production. Use an approved sender ID or leave it blank.\n');
     process.exit(1);
   }
 
@@ -113,24 +110,14 @@ export const env = {
   CLIENT_URL: process.env.CLIENT_URL,
   CLIENT_URL_STAGING: process.env.CLIENT_URL_STAGING,
   REDIS_URL: process.env.REDIS_URL,
-  // SMS provider — optional until SMS feature is activated
-  SMS_PROVIDER: (process.env.SMS_PROVIDER || 'celcom').toLowerCase(),
+  // Africa's Talking SMS — set AT_USERNAME + AT_API_KEY to enable SMS
+  AT_USERNAME: process.env.AT_USERNAME || null,
+  AT_API_KEY: process.env.AT_API_KEY || null,
+  // Approved AT sender ID / shortcode (e.g. "DIRASCHOOL"). Leave blank to use AT shared shortcode.
+  AT_SENDER_ID: process.env.AT_SENDER_ID || null,
+  // Comma-separated E.164 numbers. When set, ALL SMS are redirected to these — dev/QA only.
   SMS_TEST_NUMBERS: (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS)
     ? (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS).split(',').map((n) => n.trim()).filter(Boolean)
-    : null,
-  CELCOM_API_KEY: process.env.CELCOM_API_KEY,
-  CELCOM_PARTNER_ID: process.env.CELCOM_PARTNER_ID,
-  CELCOM_SHORTCODE: process.env.CELCOM_SHORTCODE || process.env.SMS_PLATFORM_SENDER_ID || null,
-  CELCOM_SEND_URL: process.env.CELCOM_SEND_URL || 'https://isms.celcomafrica.com/api/services/sendsms/',
-  // Africa's Talking — legacy fallback
-  AT_USERNAME: process.env.AT_USERNAME,
-  AT_API_KEY: process.env.AT_API_KEY,
-  SMS_PLATFORM_SENDER_ID: process.env.SMS_PLATFORM_SENDER_ID || process.env.CELCOM_SHORTCODE || process.env.AT_SENDER_ID || null,
-  AT_SENDER_ID: process.env.AT_SENDER_ID || null,
-  // Comma-separated E.164 numbers. When set, ALL SMS (including broadcasts) are
-  // redirected to only these numbers — use during development/QA to avoid spamming.
-  AT_TEST_NUMBERS: process.env.AT_TEST_NUMBERS
-    ? process.env.AT_TEST_NUMBERS.split(',').map((n) => n.trim()).filter(Boolean)
     : null,
   EMAIL_FROM: process.env.EMAIL_FROM,
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,

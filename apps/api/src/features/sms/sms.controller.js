@@ -87,7 +87,7 @@ async function queueSmsPayload(payload) {
   });
 }
 
-async function queueChunked({ to, message, schoolId, trigger, smsLogId }) {
+async function queueChunked({ to, message, schoolId, trigger, smsLogId, requestedByUserId }) {
   const recipients = Array.isArray(to) ? to : [to];
   for (let i = 0; i < recipients.length; i += SMS_CHUNK_SIZE) {
     await queueSmsPayload({
@@ -96,6 +96,7 @@ async function queueChunked({ to, message, schoolId, trigger, smsLogId }) {
       schoolId,
       trigger,
       smsLogId,
+      requestedByUserId,
     });
   }
 }
@@ -177,6 +178,7 @@ export const sendSingle = asyncHandler(async (req, res) => {
     schoolId: req.user.schoolId.toString(),
     trigger: SMS_TRIGGER_TYPES.CUSTOM_BROADCAST,
     smsLogId: log._id.toString(),
+    requestedByUserId: req.user._id.toString(),
   });
 
   logger.info('[SMS-OUTBOUND] Single message queued', { schoolId: req.user.schoolId, phone });
@@ -239,6 +241,7 @@ export const broadcastSms = asyncHandler(async (req, res) => {
     schoolId: schoolId.toString(),
     trigger: SMS_TRIGGER_TYPES.CUSTOM_BROADCAST,
     smsLogId: log._id.toString(),
+    requestedByUserId: req.user._id.toString(),
   });
 
   logger.info('[SMS-OUTBOUND] Broadcast queued', {
@@ -390,6 +393,7 @@ export const sendFeeReminders = asyncHandler(async (req, res) => {
       smsLogId: log._id.toString(),
       term,
       academicYear,
+      requestedByUserId: req.user._id.toString(),
     });
   }
 
@@ -430,7 +434,7 @@ export const testSendDirect = asyncHandler(async (req, res) => {
     ? env.SMS_TEST_NUMBERS
     : [phone];
 
-  let senderId = env.SMS_PLATFORM_SENDER_ID || null;
+  let senderId = env.AT_SENDER_ID || null;
   let outboundMessage = message;
 
   try {
@@ -651,43 +655,47 @@ export const buyCreditPack = asyncHandler(async (req, res) => {
 
 /**
  * POST /api/v1/sms/dlr
- * SMS delivery report webhook (public — no JWT).
- * Africa's Talking sends: { id, status, phoneNumber, failureReason }
- * Celcom sends: { messageId, status, recipient, status_code, timestamp }
+ * Delivery report webhook from Africa's Talking (application/x-www-form-urlencoded).
+ *
+ * AT payload fields:
+ *   id           — AT message ID (matches SmsDelivery.messageId)
+ *   status       — "Success" | "Failed" | "Rejected"
+ *   phoneNumber  — recipient in E.164
+ *   networkCode  — carrier code
+ *   failureReason — present when status !== "Success"
+ *
+ * Always respond 200 immediately — AT retries if it gets anything else.
  */
 export const handleDlr = asyncHandler(async (req, res) => {
-  // Acknowledge immediately
   res.status(200).end();
 
-  const {
-    id,
-    messageId: celcomMessageId,
-    messageid,
-    status,
-    phoneNumber,
-    recipient,
-    mobile,
-    failureReason,
-  } = req.body;
-  const messageId = id || celcomMessageId || messageid;
-  if (!messageId) return;
+  const { id, status, phoneNumber, failureReason } = req.body;
+
+  if (!id) {
+    logger.warn('[SMS-DLR] Received DLR with no message ID', { body: req.body });
+    return;
+  }
 
   const normalizedStatus = String(status ?? '').toLowerCase();
-  const deliveryStatus = normalizedStatus === 'success' || normalizedStatus === 'delivered'
-    ? SMS_DELIVERY_STATUS.DELIVERED
-    : normalizedStatus === 'rejected'
-      ? SMS_DELIVERY_STATUS.REJECTED
-      : SMS_DELIVERY_STATUS.FAILED;
+  const deliveryStatus =
+    normalizedStatus === 'success'
+      ? SMS_DELIVERY_STATUS.DELIVERED
+      : normalizedStatus === 'rejected'
+        ? SMS_DELIVERY_STATUS.REJECTED
+        : SMS_DELIVERY_STATUS.FAILED;
 
   try {
-    await SmsDelivery.findOneAndUpdate(
-      { messageId },
-      { deliveryStatus, ...(failureReason ? { failureReason } : {}) }
+    const updated = await SmsDelivery.findOneAndUpdate(
+      { messageId: id },
+      { deliveryStatus, ...(failureReason ? { failureReason } : {}) },
+      { new: true }
     );
-    logger.info('[SMS-DLR] Delivery status updated', {
-      messageId, phoneNumber: phoneNumber || recipient || mobile, status, deliveryStatus,
-    });
+    if (updated) {
+      logger.info('[SMS-DLR] Delivery status updated', { messageId: id, phoneNumber, status, deliveryStatus });
+    } else {
+      logger.warn('[SMS-DLR] No SmsDelivery record found for messageId', { messageId: id, phoneNumber, status });
+    }
   } catch (err) {
-    logger.error('[SMS-DLR] Failed to update delivery status', { messageId, err: err.message });
+    logger.error('[SMS-DLR] Failed to update delivery status', { messageId: id, err: err.message });
   }
 });

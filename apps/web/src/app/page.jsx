@@ -133,7 +133,7 @@ function Hero() {
           </Link>
         </div>
         <p className="mt-4 text-xs text-slate-600 tracking-wide">
-          Full access · 50 students during trial · No credit card required
+          Full access · Unlimited students during trial · No credit card required
         </p>
 
         <div className="mt-14 flex flex-wrap justify-center gap-x-8 gap-y-3 text-xs text-slate-500">
@@ -634,7 +634,7 @@ function FinalCTA() {
           </a>
         </div>
         <div className="mt-10 flex flex-wrap justify-center gap-6 text-xs text-slate-600">
-          {['30-day free trial', 'No credit card', 'Full CBC compliance', '50 students included', 'Cancel any time'].map((t) => (
+          {['30-day free trial', 'No credit card', 'Full CBC compliance', 'Unlimited students', 'Cancel any time'].map((t) => (
             <span key={t} className="flex items-center gap-1.5">
               <Check className="h-3 w-3 text-emerald-500" />{t}
             </span>

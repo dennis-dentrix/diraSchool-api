@@ -79,7 +79,7 @@ export const sendOtp = asyncHandler(async (req, res) => {
     await sendViaConfiguredSmsProvider({
       recipients: [phone],
       message: `Your Diraschool verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`,
-      senderId: env.SMS_PLATFORM_SENDER_ID,
+      senderId: env.AT_SENDER_ID,
     });
     logger.info('[OTP] Sent', { phone, provider: smsProviderName(), userId: req.user._id });
   } catch (err) {

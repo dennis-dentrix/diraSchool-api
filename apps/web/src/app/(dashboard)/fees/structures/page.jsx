@@ -54,7 +54,13 @@ function printStructure(structure, options = {}) {
     <tr><td colspan="2" class="cat">${cat}</td></tr>
     ${items.map((item) => `<tr><td>${item.name}</td><td class="amt">${formatCurrency(item.amount)}</td></tr>`).join('')}
   `).join('');
-  const win = window.open('', '', 'width=680,height=900');
+
+  const win = window.open('', '_blank', 'width=680,height=900');
+  if (!win) {
+    alert('Pop-ups are blocked. Please allow pop-ups for this site, then try again.');
+    return;
+  }
+
   win.document.write(`<!DOCTYPE html><html><head><title>Fee Structure — ${className}</title>
 <style>body{font-family:Arial,sans-serif;font-size:13px;margin:32px;color:#111;}${getDocumentHeaderCss()}
 table{width:100%;border-collapse:collapse;}th{text-align:left;border-bottom:2px solid #333;padding:6px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#555;}
@@ -66,7 +72,13 @@ td{padding:5px 4px;border-bottom:1px solid #eee;}.cat{font-weight:700;font-size:
   <tbody>${rows}<tr class="total"><td>Total Per Term</td><td class="amt">${formatCurrency(structure.totalAmount)}</td></tr></tbody></table>
   ${structure.notes ? `<div style="margin-top:20px;font-size:11px;color:#555;background:#f8f8f8;padding:10px 12px;border-radius:4px;"><strong>NB:</strong> ${structure.notes}</div>` : ''}
 </body></html>`);
-  win.document.close(); win.print(); win.close();
+  win.document.close();
+  win.focus();
+  // Give the browser time to render content before triggering print
+  setTimeout(() => {
+    win.print();
+    win.onafterprint = () => win.close();
+  }, 300);
 }
 
 // ── Detail pane — definition-list with inline-edit affordances ────────────────

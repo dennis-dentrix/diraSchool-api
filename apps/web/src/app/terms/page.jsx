@@ -80,7 +80,7 @@ export default function TermsPage() {
         <Section title="3. Free Trial">
           <p>
             New schools receive a <strong>30-day free trial</strong> with access to all features and
-            up to 50 student records. No credit card is required to start. At the end of the trial
+            with no limit on student records. No credit card is required to start. At the end of the trial
             period, you must subscribe to continue using the service.
           </p>
           <p>

@@ -51,8 +51,6 @@ export default function InvoicePage() {
   const pricing = invoice?.pricing ?? payment.pricingAgreementSnapshot;
   const isSmsCredits = (invoice?.paymentType ?? payment.paymentType) === 'sms_credits';
   const subtotalExVat = invoice?.subtotalExVat ?? payment.subtotalExVat ?? payment.amount;
-  const vatAmount = invoice?.vatAmount ?? payment.vatAmount ?? 0;
-  const vatRate = invoice?.vatRate ?? payment.vatRate ?? 0.16;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -121,12 +119,12 @@ export default function InvoicePage() {
           </tbody>
           <tfoot>
             <tr className="border-t border-slate-200">
-              <td className="pt-3 pr-4 text-slate-600">Subtotal ex VAT</td>
-              <td className="pt-3 text-right font-mono text-slate-900">{fmt(subtotalExVat)}</td>
+              <td className="pt-2 pr-4 text-slate-500 text-sm">Subtotal ex VAT</td>
+              <td className="pt-2 text-right font-mono text-slate-600 text-sm">{fmt(subtotalExVat)}</td>
             </tr>
             <tr>
-              <td className="pt-2 pr-4 text-slate-600">VAT ({Math.round(vatRate * 100)}%)</td>
-              <td className="pt-2 text-right font-mono text-slate-900">{fmt(vatAmount)}</td>
+              <td className="pt-1 pr-4 text-slate-500 text-sm">VAT ({Math.round((invoice?.vatRate ?? 0) * 100)}%)</td>
+              <td className="pt-1 text-right font-mono text-slate-600 text-sm">{fmt((invoice?.vatAmount ?? 0))}</td>
             </tr>
             <tr className="border-t-2 border-slate-900">
               <td className="pt-3 pr-4 font-bold text-slate-900">Total paid incl. VAT</td>

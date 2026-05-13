@@ -60,7 +60,7 @@ const subscriptionPaymentSchema = new mongoose.Schema(
     },
     vatAmount: {
       type: Number,
-      required: true,
+      default: 0,
       min: 0,
     },
     vatRate: {

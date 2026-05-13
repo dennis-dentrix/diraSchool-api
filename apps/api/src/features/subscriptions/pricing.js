@@ -80,8 +80,7 @@ export function calculateSubscriptionAmount({ studentCount, billingCycle = 'per-
   const studentComponent = safeStudentCount * perStudentRate;
   const subtotalPerTerm = baseFee + studentComponent;
   const subtotalExVat = Math.round(subtotalPerTerm * multiplier);
-  const vatRate = Number(pricingTerms.vatRate ?? DEFAULT_VAT_RATE);
-  const vatAmount = Math.round(subtotalExVat * vatRate);
+  const vatAmount = Math.round(subtotalExVat * DEFAULT_VAT_RATE);
   const total = subtotalExVat + vatAmount;
 
   return {
@@ -91,7 +90,7 @@ export function calculateSubscriptionAmount({ studentCount, billingCycle = 'per-
     subtotalPerTerm: Math.round(subtotalPerTerm),
     multiplier,
     subtotalExVat,
-    vatRate,
+    vatRate: DEFAULT_VAT_RATE,
     vatAmount,
     total,
     currency: pricingTerms.currency || DEFAULT_CURRENCY,
