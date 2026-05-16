@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import School from './School.model.js';
 import User from '../users/User.model.js';
+import Student from '../students/Student.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
@@ -458,4 +459,81 @@ export const requestSmsSenderId = asyncHandler(async (req, res) => {
   }).catch(() => {});
 
   return sendSuccess(res, school, 'SMS sender ID requested. Our team will review and approve within 24 hours.');
+});
+
+/**
+ * GET /api/v1/schools/trial-activity
+ * Superadmin — lists all active trial schools with engagement signals.
+ * Used to prioritise follow-up calls and monitor onboarding health.
+ */
+export const getTrialActivity = asyncHandler(async (req, res) => {
+  const now = new Date();
+
+  const trialSchools = await School.find({
+    subscriptionStatus: SUBSCRIPTION_STATUSES.TRIAL,
+    isActive: true,
+  })
+    .select('name email phone county trialExpiry createdAt')
+    .sort({ trialExpiry: 1 })
+    .lean();
+
+  if (!trialSchools.length) return sendSuccess(res, []);
+
+  const schoolIds = trialSchools.map((s) => s._id);
+
+  // Student counts per school in one aggregation
+  const studentCounts = await Student.aggregate([
+    { $match: { schoolId: { $in: schoolIds }, status: 'active' } },
+    { $group: { _id: '$schoolId', count: { $sum: 1 } } },
+  ]);
+  const countMap = studentCounts.reduce((acc, r) => {
+    acc[r._id.toString()] = r.count;
+    return acc;
+  }, {});
+
+  // Most recent login per school (school admin only)
+  const admins = await User.find({
+    schoolId: { $in: schoolIds },
+    role: ROLES.SCHOOL_ADMIN,
+    isActive: true,
+  })
+    .select('schoolId email firstName lastName lastLoginAt phone')
+    .lean();
+
+  const adminMap = admins.reduce((acc, a) => {
+    acc[a.schoolId.toString()] = a;
+    return acc;
+  }, {});
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  const data = trialSchools.map((school) => {
+    const sid = school._id.toString();
+    const admin = adminMap[sid];
+    const daysLeft = Math.ceil((new Date(school.trialExpiry).getTime() - now.getTime()) / DAY_MS);
+    const daysActive = Math.floor((now.getTime() - new Date(school.createdAt).getTime()) / DAY_MS);
+
+    return {
+      _id: school._id,
+      name: school.name,
+      email: school.email,
+      phone: school.phone,
+      county: school.county,
+      createdAt: school.createdAt,
+      trialExpiry: school.trialExpiry,
+      daysLeft: Math.max(0, daysLeft),
+      daysActive,
+      studentCount: countMap[sid] ?? 0,
+      admin: admin
+        ? {
+            name: `${admin.firstName} ${admin.lastName}`.trim(),
+            email: admin.email,
+            phone: admin.phone,
+            lastLoginAt: admin.lastLoginAt ?? null,
+          }
+        : null,
+    };
+  });
+
+  return sendSuccess(res, data);
 });

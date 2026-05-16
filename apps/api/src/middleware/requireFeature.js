@@ -1,63 +1,67 @@
 import School from '../features/schools/School.model.js';
-import { PLAN_FEATURE_MAP, PLAN_TIERS } from '../constants/index.js';
+import { PLAN_FEATURES, TRIAL_FEATURES } from '../constants/index.js';
+import { SUBSCRIPTION_STATUSES } from '../constants/index.js';
 import { getRedis } from '../config/redis.js';
 
 /**
- * requireFeature(featureKey) — plan-based feature gate.
+ * requireFeature(featureKey) — subscription-based feature gate.
+ *
+ * Two states only:
+ *   - active (paid)  → all features available
+ *   - trial/expired/suspended → only TRIAL_FEATURES are available
+ *
+ * Special case: SMS is also unlocked if school.smsSettings.smsEnabled = true
+ * (superadmin-controlled addon, independent of subscription status).
  *
  * Place AFTER protect() + blockIfMustChangePassword() in the middleware chain.
  * Superadmin users (no schoolId) always bypass this check.
  *
- * How it works:
- *  1. Reads planTier from the existing school subscription Redis cache
- *     (populated by protect() — zero extra DB round-trips in the common case).
- *  2. Falls back to a direct DB read if the cache key is cold.
- *  3. Checks PLAN_FEATURE_MAP[planTier] for the requested feature key.
- *  4. Returns 403 with an upgrade message if the feature is not in the plan.
- *
- * To activate feature gating once pricing is decided:
- *   1. Edit PLAN_FEATURE_MAP in constants/index.js — remove the feature from
- *      lower tiers.  No other code needs to change.
- *
  * @param {string} feature — one of the PLAN_FEATURES values
  */
 const requireFeature = (feature) => async (req, res, next) => {
-  // Superadmin has no schoolId — always allowed through
   if (!req.user?.schoolId) return next();
 
   const schoolId = req.user.schoolId.toString();
-  let planTier = null;
+  let subscriptionStatus = null;
+  let smsEnabled = false;
 
-  // ── Try the subscription cache first ──────────────────────────────────────
+  // ── Try the subscription cache first (populated by protect()) ─────────────
   const redis = getRedis();
   if (redis) {
     try {
       const cached = await redis.get(`school:sub:${schoolId}`);
-      if (cached) planTier = JSON.parse(cached).planTier;
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        subscriptionStatus = parsed.subscriptionStatus;
+        smsEnabled = parsed.smsEnabled ?? false;
+      }
     } catch {
       // cache miss — fall through
     }
   }
 
-  // ── Cold path: read from DB ────────────────────────────────────────────────
-  if (!planTier) {
-    const school = await School.findById(schoolId).select('planTier');
-    planTier = school?.planTier ?? PLAN_TIERS.TRIAL;
+  // ── Cold path: read from DB ───────────────────────────────────────────────
+  if (!subscriptionStatus) {
+    const school = await School.findById(schoolId).select('subscriptionStatus smsSettings.smsEnabled');
+    subscriptionStatus = school?.subscriptionStatus ?? SUBSCRIPTION_STATUSES.TRIAL;
+    smsEnabled = school?.smsSettings?.smsEnabled ?? false;
   }
 
-  // ── Check feature against plan map ────────────────────────────────────────
-  const allowedFeatures = PLAN_FEATURE_MAP[planTier] ?? [];
+  // ── Paid subscription → all features allowed ──────────────────────────────
+  if (subscriptionStatus === SUBSCRIPTION_STATUSES.ACTIVE) return next();
 
-  if (!allowedFeatures.includes(feature)) {
-    return res.status(403).json({
-      message: `The "${feature}" feature is not available on your current plan (${planTier}). Please upgrade to access it.`,
-      feature,
-      currentPlan: planTier,
-      upgradeRequired: true,
-    });
-  }
+  // ── SMS addon override (superadmin-enabled regardless of subscription) ─────
+  if (feature === PLAN_FEATURES.SMS && smsEnabled) return next();
 
-  next();
+  // ── Trial/expired/suspended → only trial features allowed ─────────────────
+  if (TRIAL_FEATURES.has(feature)) return next();
+
+  return res.status(403).json({
+    message: `The "${feature}" feature requires an active subscription. Please subscribe to access it.`,
+    feature,
+    subscriptionStatus,
+    upgradeRequired: true,
+  });
 };
 
 export default requireFeature;

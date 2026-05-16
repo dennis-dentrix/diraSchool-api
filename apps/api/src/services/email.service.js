@@ -373,6 +373,50 @@ export const sendCheckoutReminderEmail = ({
     meta,
   });
 
+export const sendWelcomeEmail = ({
+  to, firstName, schoolName, dashboardUrl, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `Welcome to Diraschool — let's get ${schoolName} set up`,
+    html: _welcomeTemplate({ firstName, schoolName, dashboardUrl }),
+    template: 'welcome',
+    meta,
+  });
+
+export const sendTrialDay3Email = ({
+  to, firstName, schoolName, dashboardUrl, trialDaysLeft, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `Quick check-in — how is ${schoolName} getting on?`,
+    html: _trialDay3Template({ firstName, schoolName, dashboardUrl, trialDaysLeft }),
+    template: 'trial-day3',
+    meta,
+  });
+
+export const sendTrialMidpointEmail = ({
+  to, firstName, schoolName, dashboardUrl, trialDaysLeft, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `You're halfway through your Diraschool trial — ${schoolName}`,
+    html: _trialMidpointTemplate({ firstName, schoolName, dashboardUrl, trialDaysLeft }),
+    template: 'trial-midpoint',
+    meta,
+  });
+
+export const sendTrialExpiryEmail = ({
+  to, firstName, schoolName, dashboardUrl, trialDaysLeft, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `Your Diraschool trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''} — ${schoolName}`,
+    html: _trialExpiryTemplate({ firstName, schoolName, dashboardUrl, trialDaysLeft }),
+    template: 'trial-expiry',
+    meta,
+  });
+
 const _departmentMemberTemplate = ({ firstName, schoolName, departmentName, action }) =>
   _shell(
     action === 'added' ? `Added to ${departmentName} — ${schoolName}` : `Removed from ${departmentName} — ${schoolName}`,
@@ -491,6 +535,150 @@ const _schoolDeactivationReviewedTemplate = ({ schoolName, action, reviewNote })
         </p>
         ${reviewNote ? `<p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6;"><strong>Reason:</strong> ${escapeHtml(reviewNote)}</p>` : ''}
       `
+  );
+
+const _welcomeTemplate = ({ firstName, schoolName, dashboardUrl }) =>
+  _shell(
+    `Welcome to Diraschool — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Welcome aboard, ${firstName}!</h2>
+      <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+        Thank you for signing up <strong>${schoolName}</strong> on Diraschool.
+        Your 30-day free trial has started — here are three things to do first to get the most out of it.
+      </p>
+
+      <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:14px 16px;border-left:4px solid #1a56db;background:#f0f4ff;border-radius:0 6px 6px 0;">
+            <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#1e40af;">1. Create your first class</p>
+            <p style="margin:0;font-size:13px;color:#374151;line-height:1.5;">Go to <strong>Classes</strong> and add your class levels — Grade 1, Form 1, etc.</p>
+          </td>
+        </tr>
+        <tr><td style="height:10px;"></td></tr>
+        <tr>
+          <td style="padding:14px 16px;border-left:4px solid #1a56db;background:#f0f4ff;border-radius:0 6px 6px 0;">
+            <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#1e40af;">2. Add your students</p>
+            <p style="margin:0;font-size:13px;color:#374151;line-height:1.5;">Import students via CSV or add them one by one under <strong>Students</strong>.</p>
+          </td>
+        </tr>
+        <tr><td style="height:10px;"></td></tr>
+        <tr>
+          <td style="padding:14px 16px;border-left:4px solid #1a56db;background:#f0f4ff;border-radius:0 6px 6px 0;">
+            <p style="margin:0 0 4px;font-size:14px;font-weight:700;color:#1e40af;">3. Configure your fee structure</p>
+            <p style="margin:0;font-size:13px;color:#374151;line-height:1.5;">Set term fees under <strong>Fees</strong> so you can start tracking payments immediately.</p>
+          </td>
+        </tr>
+      </table>
+
+      ${_btn(dashboardUrl, 'Go to Dashboard →')}
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+        Need help? Reply to this email or reach us at
+        <a href="mailto:contact@diraschool.com" style="color:#1a56db;">contact@diraschool.com</a>.
+        We're happy to walk you through setup.
+      </p>
+    `
+  );
+
+const _trialDay3Template = ({ firstName, schoolName, dashboardUrl, trialDaysLeft }) =>
+  _shell(
+    `Getting started — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Hi ${firstName}, just checking in</h2>
+      <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+        It's been a few days since <strong>${schoolName}</strong> joined Diraschool.
+        Have you had a chance to explore the system?
+      </p>
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#92400e;">Your trial setup checklist</p>
+        <p style="margin:0 0 6px;font-size:14px;color:#374151;">&#9744; &nbsp;Create at least one class (e.g. Grade 4 North)</p>
+        <p style="margin:0 0 6px;font-size:14px;color:#374151;">&#9744; &nbsp;Add 5 students to see how the system works</p>
+        <p style="margin:0;font-size:14px;color:#374151;">&#9744; &nbsp;Record a fee payment to test the finance module</p>
+      </div>
+      <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+        You have <strong>${trialDaysLeft} days</strong> remaining on your trial. No payment is required now.
+      </p>
+      ${_btn(dashboardUrl, 'Open Diraschool →')}
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+        Stuck somewhere? Reply to this email — we'll help you get set up.
+      </p>
+    `
+  );
+
+const _trialMidpointTemplate = ({ firstName, schoolName, dashboardUrl, trialDaysLeft }) =>
+  _shell(
+    `Halfway through your trial — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">You're halfway there, ${firstName}</h2>
+      <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+        <strong>${schoolName}</strong> has been on Diraschool for 15 days.
+        You have <strong>${trialDaysLeft} days</strong> left on your free trial.
+      </p>
+      <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.6;">Here's a reminder of what's included:</p>
+      <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:20px;">
+        <tr style="background:#f9fafb;">
+          <td style="padding:9px 14px;font-weight:600;color:#111827;border:1px solid #e5e7eb;width:45%;">Student management</td>
+          <td style="padding:9px 14px;color:#374151;border:1px solid #e5e7eb;">Track enrolment, profiles, and transfers</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 14px;font-weight:600;color:#111827;border:1px solid #e5e7eb;">Fee collection</td>
+          <td style="padding:9px 14px;color:#374151;border:1px solid #e5e7eb;">Record and report on all term payments</td>
+        </tr>
+        <tr style="background:#f9fafb;">
+          <td style="padding:9px 14px;font-weight:600;color:#111827;border:1px solid #e5e7eb;">Attendance</td>
+          <td style="padding:9px 14px;color:#374151;border:1px solid #e5e7eb;">Daily registers with parent SMS alerts</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 14px;font-weight:600;color:#111827;border:1px solid #e5e7eb;">Exams &amp; report cards</td>
+          <td style="padding:9px 14px;color:#374151;border:1px solid #e5e7eb;">CBC-aligned results and printable report cards</td>
+        </tr>
+        <tr style="background:#f9fafb;">
+          <td style="padding:9px 14px;font-weight:600;color:#111827;border:1px solid #e5e7eb;">Parent portal</td>
+          <td style="padding:9px 14px;color:#374151;border:1px solid #e5e7eb;">Parents view fees and results online</td>
+        </tr>
+      </table>
+      <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+        Subscribing now keeps everything running without interruption.
+        Pricing starts at <strong>KES 3,000 per term</strong> for up to 150 students.
+      </p>
+      ${_btn(dashboardUrl, 'Subscribe now →')}
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+        Questions about pricing? Reply to this email and we'll help.
+      </p>
+    `
+  );
+
+const _trialExpiryTemplate = ({ firstName, schoolName, dashboardUrl, trialDaysLeft }) =>
+  _shell(
+    `Your trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''} — ${schoolName}`,
+    `
+      <h2 style="margin:0 0 16px;font-size:20px;color:#111827;">Your trial ends soon, ${firstName}</h2>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin:0 0 20px;">
+        <p style="margin:0;font-size:15px;font-weight:700;color:#b91c1c;line-height:1.6;">
+          ${schoolName}'s free trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''}.
+        </p>
+      </div>
+      <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+        After your trial expires, staff and admin access will be paused until a subscription is activated.
+        <strong>Your school data is safe</strong> — nothing is deleted.
+      </p>
+      <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">
+        Subscribe today to keep everything running without interruption.
+        Pricing starts at <strong>KES 3,000 per term</strong> for up to 150 students.
+      </p>
+      ${_btn(dashboardUrl, 'Subscribe now — keep access →')}
+      <p style="margin:16px 0 0;font-size:13px;color:#6b7280;line-height:1.6;">
+        Or copy this link into your browser:<br/>
+        <span style="color:#1a56db;word-break:break-all;">${dashboardUrl}</span>
+      </p>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+        Need help or have questions about pricing? Reply to this email — we're here.
+      </p>
+    `
   );
 
 const _shell = (title, body) => `<!DOCTYPE html>

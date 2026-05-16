@@ -5,6 +5,10 @@ import {
   sendParentEnrollmentEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
+  sendWelcomeEmail,
+  sendTrialDay3Email,
+  sendTrialMidpointEmail,
+  sendTrialExpiryEmail,
 } from '../services/email.service.js';
 import logger from '../config/logger.js';
 
@@ -24,6 +28,14 @@ const sendDirect = (type, payload) => {
       return sendPasswordResetEmail(payload);
     case JOB_NAMES.SEND_VERIFICATION_EMAIL:
       return sendVerificationEmail(payload);
+    case JOB_NAMES.SEND_WELCOME_EMAIL:
+      return sendWelcomeEmail(payload);
+    case JOB_NAMES.SEND_TRIAL_DAY3_EMAIL:
+      return sendTrialDay3Email(payload);
+    case JOB_NAMES.SEND_TRIAL_MIDPOINT_EMAIL:
+      return sendTrialMidpointEmail(payload);
+    case JOB_NAMES.SEND_TRIAL_EXPIRY_EMAIL:
+      return sendTrialExpiryEmail(payload);
     default:
       throw new Error(`Unknown email job type: ${type}`);
   }

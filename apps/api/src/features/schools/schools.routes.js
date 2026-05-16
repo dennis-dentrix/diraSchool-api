@@ -23,6 +23,7 @@ import {
   updateSubscription,
   requestSchoolDeactivation,
   requestSmsSenderId,
+  getTrialActivity,
 } from './schools.controller.js';
 
 const router = Router();
@@ -56,6 +57,9 @@ router.post(
 );
 
 // ── Superadmin routes (/api/v1/schools) ──────────────────────────────────────
+
+// Must be before /:id to avoid being captured as an ObjectId param
+router.get('/trial-activity', superadminOnly, getTrialActivity);
 
 router
   .route('/')

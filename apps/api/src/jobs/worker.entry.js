@@ -25,6 +25,7 @@ import { processReceiptJob } from './workers/receipt.worker.js';
 import { processImportJob } from './workers/import.worker.js';
 import { startEmailWorker } from './workers/email.worker.js';
 import { processCheckoutReminderScan } from './workers/checkout-reminder.worker.js';
+import { processTrialReminderScan } from './workers/trial-reminder.worker.js';
 
 validateEnv();
 initSentry('diraschool-worker');
@@ -77,6 +78,23 @@ const checkoutReminderWorker = new Worker(
   { connection, concurrency: 1 }
 );
 
+// ── Trial-reminder daily job ──────────────────────────────────────────────────
+// Runs at 08:00 UTC daily (11:00 EAT). Sends engagement emails to trial
+// schools at day 3, day 15, and day 27 of their 30-day trial.
+const trialReminderQueue = new Queue(QUEUE_NAMES.TRIAL_REMINDER, { connection });
+trialReminderQueue.on('error', (err) => logRedisConnectionError('Queue:trial-reminder', err));
+await trialReminderQueue.upsertJobScheduler(
+  'trial-reminder-scan',
+  { pattern: '0 8 * * *' },
+  { name: JOB_NAMES.RUN_TRIAL_REMINDER_SCAN, data: {} }
+);
+
+const trialReminderWorker = new Worker(
+  QUEUE_NAMES.TRIAL_REMINDER,
+  async () => processTrialReminderScan(),
+  { connection, concurrency: 1 }
+);
+
 const smsWorker = new Worker(QUEUE_NAMES.SMS, processSmsJob, {
   connection,
   concurrency: 5,    // process up to 5 SMS jobs in parallel
@@ -108,6 +126,7 @@ for (const [name, worker] of [
   ['import',            importWorker],
   ['email',             emailWorker],
   ['checkout-reminder', checkoutReminderWorker],
+  ['trial-reminder',    trialReminderWorker],
 ]) {
   worker.on('completed', (job) => {
     logger.info(`[Worker:${name}] Job ${job.id} completed`);
@@ -142,6 +161,8 @@ const shutdown = async (signal) => {
   await emailWorker.close();
   await checkoutReminderWorker.close();
   await checkoutQueue.close();
+  await trialReminderWorker.close();
+  await trialReminderQueue.close();
   await mongoose.disconnect();
   process.exit(0);
 };

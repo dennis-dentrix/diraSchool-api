@@ -23,6 +23,14 @@ const visitorSchema = new mongoose.Schema(
       required: [true, 'Reason for visit is required'],
       trim: true,
     },
+    timeIn: {
+      type: String,
+      trim: true,
+    },
+    timeOut: {
+      type: String,
+      trim: true,
+    },
     comment: {
       type: String,
       trim: true,

@@ -14,7 +14,7 @@ import { ROLES, PLAN_FEATURES } from '../../constants/index.js';
 const router = Router();
 
 // ── Feature gate: library module ─────────────────────────────────────────────
-// Plan-tier feature gate is active via PLAN_FEATURE_MAP.
+// Feature gate: requires active subscription (see requireFeature middleware).
 router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.LIBRARY));
 
 // Book catalogue — read access to all school staff

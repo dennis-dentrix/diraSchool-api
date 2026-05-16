@@ -13,7 +13,7 @@ const router = Router();
 
 // All parent routes: must be authenticated, not pending password change, and role=parent
 // ── Feature gate: parent portal ──────────────────────────────────────────────
-// Plan-tier feature gate is active via PLAN_FEATURE_MAP.
+// Feature gate: requires active subscription (see requireFeature middleware).
 router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.PARENT_PORTAL), authorize(ROLES.PARENT));
 
 router.get('/children', getMyChildren);

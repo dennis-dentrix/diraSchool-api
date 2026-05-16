@@ -17,6 +17,10 @@ import {
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendCheckoutReminderEmail,
+  sendWelcomeEmail,
+  sendTrialDay3Email,
+  sendTrialMidpointEmail,
+  sendTrialExpiryEmail,
 } from '../../services/email.service.js';
 import logger from '../../config/logger.js';
 
@@ -46,6 +50,22 @@ export const startEmailWorker = () => {
 
         case JOB_NAMES.SEND_CHECKOUT_REMINDER_EMAIL:
           result = await sendCheckoutReminderEmail(payload);
+          break;
+
+        case JOB_NAMES.SEND_WELCOME_EMAIL:
+          result = await sendWelcomeEmail(payload);
+          break;
+
+        case JOB_NAMES.SEND_TRIAL_DAY3_EMAIL:
+          result = await sendTrialDay3Email(payload);
+          break;
+
+        case JOB_NAMES.SEND_TRIAL_MIDPOINT_EMAIL:
+          result = await sendTrialMidpointEmail(payload);
+          break;
+
+        case JOB_NAMES.SEND_TRIAL_EXPIRY_EMAIL:
+          result = await sendTrialExpiryEmail(payload);
           break;
 
         default:

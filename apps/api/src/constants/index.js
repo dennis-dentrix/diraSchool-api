@@ -151,6 +151,7 @@ export const QUEUE_NAMES = {
   NOTIFICATION: 'notification',
   EMAIL: 'email',
   CHECKOUT_REMINDER: 'checkout-reminder',
+  TRIAL_REMINDER: 'trial-reminder',
 };
 
 export const JOB_NAMES = {
@@ -165,6 +166,11 @@ export const JOB_NAMES = {
   SEND_VERIFICATION_EMAIL:       'send-verification-email',
   SEND_CHECKOUT_REMINDER_EMAIL:  'send-checkout-reminder-email',
   RUN_CHECKOUT_REMINDER_SCAN:    'run-checkout-reminder-scan',
+  SEND_WELCOME_EMAIL:            'send-welcome-email',
+  SEND_TRIAL_DAY3_EMAIL:         'send-trial-day3-email',
+  SEND_TRIAL_MIDPOINT_EMAIL:     'send-trial-midpoint-email',
+  SEND_TRIAL_EXPIRY_EMAIL:       'send-trial-expiry-email',
+  RUN_TRIAL_REMINDER_SCAN:       'run-trial-reminder-scan',
 };
 
 export const AUDIT_ACTIONS = {
@@ -204,8 +210,8 @@ export const BORROWER_TYPES = {
 };
 
 // ── Feature keys — one constant per gated feature ────────────────────────────
-// Core features (students, classes, attendance, exams, fees, users) are NOT listed
-// here — they are always available on every plan.
+// Core features (students, classes, attendance, exams, fees, users, dashboard,
+// settings) are NOT listed here — they are always available on every plan.
 export const PLAN_FEATURES = {
   REPORT_CARDS:  'report_cards',
   PARENT_PORTAL: 'parent_portal',
@@ -214,25 +220,16 @@ export const PLAN_FEATURES = {
   BULK_IMPORT:   'bulk_import',
   AUDIT_LOG:     'audit_log',
   SMS:           'sms',
+  LIBRARY:       'library',
 };
 
-export const PLAN_FEATURE_MAP = {
-  [PLAN_TIERS.TRIAL]: Object.values(PLAN_FEATURES),
-  [PLAN_TIERS.BASIC]: [
-    PLAN_FEATURES.REPORT_CARDS,
-    PLAN_FEATURES.PARENT_PORTAL,
-    PLAN_FEATURES.TIMETABLE,
-  ],
-  [PLAN_TIERS.STANDARD]: [
-    PLAN_FEATURES.REPORT_CARDS,
-    PLAN_FEATURES.PARENT_PORTAL,
-    PLAN_FEATURES.TIMETABLE,
-    PLAN_FEATURES.TRANSPORT,
-    PLAN_FEATURES.BULK_IMPORT,
-    PLAN_FEATURES.AUDIT_LOG,
-  ],
-  [PLAN_TIERS.PREMIUM]: Object.values(PLAN_FEATURES),
-};
+// Features available during a free trial (subscriptionStatus = 'trial').
+// Everything else requires an active paid subscription.
+export const TRIAL_FEATURES = new Set([
+  PLAN_FEATURES.REPORT_CARDS,
+  PLAN_FEATURES.TIMETABLE,
+  PLAN_FEATURES.PARENT_PORTAL,
+]);
 
 // Redis cache TTLs (seconds)
 export const CACHE_TTL = {

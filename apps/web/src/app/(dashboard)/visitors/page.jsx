@@ -21,14 +21,24 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 const today = new Date().toISOString().split('T')[0];
 
+const fmt12h = (t) => {
+  if (!t) return '—';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${ampm}`;
+};
+
 const schema = z.object({
   visitDate: z.string().min(1, 'Date is required'),
+  timeIn: z.string().optional(),
+  timeOut: z.string().optional(),
   name: z.string().min(1, 'Name is required'),
   reason: z.string().min(1, 'Reason is required'),
   comment: z.string().optional(),
 });
 
-const EMPTY_FORM = { visitDate: today, name: '', reason: '', comment: '' };
+const nowTime = () => new Date().toTimeString().slice(0, 5);
+const EMPTY_FORM = () => ({ visitDate: today, timeIn: nowTime(), timeOut: '', name: '', reason: '', comment: '' });
 
 function VisitorDialog({ open, onClose, initial }) {
   const qc = useQueryClient();
@@ -37,8 +47,8 @@ function VisitorDialog({ open, onClose, initial }) {
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: initial
-      ? { visitDate: initial.visitDate?.split('T')[0] ?? today, name: initial.name, reason: initial.reason, comment: initial.comment ?? '' }
-      : EMPTY_FORM,
+      ? { visitDate: initial.visitDate?.split('T')[0] ?? today, timeIn: initial.timeIn ?? '', timeOut: initial.timeOut ?? '', name: initial.name, reason: initial.reason, comment: initial.comment ?? '' }
+      : EMPTY_FORM(),
   });
 
   const { mutate, isPending } = useMutation({
@@ -46,14 +56,14 @@ function VisitorDialog({ open, onClose, initial }) {
     onSuccess: () => {
       toast.success(isEdit ? 'Visitor record updated' : 'Visitor logged');
       qc.invalidateQueries({ queryKey: ['visitors'] });
-      reset(EMPTY_FORM);
+      reset(EMPTY_FORM());
       onClose();
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(EMPTY_FORM); onClose(); } }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { reset(EMPTY_FORM()); onClose(); } }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Visitor Record' : 'Log Visitor'}</DialogTitle>
@@ -63,6 +73,16 @@ function VisitorDialog({ open, onClose, initial }) {
             <Label>Date of Visit</Label>
             <Input type="date" max={today} {...register('visitDate')} />
             {errors.visitDate && <p className="text-xs text-destructive">{errors.visitDate.message}</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Time In <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input type="time" {...register('timeIn')} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Time Out <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input type="time" {...register('timeOut')} />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label>Visitor Name</Label>
@@ -79,7 +99,7 @@ function VisitorDialog({ open, onClose, initial }) {
             <Textarea {...register('comment')} placeholder="Additional notes…" rows={3} />
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => { reset(EMPTY_FORM); onClose(); }}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => { reset(EMPTY_FORM()); onClose(); }}>Cancel</Button>
             <Button type="submit" disabled={isPending}>{isPending ? 'Saving…' : isEdit ? 'Update' : 'Log Visitor'}</Button>
           </DialogFooter>
         </form>
@@ -180,8 +200,10 @@ export default function VisitorsPage() {
                   <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground w-28">Date</th>
                   <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Visitor</th>
                   <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Reason</th>
-                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Comment</th>
-                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Recorded By</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Time In</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Time Out</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Comment</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden xl:table-cell">Recorded By</th>
                   <th className="py-2.5 px-3 w-20" />
                 </tr>
               </thead>
@@ -195,8 +217,10 @@ export default function VisitorsPage() {
                       </td>
                       <td className="py-3 px-3 font-medium">{v.name}</td>
                       <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">{v.reason}</td>
-                      <td className="py-3 px-3 text-xs text-muted-foreground hidden md:table-cell">{v.comment || '—'}</td>
-                      <td className="py-3 px-3 text-xs text-muted-foreground hidden lg:table-cell">
+                      <td className="py-3 px-3 text-xs tabular-nums text-muted-foreground hidden md:table-cell">{fmt12h(v.timeIn)}</td>
+                      <td className="py-3 px-3 text-xs tabular-nums text-muted-foreground hidden md:table-cell">{fmt12h(v.timeOut)}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground hidden lg:table-cell">{v.comment || '—'}</td>
+                      <td className="py-3 px-3 text-xs text-muted-foreground hidden xl:table-cell">
                         {recorder ? `${recorder.firstName} ${recorder.lastName}` : '—'}
                       </td>
                       <td className="py-3 px-3">

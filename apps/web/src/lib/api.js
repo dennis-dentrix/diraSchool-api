@@ -162,6 +162,7 @@ export const adminApi = {
   updateFinanceTax: (id, data) => api.patch(`/admin/finance/taxes/${id}`, data),
   deleteFinanceTax: (id) => api.delete(`/admin/finance/taxes/${id}`),
   smsAnalytics: (params) => api.get('/admin/sms-analytics', { params }),
+  trialActivity: () => api.get('/schools/trial-activity'),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────

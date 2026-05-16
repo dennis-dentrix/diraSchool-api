@@ -1,5 +1,7 @@
 import express from 'express';
 import { protect, blockIfMustChangePassword, adminOnly } from '../../middleware/auth.js';
+import requireFeature from '../../middleware/requireFeature.js';
+import { PLAN_FEATURES } from '../../constants/index.js';
 import {
   validateRemarks,
   validateSubjectRemark,
@@ -15,7 +17,7 @@ import {
 
 const router = express.Router();
 
-router.use(protect, blockIfMustChangePassword, adminOnly);
+router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.REPORT_CARDS), adminOnly);
 
 // ── Read-only access to existing report card data ────────────────────────────
 // Generation, publishing, and PDF export have been removed.

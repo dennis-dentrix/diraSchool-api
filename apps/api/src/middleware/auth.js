@@ -107,7 +107,7 @@ export const protect = async (req, res, next) => {
 
     if (!schoolData) {
       const school = await School.findById(user.schoolId).select(
-        'isActive subscriptionStatus trialExpiry planTier'
+        'isActive subscriptionStatus trialExpiry planTier smsSettings.smsEnabled'
       );
       if (school) {
         schoolData = {
@@ -115,6 +115,7 @@ export const protect = async (req, res, next) => {
           subscriptionStatus: school.subscriptionStatus,
           trialExpiry: school.trialExpiry,
           planTier: school.planTier,
+          smsEnabled: school.smsSettings?.smsEnabled ?? false,
         };
         // Cache for 5 minutes
         if (redis) {

@@ -22,7 +22,7 @@ import { ROLES, PLAN_FEATURES } from '../../constants/index.js';
 const router = Router();
 
 // ── Feature gate: transport module ───────────────────────────────────────────
-// Plan-tier feature gate is active via PLAN_FEATURE_MAP.
+// Feature gate: requires active subscription (see requireFeature middleware).
 router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.TRANSPORT));
 
 // Transport is managed by deputy headteacher, secretary, and accountant.

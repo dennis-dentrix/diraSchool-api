@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { protect, blockIfMustChangePassword, authorize } from '../../middleware/auth.js';
-import { ROLES } from '../../constants/index.js';
+import requireFeature from '../../middleware/requireFeature.js';
+import { ROLES, PLAN_FEATURES } from '../../constants/index.js';
 import { handleInboundSms } from './sms-inbound.controller.js';
 import {
   sendSingle,
@@ -23,7 +24,7 @@ router.post('/inbound', handleInboundSms);
 router.post('/dlr',     handleDlr);       // Delivery report callback from provider
 
 // ── Protected ─────────────────────────────────────────────────────────────────
-router.use(protect, blockIfMustChangePassword);
+router.use(protect, blockIfMustChangePassword, requireFeature(PLAN_FEATURES.SMS));
 
 const canSms = authorize(
   ROLES.SCHOOL_ADMIN,

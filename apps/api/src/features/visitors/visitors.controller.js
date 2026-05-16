@@ -42,7 +42,7 @@ export const listVisitors = asyncHandler(async (req, res) => {
 
 // POST /visitors
 export const createVisitor = asyncHandler(async (req, res) => {
-  const { visitDate, name, reason, comment } = req.body;
+  const { visitDate, name, reason, comment, timeIn, timeOut } = req.body;
 
   if (!visitDate || !name || !reason) {
     return sendError(res, 'visitDate, name, and reason are required.', 400);
@@ -54,6 +54,8 @@ export const createVisitor = asyncHandler(async (req, res) => {
     name: name.trim(),
     reason: reason.trim(),
     comment: comment?.trim(),
+    timeIn: timeIn?.trim() || undefined,
+    timeOut: timeOut?.trim() || undefined,
     recordedBy: req.user._id,
   });
 
@@ -66,11 +68,13 @@ export const updateVisitor = asyncHandler(async (req, res) => {
   const visitor = await Visitor.findOne({ _id: req.params.id, schoolId: req.user.schoolId });
   if (!visitor) return sendError(res, 'Visitor record not found.', 404);
 
-  const { visitDate, name, reason, comment } = req.body;
+  const { visitDate, name, reason, comment, timeIn, timeOut } = req.body;
   if (visitDate) visitor.visitDate = new Date(visitDate);
   if (name)      visitor.name = name.trim();
   if (reason)    visitor.reason = reason.trim();
   if (typeof comment !== 'undefined') visitor.comment = comment?.trim();
+  if (typeof timeIn  !== 'undefined') visitor.timeIn  = timeIn?.trim()  || undefined;
+  if (typeof timeOut !== 'undefined') visitor.timeOut = timeOut?.trim() || undefined;
 
   await visitor.save();
   const populated = await visitor.populate('recordedBy', 'firstName lastName');

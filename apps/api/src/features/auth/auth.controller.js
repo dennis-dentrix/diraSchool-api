@@ -414,6 +414,24 @@ export const acceptInvite = asyncHandler(async (req, res) => {
   user.emailVerified = true; // admin-created accounts are trusted — no separate email check
   await user.save();
 
+  // Send onboarding welcome email to new school admins (fire-and-forget)
+  if (user.role === ROLES.SCHOOL_ADMIN && user.schoolId) {
+    School.findById(user.schoolId).select('name').then((school) => {
+      if (!school) return;
+      queueEmailWithDirectFallback(
+        JOB_NAMES.SEND_WELCOME_EMAIL,
+        {
+          to: user.email,
+          firstName: user.firstName,
+          schoolName: school.name,
+          dashboardUrl: env.CLIENT_URL,
+          meta: { schoolId: user.schoolId, userId: user._id, flow: 'onboarding-welcome' },
+        },
+        'Welcome email'
+      );
+    }).catch(() => {/* non-fatal */});
+  }
+
   // Auto-sign the user in immediately
   const jwtToken = signToken(user._id);
   attachCookie(res, jwtToken);
