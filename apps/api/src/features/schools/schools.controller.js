@@ -477,7 +477,7 @@ export const getTrialActivity = asyncHandler(async (req, res) => {
     .sort({ trialExpiry: 1 })
     .lean();
 
-  if (!trialSchools.length) return sendSuccess(res, []);
+  if (!trialSchools.length) return sendSuccess(res, { schools: [] });
 
   const schoolIds = trialSchools.map((s) => s._id);
 
@@ -535,5 +535,5 @@ export const getTrialActivity = asyncHandler(async (req, res) => {
     };
   });
 
-  return sendSuccess(res, data);
+  return sendSuccess(res, { schools: data });
 });

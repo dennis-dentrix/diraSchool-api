@@ -43,7 +43,7 @@ export default function TrialActivityPage() {
 
   const { data: schools = [], isLoading } = useQuery({
     queryKey: ['trial-activity'],
-    queryFn: () => adminApi.trialActivity().then((r) => r.data.data),
+    queryFn: () => adminApi.trialActivity().then((r) => r.data.schools ?? []),
   });
 
   const filtered = schools.filter((s) => {
