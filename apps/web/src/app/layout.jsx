@@ -66,9 +66,11 @@ export const metadata = {
     googleBot: { index: true, follow: true, 'max-image-preview': 'large' },
   },
   icons: {
-    icon: '/icon.svg',
-    shortcut: '/icon.svg',
-    apple: '/icon.svg',
+    icon: [
+      { url: '/icon', type: 'image/png', sizes: '512x512' },
+    ],
+    shortcut: '/icon',
+    apple: '/apple-icon',
   },
   verification: {
     // google: 'your-google-site-verification-token',
@@ -81,7 +83,12 @@ const organizationSchema = {
   '@type': 'Organization',
   name: SITE_NAME,
   url: SITE_URL,
-  logo: `${SITE_URL}/icon.svg`,
+  logo: {
+    '@type': 'ImageObject',
+    url: `${SITE_URL}/icon`,
+    width: 512,
+    height: 512,
+  },
 };
 
 export default function RootLayout({ children }) {
