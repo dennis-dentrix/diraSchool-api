@@ -31,6 +31,9 @@ import {
   deleteGroup,
   addSchoolToGroup,
   removeSchoolFromGroup,
+  purgeSchool,
+  previewOrphans,
+  purgeOrphans,
 } from './admin.controller.js';
 
 const router = express.Router();
@@ -72,5 +75,10 @@ router.delete('/groups/:id',                     deleteGroup);
 router.patch('/groups/:id/pricing-agreement',    updateGroupPricingAgreement);
 router.post('/groups/:id/schools',               addSchoolToGroup);
 router.delete('/groups/:id/schools/:schoolId',   removeSchoolFromGroup);
+
+// Test-data purge (danger zone)
+router.delete('/purge/school/:id',              purgeSchool);
+router.get('/purge/orphans/preview',            previewOrphans);
+router.delete('/purge/orphans',                 purgeOrphans);
 
 export default router;

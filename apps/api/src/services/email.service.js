@@ -572,12 +572,16 @@ const _welcomeTemplate = ({ firstName, schoolName, dashboardUrl }) =>
 
       ${_btn(dashboardUrl, 'Go to Dashboard →')}
 
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />
-      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
-        Need help? Reply to this email or reach us at
-        <a href="mailto:contact@diraschool.com" style="color:#1a56db;">contact@diraschool.com</a>.
-        We're happy to walk you through setup.
-      </p>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:28px 0 0;">
+        <p style="margin:0 0 6px;font-size:14px;font-weight:700;color:#166534;">📞 We'll be in touch</p>
+        <p style="margin:0 0 8px;font-size:14px;color:#374151;line-height:1.6;">
+          A member of the Diraschool team will call you shortly to help you get set up and answer any questions about the platform.
+        </p>
+        <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">
+          You can also reach us anytime on <strong><a href="tel:+254115879589" style="color:#166534;text-decoration:none;">0115 879 589</a></strong>
+          or at <a href="mailto:contact@diraschool.com" style="color:#166534;">contact@diraschool.com</a>.
+        </p>
+      </div>
     `
   );
 

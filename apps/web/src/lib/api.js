@@ -163,6 +163,10 @@ export const adminApi = {
   deleteFinanceTax: (id) => api.delete(`/admin/finance/taxes/${id}`),
   smsAnalytics: (params) => api.get('/admin/sms-analytics', { params }),
   trialActivity: () => api.get('/schools/trial-activity'),
+  // Purge helpers (test-data cleanup)
+  purgeSchool: (id) => api.delete(`/admin/purge/school/${id}`),
+  previewOrphans: () => api.get('/admin/purge/orphans/preview'),
+  purgeOrphans: () => api.delete('/admin/purge/orphans'),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────

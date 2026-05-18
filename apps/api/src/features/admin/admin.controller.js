@@ -18,9 +18,31 @@ import Student     from '../students/Student.model.js';
 import ClassModel  from '../classes/Class.model.js';
 import AuditLog    from '../audit/AuditLog.model.js';
 import SmsDelivery from '../sms/SmsDelivery.model.js';
+import SmsLog      from '../sms/SmsLog.model.js';
 import SubscriptionPayment from '../subscriptions/SubscriptionPayment.model.js';
 import PlatformExpense from './PlatformExpense.model.js';
 import PlatformTaxRecord, { PLATFORM_TAX_TYPES } from './PlatformTaxRecord.model.js';
+import Attendance  from '../attendance/Attendance.model.js';
+import Exam        from '../exams/Exam.model.js';
+import Result      from '../results/Result.model.js';
+import ReportCard  from '../report-cards/ReportCard.model.js';
+import FeeStructure from '../fees/FeeStructure.model.js';
+import Payment     from '../fees/Payment.model.js';
+import PaymentNotification from '../fees/PaymentNotification.model.js';
+import SchoolSettings from '../settings/SchoolSettings.model.js';
+import TransportRoute from '../transport/TransportRoute.model.js';
+import Visitor     from '../visitors/Visitor.model.js';
+import LessonPlan  from '../lesson-plans/LessonPlan.model.js';
+import Book        from '../library/Book.model.js';
+import BookLoan    from '../library/BookLoan.model.js';
+import Subject     from '../subjects/Subject.model.js';
+import Department  from '../subjects/Department.model.js';
+import Timetable   from '../timetable/Timetable.model.js';
+import CheckIn     from '../checkins/CheckIn.model.js';
+import PayrollRun  from '../payroll/PayrollRun.model.js';
+import SalaryGrade from '../payroll/SalaryGrade.model.js';
+import Leave       from '../leave/Leave.model.js';
+import Notification from '../notifications/Notification.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
@@ -1506,4 +1528,82 @@ export const removeSchoolFromGroup = asyncHandler(async (req, res) => {
   await school.save();
 
   return sendSuccess(res, { message: 'School removed from group.' });
+});
+
+// ─── Test-data purge helpers (superadmin only) ────────────────────────────
+
+const SCHOOL_COLLECTIONS = [
+  Attendance, Exam, Result, ReportCard,
+  FeeStructure, Payment, PaymentNotification,
+  SchoolSettings, TransportRoute, Visitor,
+  LessonPlan, Book, BookLoan,
+  Subject, Department, Timetable,
+  CheckIn, PayrollRun, SalaryGrade,
+  Leave, Notification,
+  SmsDelivery, SmsLog,
+  AuditLog, SubscriptionPayment,
+  ClassModel, Student, User,
+];
+
+/**
+ * DELETE /api/v1/admin/purge/school/:id
+ * Hard-deletes a school and every document in every collection that
+ * belongs to that school.  Intended for test-data cleanup only.
+ */
+export const purgeSchool = asyncHandler(async (req, res) => {
+  const school = await School.findById(req.params.id);
+  if (!school) return sendError(res, 'School not found.', 404);
+
+  const schoolId = school._id;
+  const deleted = {};
+
+  for (const Model of SCHOOL_COLLECTIONS) {
+    const r = await Model.deleteMany({ school: schoolId });
+    deleted[Model.modelName] = r.deletedCount;
+  }
+
+  await School.findByIdAndDelete(schoolId);
+  deleted.School = 1;
+
+  return sendSuccess(res, {
+    message: `School "${school.name}" and all related data permanently deleted.`,
+    deleted,
+  });
+});
+
+/**
+ * GET /api/v1/admin/purge/orphans/preview
+ * Returns counts of orphaned documents (records referencing schools
+ * that no longer exist) so the superadmin can review before purging.
+ */
+export const previewOrphans = asyncHandler(async (req, res) => {
+  const schoolIds = await School.distinct('_id');
+
+  const counts = {};
+  for (const Model of SCHOOL_COLLECTIONS) {
+    counts[Model.modelName] = await Model.countDocuments({
+      school: { $nin: schoolIds },
+    });
+  }
+
+  return sendSuccess(res, { counts });
+});
+
+/**
+ * DELETE /api/v1/admin/purge/orphans
+ * Deletes all documents whose `school` field references a non-existent school.
+ */
+export const purgeOrphans = asyncHandler(async (req, res) => {
+  const schoolIds = await School.distinct('_id');
+
+  const deleted = {};
+  for (const Model of SCHOOL_COLLECTIONS) {
+    const r = await Model.deleteMany({ school: { $nin: schoolIds } });
+    deleted[Model.modelName] = r.deletedCount;
+  }
+
+  return sendSuccess(res, {
+    message: 'Orphaned records permanently deleted.',
+    deleted,
+  });
 });

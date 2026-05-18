@@ -21,6 +21,7 @@ import {
   Umbrella,
   Layers,
   Clock,
+  Trash2,
 } from 'lucide-react';
 
 // Role groups
@@ -92,6 +93,7 @@ export const superadminNavItems = [
   { label: 'Finance',        href: '/superadmin/finance',       icon: Landmark },
   { label: 'Users',          href: '/superadmin/users',         icon: UserCog },
   { label: 'Audit Logs',     href: '/superadmin/audit-logs',    icon: ShieldAlert },
+  { label: 'Danger Zone',   href: '/superadmin/danger-zone',   icon: Trash2 },
 ];
 
 export const parentNavItems = [
