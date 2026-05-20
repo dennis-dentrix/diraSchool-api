@@ -221,7 +221,8 @@ export default function ExamsPage() {
 
               {/* Hairline list */}
               <div className="rounded-lg border overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[400px]">
                   <thead>
                     <tr className="bg-muted/30">
                       <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Exam</th>
@@ -270,6 +271,7 @@ export default function ExamsPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           ))}

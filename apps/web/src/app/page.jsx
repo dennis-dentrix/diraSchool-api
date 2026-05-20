@@ -84,13 +84,16 @@ function MarketingNav() {
         <div className="hidden sm:flex items-center gap-6 text-sm text-[#5c6b60]">
           <Link href="/pricing" className="hover:text-[#1a2e1e] transition-colors">Pricing</Link>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/login" className="text-sm text-[#5c6b60] hover:text-[#1a2e1e] transition-colors hidden sm:block">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/login"
+            className="inline-flex items-center px-3 py-2 rounded-lg border border-[#ddd8d0] text-sm text-[#1a2e1e] font-medium hover:bg-[#f7f5f0] transition-colors"
+          >
             Sign in
           </Link>
           <Link
             href="/register"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1f5b5e] hover:bg-[#1a4e51] text-white text-sm font-semibold shadow-sm transition-all duration-150 active:scale-[0.98]"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1f5b5e] hover:bg-[#1a4e51] text-white text-sm font-semibold shadow-sm transition-all duration-150 active:scale-[0.98] hidden sm:inline-flex"
           >
             Start free trial
           </Link>

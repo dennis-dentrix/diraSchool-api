@@ -15,7 +15,7 @@ export default function FeesLayout({ children }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex border-b">
+      <div className="flex border-b overflow-x-auto">
         {ITEMS.map((item) => {
           const isActive = item.href === '/fees'
             ? pathname === '/fees'
@@ -26,7 +26,7 @@ export default function FeesLayout({ children }) {
               href={item.href}
               data-tour={item.tour}
               className={cn(
-                'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px',
+                'px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap',
                 isActive
                   ? 'border-foreground text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground',

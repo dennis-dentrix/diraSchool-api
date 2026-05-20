@@ -715,7 +715,7 @@ export default function MessagingPage() {
       )}
 
       <Tabs defaultValue="single">
-        <TabsList className="grid grid-cols-4 w-full max-w-xl">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full max-w-xl">
           <TabsTrigger value="single">
             <User className="h-3.5 w-3.5 mr-1.5" /> Single
           </TabsTrigger>

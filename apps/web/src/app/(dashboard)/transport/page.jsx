@@ -292,7 +292,8 @@ function ViewStudentsDialog({ open, onClose, route }) {
           ) : students.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-10">No students assigned to this route</p>
           ) : (
-            <table className="w-full text-sm border-collapse">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse min-w-[480px]">
               <thead className="bg-muted/50 sticky top-0">
                 <tr>
                   {['#','Student Name','Class','Admission No.','Drop-off Point'].map((h) => (
@@ -316,6 +317,7 @@ function ViewStudentsDialog({ open, onClose, route }) {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
         <DialogFooter>

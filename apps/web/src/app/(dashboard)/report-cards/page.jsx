@@ -168,7 +168,8 @@ export default function ReportCardsPage() {
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[440px]">
             <thead>
               <tr className="bg-muted/30">
                 <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Student</th>
@@ -241,6 +242,7 @@ export default function ReportCardsPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

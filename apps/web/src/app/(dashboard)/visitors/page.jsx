@@ -194,7 +194,8 @@ export default function VisitorsPage() {
       ) : (
         <>
           <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[380px]">
               <thead>
                 <tr className="bg-muted/30">
                   <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground w-28">Date</th>
@@ -238,6 +239,7 @@ export default function VisitorsPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
           {(meta.pages ?? 1) > 1 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground">

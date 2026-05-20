@@ -720,7 +720,8 @@ export default function StaffPage() {
           ) : (
             <>
               <div className="rounded-lg border overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[480px]">
                   <thead>
                     <tr className="bg-muted/30">
                       <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Staff Member</th>
@@ -821,6 +822,7 @@ export default function StaffPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
               </div>
               {(pagination?.totalPages ?? 1) > 1 && (
                 <div className="flex items-center justify-between text-xs text-muted-foreground">

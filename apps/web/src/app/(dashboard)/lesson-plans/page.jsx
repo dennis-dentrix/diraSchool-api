@@ -534,6 +534,7 @@ export default function LessonPlansPage() {
   const [shareTarget, setShareTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [selectedId, setSelectedId]   = useState(null);
+  const [mobileView, setMobileView]   = useState('list'); // 'list' | 'detail'
   const [search, setSearch]           = useState('');
   const [filters, setFilters] = useState({
     academicYear: defaultAcademicYear,
@@ -581,11 +582,23 @@ export default function LessonPlansPage() {
   return (
     <div className="flex flex-col gap-4 h-[calc(100vh-6rem)]">
       <div className="flex items-center justify-between shrink-0">
-        <PageHeader
-          overline="Academics"
-          title="Lesson Plans"
-          description="Upload and manage lesson plans and work schedules"
-        />
+        {/* On mobile in detail view, show a back button instead of the full header */}
+        {mobileView === 'detail' && (
+          <button
+            type="button"
+            className="lg:hidden flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setMobileView('list')}
+          >
+            <ChevronLeft className="h-4 w-4" /> Plans
+          </button>
+        )}
+        <div className={cn(mobileView === 'detail' ? 'hidden lg:block' : '')}>
+          <PageHeader
+            overline="Academics"
+            title="Lesson Plans"
+            description="Upload and manage lesson plans and work schedules"
+          />
+        </div>
         <Button onClick={() => setUploadOpen(true)} size="sm" className="gap-1.5 shrink-0">
           <Plus className="h-4 w-4" /> Upload Plan
         </Button>
@@ -593,7 +606,13 @@ export default function LessonPlansPage() {
 
       <div className="flex gap-0 flex-1 min-h-0 rounded-lg border overflow-hidden">
         {/* ── Left pane: list ─────────────────────────────────────────────── */}
-        <div className="w-72 shrink-0 flex flex-col border-r">
+        <div className={cn(
+          'flex flex-col border-r',
+          // Mobile: full width, hidden when detail is active
+          mobileView === 'detail' ? 'hidden lg:flex' : 'flex w-full',
+          // Desktop: fixed sidebar width
+          'lg:w-72 lg:shrink-0',
+        )}>
           {/* Filters bar */}
           <div className="p-2 space-y-2 border-b shrink-0">
             <Input
@@ -638,7 +657,10 @@ export default function LessonPlansPage() {
                   key={plan._id}
                   plan={plan}
                   selected={plan._id === (selectedId ?? filteredPlans[0]?._id)}
-                  onClick={() => setSelectedId(plan._id)}
+                  onClick={() => {
+                    setSelectedId(plan._id);
+                    setMobileView('detail');
+                  }}
                 />
               ))
             )}
@@ -652,7 +674,11 @@ export default function LessonPlansPage() {
         </div>
 
         {/* ── Right pane: detail ───────────────────────────────────────────── */}
-        <div className="flex-1 min-w-0 bg-muted/20">
+        <div className={cn(
+          'flex-1 min-w-0 bg-muted/20',
+          // Mobile: full width when in detail view, hidden otherwise
+          mobileView === 'list' ? 'hidden lg:flex lg:flex-col' : 'flex flex-col',
+        )}>
           {!selectedPlan ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
               <FileText className="h-10 w-10 opacity-25" />

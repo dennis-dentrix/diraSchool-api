@@ -232,8 +232,8 @@ export default function DashboardLayout({ children }) {
             schoolDayStatus={schoolDayStatus}
             tomorrowHoliday={tomorrowHoliday}
           />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6">
-            <div className="space-y-4">
+          <main className="flex-1 overflow-y-auto p-4 sm:p-5 md:p-6">
+            <div className="space-y-4 sm:space-y-5">
               <TourBanner />
               {children}
             </div>

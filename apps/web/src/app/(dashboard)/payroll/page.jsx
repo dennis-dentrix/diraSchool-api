@@ -111,7 +111,8 @@ function GradesTab() {
         </div>
       ) : (
         <div className="rounded-lg border bg-card overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[320px]">
             <thead>
               <tr className="border-b bg-muted/30">
                 <th className="py-2 px-4 text-left text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Grade</th>
@@ -139,6 +140,7 @@ function GradesTab() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -363,7 +365,7 @@ function RunsTab({ canApprove }) {
 
       {/* Summary ledger strip */}
       {ledgerStats && (
-        <div className="grid grid-cols-5 gap-px rounded-lg border bg-border overflow-hidden">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px rounded-lg border bg-border overflow-hidden">
           {ledgerStats.map(({ label, value, accent }) => (
             <div key={label} className="bg-card px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">{label}</p>

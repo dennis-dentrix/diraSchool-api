@@ -202,6 +202,7 @@ export default function FeeStructuresPage() {
   const [open, setOpen]               = useState(false);
   const [adaptOpen, setAdaptOpen]     = useState(false);
   const [selectedId, setSelectedId]   = useState(null);
+  const [mobileView, setMobileView]   = useState('list');
   const [filterYear,  setFilterYear]  = useState(String(CURRENT_YEAR));
   const [filterTerm,  setFilterTerm]  = useState('');
   const [filterClass, setFilterClass] = useState('');
@@ -352,7 +353,8 @@ export default function FeeStructuresPage() {
         {canManageStructures && (
           <>
             <Button size="sm" variant="outline" onClick={() => setAdaptOpen(true)}>
-              <Copy className="h-4 w-4 mr-1" /> Adapt from Previous Year
+              <Copy className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Adapt from Previous Year</span>
             </Button>
             <Button size="sm" onClick={() => setOpen(true)}>
               <Plus className="h-4 w-4 mr-1" /> New Structure
@@ -419,7 +421,10 @@ export default function FeeStructuresPage() {
       ) : (
         <div className="flex gap-0 rounded-lg border overflow-hidden" style={{ minHeight: '520px' }}>
           {/* Left list */}
-          <div className="w-64 shrink-0 border-r flex flex-col">
+          <div className={cn(
+            'border-r flex flex-col',
+            mobileView === 'detail' ? 'hidden lg:flex lg:w-64 lg:shrink-0' : 'flex w-full lg:w-64 lg:shrink-0',
+          )}>
             <div className="px-4 py-2.5 border-b bg-muted/30">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {sortedStructures.length} structure{sortedStructures.length !== 1 ? 's' : ''}
@@ -431,14 +436,24 @@ export default function FeeStructuresPage() {
                   key={s._id}
                   structure={s}
                   selected={s._id === (selectedId ?? sortedStructures[0]?._id)}
-                  onClick={() => setSelectedId(s._id)}
+                  onClick={() => { setSelectedId(s._id); setMobileView('detail'); }}
                 />
               ))}
             </div>
           </div>
 
           {/* Right detail */}
-          <div className="flex-1 min-w-0 bg-background">
+          <div className={cn(
+            'flex-1 min-w-0 bg-background',
+            mobileView === 'list' ? 'hidden lg:block' : 'block',
+          )}>
+            {/* Mobile back button */}
+            <button
+              onClick={() => setMobileView('list')}
+              className="lg:hidden flex items-center gap-1.5 px-4 py-2.5 border-b text-sm text-muted-foreground hover:text-foreground w-full"
+            >
+              <span className="text-base leading-none">←</span> All Structures
+            </button>
             {selectedStructure ? (
               <StructureDetailPane
                 structure={selectedStructure}
@@ -513,13 +528,14 @@ export default function FeeStructuresPage() {
                     <Plus className="h-3 w-3" /> Add Row
                   </Button>
                 </div>
-                <div className="grid grid-cols-[1fr_1.5fr_6rem_2rem] gap-2 px-1">
+                <div className="overflow-x-auto">
+                <div className="grid grid-cols-[1fr_1.5fr_6rem_2rem] gap-2 px-1 min-w-[400px]">
                   <p className="text-xs font-medium text-muted-foreground">Category</p>
                   <p className="text-xs font-medium text-muted-foreground">Description</p>
                   <p className="text-xs font-medium text-muted-foreground text-right">Amount (KES)</p>
                   <span />
                 </div>
-                <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1 min-w-[400px]">
                   {fields.map((field, i) => (
                     <div key={field.id} className="grid grid-cols-[1fr_1.5fr_6rem_2rem] gap-2 items-center">
                       <Select defaultValue={field.category || 'School Fees'} onValueChange={(v) => setValue(`items.${i}.category`, v)}>
@@ -535,6 +551,7 @@ export default function FeeStructuresPage() {
                       ) : <span />}
                     </div>
                   ))}
+                </div>
                 </div>
                 <div className="flex justify-end pt-2 border-t">
                   <span className="text-sm font-semibold flex gap-4">
@@ -629,13 +646,14 @@ export default function FeeStructuresPage() {
               <p className="text-sm text-muted-foreground">Update fee items and notes. Class/year/term stay unchanged.</p>
             </DialogHeader>
             <form onSubmit={handleSubmitEdit((data) => { if (editingStructure?._id) updateStructure({ id: editingStructure._id, data }); })} className="space-y-5">
-              <div className="grid grid-cols-[1fr_1.5fr_6rem_2rem] gap-2 px-1">
+              <div className="overflow-x-auto">
+              <div className="grid grid-cols-[1fr_1.5fr_6rem_2rem] gap-2 px-1 min-w-[400px]">
                 <p className="text-xs font-medium text-muted-foreground">Category</p>
                 <p className="text-xs font-medium text-muted-foreground">Description</p>
                 <p className="text-xs font-medium text-muted-foreground text-right">Amount (KES)</p>
                 <span />
               </div>
-              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1 min-w-[400px]">
                 {editFields.map((field, i) => (
                   <div key={field.id} className="grid grid-cols-[1fr_1.5fr_6rem_2rem] gap-2 items-center">
                     <Select defaultValue={field.category || 'School Fees'} onValueChange={(v) => setEditValue(`items.${i}.category`, v)}>
@@ -651,6 +669,7 @@ export default function FeeStructuresPage() {
                     ) : <span />}
                   </div>
                 ))}
+              </div>
               </div>
               <div className="flex justify-between items-center">
                 <Button type="button" size="sm" variant="outline" onClick={() => appendEdit({ category: 'School Fees', name: '', amount: '' })}>

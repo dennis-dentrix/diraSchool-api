@@ -76,9 +76,9 @@ function TotalsStrip({ payments, loading }) {
   return (
     <div className="grid grid-cols-3 gap-px rounded-lg border bg-border overflow-hidden mb-4">
       {stats.map((s) => (
-        <div key={s.label} className="bg-card px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{s.label}</p>
-          <p className="font-mono text-base font-semibold tabular-nums">{s.value}</p>
+        <div key={s.label} className="bg-card px-3 py-3 sm:px-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 leading-tight">{s.label}</p>
+          <p className="font-mono text-sm sm:text-base font-semibold tabular-nums">{s.value}</p>
         </div>
       ))}
     </div>
@@ -336,7 +336,7 @@ function RecordPaymentPanel({ open, onClose, settingsData, schoolData, studentsD
               {/* Method segmented control */}
               <div className="space-y-1.5">
                 <Label>Payment Method</Label>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {METHODS.map((m) => (
                     <button
                       key={m}
@@ -612,7 +612,8 @@ export default function PaymentsPage() {
       <PageHeader title="Payments" description="Record and manage fee payments">
         <RefreshButton queryKeys={[['payments']]} />
         <Button variant="outline" size="sm" onClick={() => setBalanceOpen(true)}>
-          <Wallet className="h-4 w-4 mr-1" /> Check Balance
+          <Wallet className="h-4 w-4 sm:mr-1" />
+          <span className="hidden sm:inline">Check Balance</span>
         </Button>
         <Button
           variant="outline" size="sm"
@@ -621,7 +622,8 @@ export default function PaymentsPage() {
             catch { toast.error('Export failed'); }
           }}
         >
-          <Download className="h-4 w-4 mr-1" /> Export CSV
+          <Download className="h-4 w-4 sm:mr-1" />
+          <span className="hidden sm:inline">Export CSV</span>
         </Button>
         <Button size="sm" onClick={() => setPanelOpen(true)}>
           <Plus className="h-4 w-4 mr-1" /> Record Payment
@@ -633,7 +635,7 @@ export default function PaymentsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-4">
-        <div className="relative flex-1 min-w-[160px] max-w-xs">
+        <div className="relative w-full sm:flex-1 sm:min-w-[160px] sm:max-w-xs">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search reference…"
@@ -642,33 +644,35 @@ export default function PaymentsPage() {
             className="pl-8 h-9"
           />
         </div>
-        <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v === 'all' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="h-9 w-[130px]"><SelectValue placeholder="Method" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All methods</SelectItem>
-            {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{capitalize(m)}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v === 'all' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="h-9 w-[120px]"><SelectValue placeholder="Year" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All years</SelectItem>
-            {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={termFilter} onValueChange={(v) => { setTermFilter(v === 'all' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="h-9 w-[110px]"><SelectValue placeholder="Term" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All terms</SelectItem>
-            {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        {hasFilters && (
-          <Button variant="ghost" size="sm" className="h-9"
-            onClick={() => { setSearch(''); setMethodFilter(''); setStatusFilter(''); setYearFilter(''); setTermFilter(''); setPage(1); }}>
-            Clear
-          </Button>
-        )}
+        <div className="flex gap-2 flex-wrap flex-1">
+          <Select value={methodFilter} onValueChange={(v) => { setMethodFilter(v === 'all' ? '' : v); setPage(1); }}>
+            <SelectTrigger className="h-9 flex-1 min-w-[110px] sm:w-[130px] sm:flex-none"><SelectValue placeholder="Method" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All methods</SelectItem>
+              {PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{capitalize(m)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v === 'all' ? '' : v); setPage(1); }}>
+            <SelectTrigger className="h-9 flex-1 min-w-[90px] sm:w-[120px] sm:flex-none"><SelectValue placeholder="Year" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All years</SelectItem>
+              {ACADEMIC_YEARS.map((y) => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={termFilter} onValueChange={(v) => { setTermFilter(v === 'all' ? '' : v); setPage(1); }}>
+            <SelectTrigger className="h-9 flex-1 min-w-[90px] sm:w-[110px] sm:flex-none"><SelectValue placeholder="Term" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All terms</SelectItem>
+              {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {hasFilters && (
+            <Button variant="ghost" size="sm" className="h-9"
+              onClick={() => { setSearch(''); setMethodFilter(''); setStatusFilter(''); setYearFilter(''); setTermFilter(''); setPage(1); }}>
+              Clear
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Hairline table */}

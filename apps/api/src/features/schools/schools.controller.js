@@ -279,7 +279,8 @@ export const listSchools = asyncHandler(async (req, res) => {
   }
 
   if (req.query.search) {
-    const regex = new RegExp(req.query.search.trim(), 'i');
+    const escaped = req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, 'i');
     filter.$or = [{ name: regex }, { email: regex }, { registrationNumber: regex }];
   }
 

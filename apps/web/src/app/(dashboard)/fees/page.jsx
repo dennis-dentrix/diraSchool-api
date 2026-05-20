@@ -75,7 +75,7 @@ function LedgerRow({ payment, rank }) {
         <p className="font-mono text-[11px] text-muted-foreground tabular-nums">{student?.admissionNumber ?? ''}</p>
       </div>
       <MethodPill method={payment.method} />
-      <span className="font-mono text-sm tabular-nums text-right w-24 shrink-0 font-semibold">
+      <span className="font-mono text-sm tabular-nums text-right shrink-0 font-semibold min-w-[5rem]">
         {formatCurrency(payment.amount)}
       </span>
       <span className="text-[10px] text-muted-foreground w-12 text-right shrink-0 tabular-nums hidden sm:block">
@@ -146,13 +146,13 @@ export default function FeesPage() {
   }, [summary]);
 
   return (
-    <div className="space-y-6" data-tour="finance-dashboard">
+    <div className="space-y-5 sm:space-y-6" data-tour="finance-dashboard">
 
       {/* ── Ledger header ─────────────────────────────────────────────────── */}
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Fees Overview</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Fees Overview</p>
             <h1 className="text-2xl font-bold tracking-tight leading-none">Fees &amp; Collections</h1>
           </div>
           <div className="flex gap-2 shrink-0">
@@ -176,7 +176,7 @@ export default function FeesPage() {
         </div>
 
         {/* Balance trio */}
-        <div className="rounded-lg border bg-card px-5 py-4">
+        <div className="rounded-lg border bg-card px-4 py-4 sm:px-5">
           {summaryLoading ? (
             <div className="flex gap-8">
               {[...Array(3)].map((_, i) => (
@@ -188,20 +188,20 @@ export default function FeesPage() {
             </div>
           ) : (
             <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="flex gap-6 sm:gap-8 flex-1 flex-wrap">
+              <div className="flex gap-5 sm:gap-8 flex-1 flex-wrap">
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Collected</p>
-                  <p className="font-mono text-2xl font-bold tabular-nums text-ok">{formatCurrency(collected)}</p>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Collected</p>
+                  <p className="font-mono text-xl sm:text-2xl font-bold tabular-nums text-ok">{formatCurrency(collected)}</p>
                 </div>
                 {target > 0 && (
                   <>
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Target</p>
-                      <p className="font-mono text-2xl font-bold tabular-nums">{formatCurrency(target)}</p>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Target</p>
+                      <p className="font-mono text-xl sm:text-2xl font-bold tabular-nums">{formatCurrency(target)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Variance</p>
-                      <p className={cn('font-mono text-2xl font-bold tabular-nums', variance >= 0 ? 'text-ok' : 'text-bad')}>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Variance</p>
+                      <p className={cn('font-mono text-xl sm:text-2xl font-bold tabular-nums', variance >= 0 ? 'text-ok' : 'text-bad')}>
                         {variance >= 0 ? '+' : ''}{formatCurrency(Math.abs(variance))}
                       </p>
                     </div>
@@ -222,7 +222,7 @@ export default function FeesPage() {
       {/* ── Today's collections ──────────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Today's Collections
           </p>
           <div className="flex items-center gap-3">
@@ -259,7 +259,7 @@ export default function FeesPage() {
       {/* ── Defaulters ──────────────────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Defaulters
             {defaulters.length > 0 && (
               <span className="ml-1.5 font-mono text-bad">({defaulters.length})</span>
