@@ -22,6 +22,7 @@ import {
   Layers,
   Clock,
   Trash2,
+  Megaphone,
 } from 'lucide-react';
 
 // Role groups
@@ -92,6 +93,7 @@ export const superadminNavItems = [
   { label: 'Billing Groups', href: '/superadmin/groups',        icon: Layers },
   { label: 'Finance',        href: '/superadmin/finance',       icon: Landmark },
   { label: 'Users',          href: '/superadmin/users',         icon: UserCog },
+  { label: 'System Events',  href: '/superadmin/events',        icon: Megaphone },
   { label: 'Audit Logs',     href: '/superadmin/audit-logs',    icon: ShieldAlert },
   { label: 'Danger Zone',   href: '/superadmin/danger-zone',   icon: Trash2 },
 ];

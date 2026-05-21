@@ -43,6 +43,7 @@ import PayrollRun  from '../payroll/PayrollRun.model.js';
 import SalaryGrade from '../payroll/SalaryGrade.model.js';
 import Leave       from '../leave/Leave.model.js';
 import Notification from '../notifications/Notification.model.js';
+import SystemEvent from './SystemEvent.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
@@ -61,6 +62,10 @@ import {
   sendSchoolDeactivationReviewedEmail,
   sendSenderIdReviewedEmail,
 } from '../../services/email.service.js';
+import { queueEmailWithDirectFallback } from '../../utils/emailJobs.js';
+import { notifyUser } from '../../utils/notify.js';
+import { emitToUser } from '../../config/socket.js';
+import { JOB_NAMES } from '../../constants/index.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { getCurrentTermAndYear } from '../../utils/term.js';
 import {
@@ -1605,5 +1610,132 @@ export const purgeOrphans = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     message: 'Orphaned records permanently deleted.',
     deleted,
+  });
+});
+
+// ── System Events ─────────────────────────────────────────────────────────────
+
+export const listSystemEvents = asyncHandler(async (req, res) => {
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.type) filter.type = req.query.type;
+
+  const total = await SystemEvent.countDocuments(filter);
+  const { skip, limit, meta } = paginate(req.query, total);
+
+  const events = await SystemEvent.find(filter)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .populate('createdBy', 'firstName lastName')
+    .lean();
+
+  return sendSuccess(res, { events, meta });
+});
+
+export const createSystemEvent = asyncHandler(async (req, res) => {
+  const { title, body, type, scheduledAt, status = 'draft' } = req.body;
+  if (!title?.trim()) return sendError(res, 'Title is required.', 400);
+  if (!body?.trim()) return sendError(res, 'Body is required.', 400);
+
+  const event = await SystemEvent.create({
+    title: title.trim(),
+    body: body.trim(),
+    type: type ?? 'announcement',
+    scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+    status,
+    createdBy: req.user._id,
+  });
+
+  return sendSuccess(res, { event }, 201);
+});
+
+export const updateSystemEvent = asyncHandler(async (req, res) => {
+  const event = await SystemEvent.findById(req.params.id);
+  if (!event) return sendError(res, 'Event not found.', 404);
+
+  const { title, body, type, scheduledAt, status } = req.body;
+  if (title !== undefined) event.title = title.trim();
+  if (body !== undefined) event.body = body.trim();
+  if (type !== undefined) event.type = type;
+  if (scheduledAt !== undefined) event.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+  if (status !== undefined) event.status = status;
+
+  await event.save();
+  return sendSuccess(res, { event });
+});
+
+export const deleteSystemEvent = asyncHandler(async (req, res) => {
+  const event = await SystemEvent.findByIdAndDelete(req.params.id);
+  if (!event) return sendError(res, 'Event not found.', 404);
+  return sendSuccess(res, { message: 'Event deleted.' });
+});
+
+export const broadcastSystemEvent = asyncHandler(async (req, res) => {
+  const event = await SystemEvent.findById(req.params.id);
+  if (!event) return sendError(res, 'Event not found.', 404);
+
+  const { sendEmail: doEmail = true, sendNotification: doNotif = true } = req.body;
+
+  // Find all school admin users across all active schools
+  const admins = await User.find({
+    role: ROLES.SCHOOL_ADMIN,
+    isActive: true,
+  }).select('_id firstName lastName email schoolId').lean();
+
+  let recipientCount = 0;
+
+  for (const admin of admins) {
+    // In-app notification
+    if (doNotif && admin.schoolId) {
+      const notif = await notifyUser({
+        schoolId: admin.schoolId,
+        userId: admin._id,
+        title: event.title,
+        message: event.body.length > 200 ? event.body.slice(0, 197) + '…' : event.body,
+        type: event.type === 'outage' ? 'error' : event.type === 'maintenance' ? 'warning' : 'info',
+        meta: { systemEventId: event._id },
+      });
+      if (notif) {
+        const unread = await Notification.countDocuments({
+          schoolId: admin.schoolId,
+          userId: admin._id,
+          readAt: null,
+        });
+        emitToUser(String(admin._id), 'notification:count', { count: unread });
+      }
+    }
+
+    // Email
+    if (doEmail && admin.email) {
+      queueEmailWithDirectFallback(
+        JOB_NAMES.SEND_SYSTEM_EVENT_EMAIL,
+        {
+          to: admin.email,
+          firstName: admin.firstName,
+          eventTitle: event.title,
+          eventBody: event.body,
+          eventType: event.type,
+          scheduledAt: event.scheduledAt,
+          meta: { userId: admin._id, schoolId: admin.schoolId },
+        },
+        'SystemEvent',
+      );
+    }
+
+    recipientCount++;
+  }
+
+  event.broadcastEmail = doEmail;
+  event.broadcastNotification = doNotif;
+  event.broadcastAt = new Date();
+  event.status = 'published';
+  event.recipientCount = recipientCount;
+  await event.save();
+
+  return sendSuccess(res, {
+    message: `Broadcast sent to ${recipientCount} school admin${recipientCount !== 1 ? 's' : ''}.`,
+    recipientCount,
+    event,
   });
 });

@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { NavigationProgress } from '@/components/layout/navigation-progress';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useAuth } from '@/hooks/use-auth';
 import { settingsApi, dashboardApi, notificationsApi } from '@/lib/api';
 import { schoolNavItems, superadminNavItems } from '@/components/layout/nav-items';
@@ -215,6 +215,7 @@ export default function DashboardLayout({ children }) {
         {/* Mobile sidebar */}
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetContent side="left" className="p-0 w-64">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
             <Sidebar user={user} badges={badges} onNavigate={() => setMobileOpen(false)} />
           </SheetContent>
         </Sheet>

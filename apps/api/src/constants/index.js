@@ -171,6 +171,7 @@ export const JOB_NAMES = {
   SEND_TRIAL_MIDPOINT_EMAIL:     'send-trial-midpoint-email',
   SEND_TRIAL_EXPIRY_EMAIL:       'send-trial-expiry-email',
   RUN_TRIAL_REMINDER_SCAN:       'run-trial-reminder-scan',
+  SEND_SYSTEM_EVENT_EMAIL:       'send-system-event-email',
 };
 
 export const AUDIT_ACTIONS = {

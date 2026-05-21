@@ -1,15 +1,17 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function SuperadminLayout({ children }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && user && user.role !== 'superadmin') {
@@ -36,11 +38,21 @@ export default function SuperadminLayout({ children }) {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
+      {/* Desktop sidebar */}
       <div className="hidden lg:flex">
         <Sidebar user={user} />
       </div>
+
+      {/* Mobile sidebar */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="p-0 w-64">
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <Sidebar user={user} onNavigate={() => setMobileOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <Header user={user} />
+        <Header user={user} onMenuClick={() => setMobileOpen(true)} />
         <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
           {children}
         </main>

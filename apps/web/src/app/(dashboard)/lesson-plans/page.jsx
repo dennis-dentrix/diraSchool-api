@@ -339,21 +339,22 @@ function ImageCarousel({ images, title, open, onClose, startIndex = 0 }) {
   const total = images.length;
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl p-2 bg-black/95">
+      <DialogContent className="max-w-3xl p-3 bg-transparent border-none shadow-none">
+        <DialogTitle className="sr-only">{title}</DialogTitle>
         <div className="relative">
           <img src={images[current]?.url} alt={`${title} — page ${current + 1}`}
             className="w-full max-h-[80vh] object-contain rounded" />
           {total > 1 && (
             <>
               <button type="button" onClick={() => setCurrent((c) => (c - 1 + total) % total)}
-                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 hover:bg-black/80">
-                <ChevronLeft className="h-5 w-5 text-white" />
+                className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 border shadow-sm p-2 hover:bg-white transition-colors">
+                <ChevronLeft className="h-5 w-5 text-foreground" />
               </button>
               <button type="button" onClick={() => setCurrent((c) => (c + 1) % total)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/60 p-2 hover:bg-black/80">
-                <ChevronRight className="h-5 w-5 text-white" />
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/90 border shadow-sm p-2 hover:bg-white transition-colors">
+                <ChevronRight className="h-5 w-5 text-foreground" />
               </button>
-              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white/80 bg-black/50 px-2 py-0.5 rounded-full">
+              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-muted-foreground bg-white/90 border px-2 py-0.5 rounded-full shadow-sm">
                 {current + 1} / {total}
               </span>
             </>
@@ -415,7 +416,7 @@ function PlanDetailPane({ plan, currentUser, onShare, onDelete }) {
   return (
     <div className="flex flex-col h-full">
       {/* Detail header */}
-      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b shrink-0">
+      <div className="px-5 py-4 border-b shrink-0 space-y-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
             {plan.type === 'work_schedule' ? 'Work Schedule' : 'Lesson Plan'}
@@ -430,7 +431,7 @@ function PlanDetailPane({ plan, currentUser, onShare, onDelete }) {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5">
           {hasImages && (
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => { setLightboxIdx(0); setLightboxOpen(true); }}>
               <Eye className="h-3.5 w-3.5" /> View
@@ -447,7 +448,7 @@ function PlanDetailPane({ plan, currentUser, onShare, onDelete }) {
             </Button>
           )}
           {(isOwner || admin) && (
-            <Button size="sm" variant="ghost" className="h-8 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => onDelete(plan)}>
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 ml-auto" onClick={() => onDelete(plan)}>
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
@@ -476,18 +477,18 @@ function PlanDetailPane({ plan, currentUser, onShare, onDelete }) {
         )}
 
         {/* Paper document viewer */}
-        <div
-          className="bg-white rounded border shadow-sm mx-auto max-w-2xl min-h-[320px] px-8 py-6 text-sm leading-relaxed"
-          style={{
-            backgroundImage: 'repeating-linear-gradient(transparent, transparent calc(12rem - 1px), hsl(var(--border)) calc(12rem - 1px), hsl(var(--border)) 12rem)',
-          }}
-        >
-          {plan.description ? (
+        {plan.description ? (
+          <div
+            className="bg-white rounded border shadow-sm mx-auto max-w-2xl min-h-[320px] px-8 py-6 text-sm leading-relaxed"
+            style={{
+              backgroundImage: 'repeating-linear-gradient(transparent, transparent calc(12rem - 1px), hsl(var(--border)) calc(12rem - 1px), hsl(var(--border)) 12rem)',
+            }}
+          >
             <p className="whitespace-pre-wrap text-foreground">{plan.description}</p>
-          ) : (
-            <p className="text-muted-foreground italic text-xs">No description provided.</p>
-          )}
-        </div>
+          </div>
+        ) : (
+          <p className="text-muted-foreground italic text-xs text-center py-1">No description provided.</p>
+        )}
 
         {/* Image pages */}
         {hasImages && (

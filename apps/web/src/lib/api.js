@@ -167,6 +167,12 @@ export const adminApi = {
   purgeSchool: (id) => api.delete(`/admin/purge/school/${id}`),
   previewOrphans: () => api.get('/admin/purge/orphans/preview'),
   purgeOrphans: () => api.delete('/admin/purge/orphans'),
+  // System events
+  listSystemEvents: (params) => api.get('/admin/system-events', { params }),
+  createSystemEvent: (data) => api.post('/admin/system-events', data),
+  updateSystemEvent: (id, data) => api.patch(`/admin/system-events/${id}`, data),
+  deleteSystemEvent: (id) => api.delete(`/admin/system-events/${id}`),
+  broadcastSystemEvent: (id, data) => api.post(`/admin/system-events/${id}/broadcast`, data),
 };
 
 // ─── Classes ──────────────────────────────────────────────────────────────────

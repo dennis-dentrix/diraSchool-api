@@ -9,6 +9,7 @@ import {
   sendTrialDay3Email,
   sendTrialMidpointEmail,
   sendTrialExpiryEmail,
+  sendSystemEventEmail,
 } from '../services/email.service.js';
 import logger from '../config/logger.js';
 
@@ -36,6 +37,8 @@ const sendDirect = (type, payload) => {
       return sendTrialMidpointEmail(payload);
     case JOB_NAMES.SEND_TRIAL_EXPIRY_EMAIL:
       return sendTrialExpiryEmail(payload);
+    case JOB_NAMES.SEND_SYSTEM_EVENT_EMAIL:
+      return sendSystemEventEmail(payload);
     default:
       throw new Error(`Unknown email job type: ${type}`);
   }

@@ -417,6 +417,17 @@ export const sendTrialExpiryEmail = ({
     meta,
   });
 
+export const sendSystemEventEmail = ({
+  to, firstName, eventTitle, eventBody, eventType, scheduledAt, meta = {},
+}) =>
+  sendEmail({
+    to,
+    subject: `[Diraschool] ${eventTitle}`,
+    html: _systemEventTemplate({ firstName, eventTitle, eventBody, eventType, scheduledAt }),
+    template: 'system-event',
+    meta,
+  });
+
 const _departmentMemberTemplate = ({ firstName, schoolName, departmentName, action }) =>
   _shell(
     action === 'added' ? `Added to ${departmentName} — ${schoolName}` : `Removed from ${departmentName} — ${schoolName}`,
@@ -684,6 +695,51 @@ const _trialExpiryTemplate = ({ firstName, schoolName, dashboardUrl, trialDaysLe
       </p>
     `
   );
+
+const EVENT_TYPE_LABELS = {
+  maintenance: 'Scheduled Maintenance',
+  update: 'System Update',
+  announcement: 'Announcement',
+  outage: 'Service Outage',
+  other: 'Notice',
+};
+
+const EVENT_TYPE_COLORS = {
+  maintenance: '#d97706',
+  update: '#1a56db',
+  announcement: '#059669',
+  outage: '#dc2626',
+  other: '#6b7280',
+};
+
+const _systemEventTemplate = ({ firstName, eventTitle, eventBody, eventType = 'announcement', scheduledAt }) => {
+  const label = EVENT_TYPE_LABELS[eventType] ?? 'Notice';
+  const color = EVENT_TYPE_COLORS[eventType] ?? '#6b7280';
+  const schedLine = scheduledAt
+    ? `<p style="margin:0 0 16px;font-size:14px;color:#6b7280;">
+         <strong>Scheduled for:</strong> ${new Date(scheduledAt).toUTCString()}
+       </p>`
+    : '';
+  return _shell(
+    eventTitle,
+    `
+      <div style="display:inline-block;background:${color}1a;color:${color};border:1px solid ${color}33;
+                  padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;
+                  text-transform:uppercase;letter-spacing:.5px;margin-bottom:20px;">
+        ${label}
+      </div>
+      <h2 style="margin:0 0 12px;font-size:20px;color:#111827;">${escapeHtml(eventTitle)}</h2>
+      ${firstName ? `<p style="margin:0 0 16px;font-size:15px;color:#374151;">Hi ${escapeHtml(firstName)},</p>` : ''}
+      ${schedLine}
+      <div style="background:#f9fafb;border-left:4px solid ${color};padding:16px 20px;border-radius:0 6px 6px 0;margin-bottom:20px;">
+        <p style="margin:0;font-size:15px;color:#374151;line-height:1.7;white-space:pre-line;">${escapeHtml(eventBody)}</p>
+      </div>
+      <p style="margin:0;font-size:13px;color:#6b7280;">
+        This is an official system notice from Diraschool. No action is required unless stated above.
+      </p>
+    `,
+  );
+};
 
 const _shell = (title, body) => `<!DOCTYPE html>
 <html lang="en">

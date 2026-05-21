@@ -484,13 +484,12 @@ export default function BillingGroupsPage() {
       <PageHeader
         title="Billing Groups"
         description="Group multiple school branches under a single shared subscription."
-        action={
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4 mr-1.5" />
-            New group
-          </Button>
-        }
-      />
+      >
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" />
+          New group
+        </Button>
+      </PageHeader>
 
       {/* Stats strip */}
       <div className="flex items-center gap-6 text-sm text-muted-foreground">
