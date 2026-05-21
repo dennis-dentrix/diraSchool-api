@@ -23,6 +23,12 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      // /favicon.ico doesn't exist as a file — redirect to the generated icon
+      { source: '/favicon.ico', destination: '/icon', permanent: false },
+    ];
+  },
 };
 
 module.exports = withSentryConfig(nextConfig, {
