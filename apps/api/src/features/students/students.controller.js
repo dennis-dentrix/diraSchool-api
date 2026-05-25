@@ -17,6 +17,8 @@ import { env } from '../../config/env.js';
 import { queueEmailWithDirectFallback } from '../../utils/emailJobs.js';
 import { uploadBuffer } from '../../jobs/helpers/spacesUpload.js';
 import { parseImportFile } from '../../utils/parseImportFile.js';
+import SchoolSettings from '../settings/SchoolSettings.model.js';
+import { LEVEL_CATEGORIES, TERMS } from '../../constants/index.js';
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
@@ -640,6 +642,32 @@ export const uploadStudentPhoto = asyncHandler(async (req, res) => {
  *
  * In both cases the client polls GET /import/:jobId/status for each jobId.
  */
+
+function inferLevelCategory(sheetName) {
+  const n = sheetName.toLowerCase().trim();
+  if (/play\s*group|pp\s*1|pp\s*2|pre.?primary/.test(n)) return LEVEL_CATEGORIES.PRE_PRIMARY;
+  const gradeMatch = n.match(/grade\s*(\d+)/);
+  if (gradeMatch) {
+    const g = parseInt(gradeMatch[1], 10);
+    if (g <= 3) return LEVEL_CATEGORIES.LOWER_PRIMARY;
+    if (g <= 6) return LEVEL_CATEGORIES.UPPER_PRIMARY;
+    if (g <= 9) return LEVEL_CATEGORIES.JUNIOR_SECONDARY;
+    return LEVEL_CATEGORIES.SENIOR_SCHOOL;
+  }
+  return LEVEL_CATEGORIES.LOWER_PRIMARY;
+}
+
+async function resolveCurrentTermAndYear(schoolId) {
+  const settings = await SchoolSettings.findOne({ schoolId }).lean();
+  const academicYear = settings?.currentAcademicYear || String(new Date().getFullYear());
+  const now = new Date();
+  const activeTerm = settings?.terms?.find(
+    (t) => new Date(t.startDate) <= now && now <= new Date(t.endDate)
+  );
+  const term = activeTerm?.name || TERMS[0];
+  return { academicYear, term };
+}
+
 export const importStudents = asyncHandler(async (req, res) => {
   const { classId } = req.body;
   const { buffer, originalname, mimetype } = req.file;
@@ -702,16 +730,31 @@ export const importStudents = asyncHandler(async (req, res) => {
     }
   }
 
+  // Lazy-load term/year only if we need to auto-create classes
+  let termYearCache = null;
+  async function getTermYear() {
+    if (!termYearCache) termYearCache = await resolveCurrentTermAndYear(req.user.schoolId);
+    return termYearCache;
+  }
+
   const enqueuedJobs = [];
-  const unmatchedSheets = [];
+  const createdClasses = [];
 
   for (const sheet of parsed.sheets) {
     const nameLower = sheet.sheetName.toLowerCase().trim();
-    const cls = classByName.get(nameLower);
+    let cls = classByName.get(nameLower);
 
     if (!cls) {
-      unmatchedSheets.push(sheet.sheetName);
-      continue;
+      const { academicYear, term } = await getTermYear();
+      cls = await Class.create({
+        schoolId: req.user.schoolId,
+        name: sheet.sheetName.trim(),
+        levelCategory: inferLevelCategory(sheet.sheetName),
+        academicYear,
+        term,
+      });
+      classByName.set(nameLower, cls);
+      createdClasses.push(cls.name);
     }
 
     if (sheet.rows.length === 0) continue;
@@ -736,13 +779,13 @@ export const importStudents = asyncHandler(async (req, res) => {
   }
 
   if (enqueuedJobs.length === 0) {
-    return sendError(res, `No matching classes found. Unmatched sheets: ${unmatchedSheets.join(', ')}. Make sure each sheet name exactly matches a class name.`, 400);
+    return sendError(res, 'No worksheets with student data found.', 400);
   }
 
   return sendSuccess(res, {
-    message: `${enqueuedJobs.length} class import job(s) queued.`,
+    message: `${enqueuedJobs.length} class import job(s) queued.${createdClasses.length ? ` Auto-created ${createdClasses.length} class(es): ${createdClasses.join(', ')}.` : ''}`,
     jobs: enqueuedJobs,
-    unmatchedSheets,
+    createdClasses,
   }, 202);
 });
 
