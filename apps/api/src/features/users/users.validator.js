@@ -16,14 +16,24 @@ const ASSIGNABLE_ROLES = [
   ROLES.PARENT,
 ];
 
+const optionalPhone = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z.string().trim().regex(phoneRegex, 'Invalid phone number (Kenyan format required)').optional()
+);
+
+const optionalString = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z.string().trim().optional()
+);
+
 const createUserSchema = z.object({
   firstName:  z.string().trim().min(1, 'First name is required'),
   lastName:   z.string().trim().min(1, 'Last name is required'),
   email:      z.string().trim().email('Invalid email address'),
-  phone:      z.string().trim().regex(phoneRegex, 'Invalid phone number (Kenyan format required)').optional(),
+  phone:      optionalPhone,
   role:       z.enum(ASSIGNABLE_ROLES, { message: `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}` }),
-  staffId:    z.string().trim().optional(),
-  tscNumber:  z.string().trim().optional(),
+  staffId:    optionalString,
+  tscNumber:  optionalString,
   // No password — the user sets their own via the invite email link
 });
 
@@ -31,11 +41,11 @@ const updateUserSchema = z.object({
   firstName: z.string().trim().min(1).optional(),
   lastName: z.string().trim().min(1).optional(),
   email: z.string().trim().email('Invalid email address').optional(),
-  phone: z.string().trim().regex(phoneRegex, 'Invalid phone number').optional(),
+  phone: optionalPhone,
   role: z.enum(ASSIGNABLE_ROLES, { message: `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}` }).optional(),
   isActive: z.boolean().optional(),
-  staffId: z.string().trim().optional(),
-  tscNumber: z.string().trim().optional(),
+  staffId: optionalString,
+  tscNumber: optionalString,
 }).strict();
 
 const validate = (schema) => (req, res, next) => {

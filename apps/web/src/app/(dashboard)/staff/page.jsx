@@ -1047,7 +1047,7 @@ export default function StaffPage() {
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Invite Staff Member</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmit(createUser)} className="space-y-4">
+          <form onSubmit={handleSubmit((data) => createUser({ ...data, phone: data.phone || undefined, tscNumber: data.tscNumber || undefined }))} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="invite-first">First Name</Label>
