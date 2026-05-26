@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Save, Plus, Trash2, Pencil, X, CalendarDays, ImageIcon,
-  Upload, MapPin, Building2, CreditCard, BookOpen, AlertTriangle,
+  Upload, MapPin, Building2, CreditCard, BookOpen, AlertTriangle, Info,
 } from 'lucide-react';
 import { useState } from 'react';
 import { settingsApi, schoolsApi, smsApi, mpesaApi, getErrorMessage } from '@/lib/api';
@@ -23,6 +23,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 
 const CONFIRM_INIT = { open: false, holidayId: null };
+
+const EVENT_TYPE_LABELS = {
+  holiday:          'Public Holiday',
+  midterm_break:    'Midterm Break',
+  sports_day:       'Sports Day',
+  academic_clinic:  'Academic Clinic',
+  parents_meeting:  'Parents Meeting',
+  school_trip:      'School Trip',
+  custom:           'Other',
+};
+const EVENT_TYPES = Object.keys(EVENT_TYPE_LABELS);
 
 function InfoRow({ label, value, action }) {
   return (
@@ -82,6 +93,9 @@ export default function SettingsPage() {
   const [senderIdForm, setSenderIdForm] = useState('');
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [newHoliday, setNewHoliday] = useState({ name: '', date: '', description: '' });
+  const [newCalEvent, setNewCalEvent] = useState({ name: '', eventType: 'custom', date: '', endDate: '', description: '' });
+  const [showAddCalEvent, setShowAddCalEvent] = useState(false);
+  const [confirmCalEvent, setConfirmCalEvent] = useState({ open: false, eventId: null });
   const [deactivationForm, setDeactivationForm] = useState({
     reason: '',
     confirmation: '',
@@ -164,6 +178,23 @@ export default function SettingsPage() {
 
   const { mutate: deleteHoliday } = useMutation({
     mutationFn: (id) => settingsApi.deleteHoliday(id),
+    onSuccess: () => { toast.success('Event removed'); queryClient.invalidateQueries({ queryKey: ['settings'] }); },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: addCalendarEvent, isPending: addingCalEvent } = useMutation({
+    mutationFn: () => settingsApi.addCalendarEvent(newCalEvent),
+    onSuccess: () => {
+      toast.success('Event added');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      setNewCalEvent({ name: '', eventType: 'custom', date: '', endDate: '', description: '' });
+      setShowAddCalEvent(false);
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: deleteCalendarEvent } = useMutation({
+    mutationFn: (id) => settingsApi.deleteCalendarEvent(id),
     onSuccess: () => { toast.success('Event removed'); queryClient.invalidateQueries({ queryKey: ['settings'] }); },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -420,6 +451,12 @@ export default function SettingsPage() {
             onCancel={() => { setEditingTerms(false); setTermsForm(null); }}
             onSave={() => saveTerms()}
           />
+          {!data?.terms?.length && !editingTerms && (
+            <div className="flex items-center gap-2 rounded-md bg-blue-50 border border-blue-200 px-4 py-2.5 text-sm text-blue-800 mb-3">
+              <CalendarDays className="h-4 w-4 shrink-0" />
+              <span>Using platform defaults set by your system administrator. Configure dates below to override.</span>
+            </div>
+          )}
           {editingTerms && termsForm ? (
             <div className="space-y-3 mt-2">
               {termsForm.map((t, i) => (
@@ -445,66 +482,165 @@ export default function SettingsPage() {
                 <InfoRow key={i} label={t.name} value={<span className="font-mono text-xs tabular-nums">{formatDate(t.startDate)} → {formatDate(t.endDate)}</span>} />
               ))}
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-2">No term dates configured yet.</p>
-          )}
+          ) : null}
         </div>
       </div>
     );
 
     // ── Events ───────────────────────────────────────────────────────────────
     if (activeSection === 'events') return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">School Events</p>
-          {canEdit && !showAddEvent && (
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAddEvent(true)}>
-              <Plus className="h-3 w-3" /> Add Event
-            </Button>
+      <div className="space-y-8">
+
+        {/* Calendar Events (typed) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Calendar Events</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Sports days, midterm breaks, parent meetings, trips and more.</p>
+            </div>
+            {canEdit && !showAddCalEvent && (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAddCalEvent(true)}>
+                <Plus className="h-3 w-3" /> Add Event
+              </Button>
+            )}
+          </div>
+
+          {showAddCalEvent && canEdit && (
+            <div className="rounded-md border p-4 bg-muted/20 space-y-3">
+              <p className="text-xs font-semibold">New Calendar Event</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Event Type</Label>
+                  <Select value={newCalEvent.eventType} onValueChange={(v) => setNewCalEvent((p) => ({ ...p, eventType: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {EVENT_TYPES.map((t) => <SelectItem key={t} value={t}>{EVENT_TYPE_LABELS[t]}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Name</Label>
+                  <Input value={newCalEvent.name} onChange={(e) => setNewCalEvent((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Inter-house Sports" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Start Date</Label>
+                  <Input type="date" value={newCalEvent.date} onChange={(e) => setNewCalEvent((p) => ({ ...p, date: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>End Date <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input type="date" value={newCalEvent.endDate} onChange={(e) => setNewCalEvent((p) => ({ ...p, endDate: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input value={newCalEvent.description} onChange={(e) => setNewCalEvent((p) => ({ ...p, description: e.target.value }))} placeholder="Additional notes" />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="outline" onClick={() => { setShowAddCalEvent(false); setNewCalEvent({ name: '', eventType: 'custom', date: '', endDate: '', description: '' }); }}>
+                  <X className="h-3 w-3" /> Cancel
+                </Button>
+                <Button size="sm" onClick={() => addCalendarEvent()} disabled={!newCalEvent.name || !newCalEvent.date || addingCalEvent}>
+                  <Plus className="h-3 w-3" /> {addingCalEvent ? 'Adding…' : 'Add'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {data?.calendarEvents?.length ? (
+            <div className="divide-y rounded-lg border bg-card px-4">
+              {[...data.calendarEvents].sort((a, b) => a.date > b.date ? 1 : -1).map((ev) => (
+                <div key={ev._id} className="flex items-center justify-between py-2.5 gap-3">
+                  <div className="min-w-0 flex items-start gap-3">
+                    <Badge variant="secondary" className="text-[10px] shrink-0 mt-0.5">{EVENT_TYPE_LABELS[ev.eventType] ?? ev.eventType}</Badge>
+                    <div>
+                      <p className="text-sm font-medium truncate">{ev.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(ev.date)}{ev.endDate ? ` → ${formatDate(ev.endDate)}` : ''}{ev.description ? ` · ${ev.description}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-bad hover:text-bad hover:bg-bad/10 shrink-0" onClick={() => setConfirmCalEvent({ open: true, eventId: ev._id })}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground py-2">No calendar events added yet.</p>
           )}
         </div>
 
-        {showAddEvent && canEdit && (
-          <div className="rounded-md border p-4 bg-muted/20 space-y-3">
-            <p className="text-xs font-semibold">New Event</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Name</Label><Input value={newHoliday.name} onChange={(e) => setNewHoliday((p) => ({ ...p, name: e.target.value }))} placeholder="Madaraka Day" /></div>
-              <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={newHoliday.date} onChange={(e) => setNewHoliday((p) => ({ ...p, date: e.target.value }))} /></div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <Input value={newHoliday.description} onChange={(e) => setNewHoliday((p) => ({ ...p, description: e.target.value }))} placeholder="Public holiday" />
+        {/* Public Holidays (legacy) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Public Holidays</p>
+            {canEdit && !showAddEvent && (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowAddEvent(true)}>
+                <Plus className="h-3 w-3" /> Add Holiday
+              </Button>
+            )}
+          </div>
+
+          {showAddEvent && canEdit && (
+            <div className="rounded-md border p-4 bg-muted/20 space-y-3">
+              <p className="text-xs font-semibold">New Holiday</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label>Name</Label><Input value={newHoliday.name} onChange={(e) => setNewHoliday((p) => ({ ...p, name: e.target.value }))} placeholder="Madaraka Day" /></div>
+                <div className="space-y-1.5"><Label>Date</Label><Input type="date" value={newHoliday.date} onChange={(e) => setNewHoliday((p) => ({ ...p, date: e.target.value }))} /></div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <Input value={newHoliday.description} onChange={(e) => setNewHoliday((p) => ({ ...p, description: e.target.value }))} placeholder="Public holiday" />
+                </div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button size="sm" variant="outline" onClick={() => { setShowAddEvent(false); setNewHoliday({ name: '', date: '', description: '' }); }}>
+                  <X className="h-3 w-3" /> Cancel
+                </Button>
+                <Button size="sm" onClick={() => addHoliday()} disabled={!newHoliday.name || !newHoliday.date || addingHoliday}>
+                  <Plus className="h-3 w-3" /> {addingHoliday ? 'Adding…' : 'Add'}
+                </Button>
               </div>
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => { setShowAddEvent(false); setNewHoliday({ name: '', date: '', description: '' }); }}>
-                <X className="h-3 w-3" /> Cancel
-              </Button>
-              <Button size="sm" onClick={() => addHoliday()} disabled={!newHoliday.name || !newHoliday.date || addingHoliday}>
-                <Plus className="h-3 w-3" /> {addingHoliday ? 'Adding…' : 'Add'}
-              </Button>
-            </div>
-          </div>
-        )}
+          )}
 
-        {data?.holidays?.length ? (
-          <div className="divide-y rounded-lg border bg-card px-4">
-            {data.holidays.map((h) => (
-              <div key={h._id} className="flex items-center justify-between py-2.5 gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{h.name}</p>
-                  <p className="text-xs text-muted-foreground">{formatDate(h.date)}{h.description ? ` · ${h.description}` : ''}</p>
-                </div>
-                {canEdit && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-bad hover:text-bad hover:bg-bad/10 shrink-0" onClick={() => setConfirmDialog({ open: true, holidayId: h._id })}>
-                    <Trash2 className="h-3.5 w-3.5" />
+          {data?.holidays?.length ? (
+            <div className="divide-y rounded-lg border bg-card px-4">
+              {data.holidays.map((h) => (
+                <div key={h._id} className="flex items-center justify-between py-2.5 gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{h.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(h.date)}{h.description ? ` · ${h.description}` : ''}</p>
+                  </div>
+                  {canEdit && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-bad hover:text-bad hover:bg-bad/10 shrink-0" onClick={() => setConfirmDialog({ open: true, holidayId: h._id })}>
+                      <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 )}
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground py-2">No events added yet.</p>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground py-2">No holidays added yet.</p>
+          )}
+        </div>
+
+        {/* Confirm delete calendar event */}
+        <AlertDialog open={confirmCalEvent.open} onOpenChange={(o) => !o && setConfirmCalEvent({ open: false, eventId: null })}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove event?</AlertDialogTitle>
+              <AlertDialogDescription>This will permanently delete this calendar event.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => { deleteCalendarEvent(confirmCalEvent.eventId); setConfirmCalEvent({ open: false, eventId: null }); }}>
+                Remove
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
 

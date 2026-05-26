@@ -23,6 +23,7 @@ import {
   Clock,
   Trash2,
   Megaphone,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 // Role groups
@@ -93,9 +94,10 @@ export const superadminNavItems = [
   { label: 'Billing Groups', href: '/superadmin/groups',        icon: Layers },
   { label: 'Finance',        href: '/superadmin/finance',       icon: Landmark },
   { label: 'Users',          href: '/superadmin/users',         icon: UserCog },
+  { label: 'Platform Settings', href: '/superadmin/platform',    icon: SlidersHorizontal },
   { label: 'System Events',  href: '/superadmin/events',        icon: Megaphone },
   { label: 'Audit Logs',     href: '/superadmin/audit-logs',    icon: ShieldAlert },
-  { label: 'Danger Zone',   href: '/superadmin/danger-zone',   icon: Trash2 },
+  { label: 'Danger Zone',    href: '/superadmin/danger-zone',   icon: Trash2 },
 ];
 
 export const parentNavItems = [

@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, Download, Wallet, Printer, Receipt, ChevronRight, X } from 'lucide-react';
+import { Plus, Search, Download, Wallet, Printer, Receipt, ChevronRight } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -236,9 +236,6 @@ function RecordPaymentPanel({ open, onClose, settingsData, schoolData, studentsD
         <SheetHeader className="px-5 pt-5 pb-4 border-b shrink-0">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-base font-semibold">Record Payment</SheetTitle>
-            <button onClick={handleClose} className="p-1 rounded hover:bg-muted text-muted-foreground">
-              <X className="h-4 w-4" />
-            </button>
           </div>
           {/* Step indicators */}
           <div className="flex gap-1 mt-2">

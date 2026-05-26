@@ -11,8 +11,9 @@
  *   GET  /api/v1/admin/users                 — platform-wide user list
  *   PATCH /api/v1/admin/users/:id/toggle     — toggle user isActive
  */
-import School      from '../schools/School.model.js';
-import SchoolGroup from './SchoolGroup.model.js';
+import School         from '../schools/School.model.js';
+import SchoolGroup    from './SchoolGroup.model.js';
+import SystemSettings from './SystemSettings.model.js';
 import User        from '../users/User.model.js';
 import Student     from '../students/Student.model.js';
 import ClassModel  from '../classes/Class.model.js';
@@ -1739,4 +1740,40 @@ export const broadcastSystemEvent = asyncHandler(async (req, res) => {
     recipientCount,
     event,
   });
+});
+
+// ── System Settings ───────────────────────────────────────────────────────────
+
+export const getSystemSettings = asyncHandler(async (req, res) => {
+  const settings = await SystemSettings.findOne().lean();
+  return sendSuccess(res, { settings: settings ?? {} });
+});
+
+export const updateSystemSettings = asyncHandler(async (req, res) => {
+  const { currentAcademicYear, terms } = req.body;
+
+  if (currentAcademicYear !== undefined && !/^\d{4}$/.test(currentAcademicYear)) {
+    return sendError(res, 'Academic year must be a 4-digit year.', 400);
+  }
+  if (terms !== undefined) {
+    if (!Array.isArray(terms) || terms.length > 3) {
+      return sendError(res, 'Terms must be an array of up to 3 entries.', 400);
+    }
+    for (const t of terms) {
+      if (!t.name || !t.startDate || !t.endDate) {
+        return sendError(res, 'Each term requires name, startDate, and endDate.', 400);
+      }
+      if (new Date(t.endDate) <= new Date(t.startDate)) {
+        return sendError(res, `Term "${t.name}": endDate must be after startDate.`, 400);
+      }
+    }
+  }
+
+  const settings = await SystemSettings.findOneAndUpdate(
+    {},
+    { $set: req.body },
+    { upsert: true, new: true, runValidators: true }
+  );
+
+  return sendSuccess(res, { settings });
 });

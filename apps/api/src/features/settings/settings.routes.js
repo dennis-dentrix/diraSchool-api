@@ -11,10 +11,13 @@ import {
   addHoliday,
   deleteHoliday,
   uploadSchoolLogo,
+  addCalendarEvent,
+  deleteCalendarEvent,
 } from './settings.controller.js';
 import {
   validateUpdateSettings,
   validateAddHoliday,
+  validateAddCalendarEvent,
 } from './settings.validator.js';
 import { updateGeofence, updateCheckInTimes } from '../checkins/checkins.controller.js';
 import { validateGeofence, validateCheckInTimes } from '../checkins/checkins.validator.js';
@@ -28,6 +31,8 @@ router.put('/', seniorAdmin, validateUpdateSettings, updateSettings);
 router.post('/logo', seniorAdmin, uploadImage('logo'), uploadSchoolLogo);
 router.post('/holidays', seniorAdmin, validateAddHoliday, addHoliday);
 router.delete('/holidays/:holidayId', seniorAdmin, deleteHoliday);
+router.post('/events', seniorAdmin, validateAddCalendarEvent, addCalendarEvent);
+router.delete('/events/:eventId', seniorAdmin, deleteCalendarEvent);
 router.put('/geofence', seniorAdmin, validateGeofence, updateGeofence);
 router.put('/checkin-times', seniorAdmin, validateCheckInTimes, updateCheckInTimes);
 

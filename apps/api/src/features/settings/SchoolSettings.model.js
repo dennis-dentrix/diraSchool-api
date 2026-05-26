@@ -1,6 +1,27 @@
 import mongoose from 'mongoose';
 import { DAYS_OF_WEEK, TERMS } from '../../constants/index.js';
 
+export const CALENDAR_EVENT_TYPES = [
+  'holiday',
+  'midterm_break',
+  'sports_day',
+  'academic_clinic',
+  'parents_meeting',
+  'school_trip',
+  'custom',
+];
+
+const calendarEventSchema = new mongoose.Schema(
+  {
+    name:        { type: String, required: true, trim: true },
+    eventType:   { type: String, enum: CALENDAR_EVENT_TYPES, default: 'custom' },
+    date:        { type: Date, required: true },
+    endDate:     { type: Date },   // optional — for multi-day events
+    description: { type: String, trim: true },
+  },
+  { timestamps: false }
+);
+
 const termDateSchema = new mongoose.Schema(
   {
     name:      { type: String, enum: TERMS, required: true },
@@ -41,6 +62,11 @@ const schoolSettingsSchema = new mongoose.Schema(
     // School holidays (no attendance taken, timetable suspended)
     holidays: {
       type: [holidaySchema],
+      default: [],
+    },
+    // Typed calendar events — sports day, midterm breaks, parent meetings, trips, etc.
+    calendarEvents: {
+      type: [calendarEventSchema],
       default: [],
     },
     // Days the school operates — defaults Mon–Fri

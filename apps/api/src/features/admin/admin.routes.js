@@ -39,6 +39,8 @@ import {
   updateSystemEvent,
   deleteSystemEvent,
   broadcastSystemEvent,
+  getSystemSettings,
+  updateSystemSettings,
 } from './admin.controller.js';
 
 const router = express.Router();
@@ -85,6 +87,10 @@ router.delete('/groups/:id/schools/:schoolId',   removeSchoolFromGroup);
 router.delete('/purge/school/:id',              purgeSchool);
 router.get('/purge/orphans/preview',            previewOrphans);
 router.delete('/purge/orphans',                 purgeOrphans);
+
+// Platform / system settings
+router.get('/system-settings',              getSystemSettings);
+router.patch('/system-settings',            updateSystemSettings);
 
 // System events
 router.get('/system-events',                    listSystemEvents);

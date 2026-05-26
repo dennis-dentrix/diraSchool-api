@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { sendError } from '../../utils/response.js';
 import { TERMS, DAYS_OF_WEEK } from '../../constants/index.js';
+import { CALENDAR_EVENT_TYPES } from './SchoolSettings.model.js';
 
 const objectIdRegex = /^[a-f\d]{24}$/i;
 const yearRegex     = /^\d{4}$/;
@@ -35,6 +36,19 @@ const addHolidaySchema = z.object({
   description: z.string().trim().optional(),
 }).strict();
 
+// ── Add Calendar Event ────────────────────────────────────────────────────────
+
+const addCalendarEventSchema = z.object({
+  name:        z.string().trim().min(1, 'Event name is required'),
+  eventType:   z.enum(CALENDAR_EVENT_TYPES).default('custom'),
+  date:        z.coerce.date(),
+  endDate:     z.coerce.date().optional(),
+  description: z.string().trim().optional(),
+}).strict().refine(
+  (e) => !e.endDate || e.endDate >= e.date,
+  { message: 'endDate must be on or after date' }
+);
+
 // ── Middleware factories ───────────────────────────────────────────────────────
 
 const validateBody = (schema) => (req, res, next) => {
@@ -44,5 +58,6 @@ const validateBody = (schema) => (req, res, next) => {
   next();
 };
 
-export const validateUpdateSettings = validateBody(updateSettingsSchema);
-export const validateAddHoliday     = validateBody(addHolidaySchema);
+export const validateUpdateSettings    = validateBody(updateSettingsSchema);
+export const validateAddHoliday        = validateBody(addHolidaySchema);
+export const validateAddCalendarEvent  = validateBody(addCalendarEventSchema);

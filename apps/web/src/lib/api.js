@@ -167,6 +167,9 @@ export const adminApi = {
   purgeSchool: (id) => api.delete(`/admin/purge/school/${id}`),
   previewOrphans: () => api.get('/admin/purge/orphans/preview'),
   purgeOrphans: () => api.delete('/admin/purge/orphans'),
+  // Platform / system settings
+  getSystemSettings: () => api.get('/admin/system-settings'),
+  updateSystemSettings: (data) => api.patch('/admin/system-settings', data),
   // System events
   listSystemEvents: (params) => api.get('/admin/system-events', { params }),
   createSystemEvent: (data) => api.post('/admin/system-events', data),
@@ -329,6 +332,8 @@ export const settingsApi = {
     }),
   addHoliday: (data) => api.post('/settings/holidays', data),
   deleteHoliday: (id) => api.delete(`/settings/holidays/${id}`),
+  addCalendarEvent: (data) => api.post('/settings/events', data),
+  deleteCalendarEvent: (id) => api.delete(`/settings/events/${id}`),
 };
 
 // ─── Lesson Plans ─────────────────────────────────────────────────────────────

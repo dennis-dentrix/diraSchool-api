@@ -17,8 +17,8 @@ import { env } from '../../config/env.js';
 import { queueEmailWithDirectFallback } from '../../utils/emailJobs.js';
 import { uploadBuffer } from '../../jobs/helpers/spacesUpload.js';
 import { parseImportFile } from '../../utils/parseImportFile.js';
-import SchoolSettings from '../settings/SchoolSettings.model.js';
 import { LEVEL_CATEGORIES, TERMS } from '../../constants/index.js';
+import { resolveCurrentTermAndYear } from '../../utils/term.js';
 
 // ── Private helpers ───────────────────────────────────────────────────────────
 
@@ -657,16 +657,6 @@ function inferLevelCategory(sheetName) {
   return LEVEL_CATEGORIES.LOWER_PRIMARY;
 }
 
-async function resolveCurrentTermAndYear(schoolId) {
-  const settings = await SchoolSettings.findOne({ schoolId }).lean();
-  const academicYear = settings?.currentAcademicYear || String(new Date().getFullYear());
-  const now = new Date();
-  const activeTerm = settings?.terms?.find(
-    (t) => new Date(t.startDate) <= now && now <= new Date(t.endDate)
-  );
-  const term = activeTerm?.name || TERMS[0];
-  return { academicYear, term };
-}
 
 export const importStudents = asyncHandler(async (req, res) => {
   const { classId } = req.body;
