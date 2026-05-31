@@ -696,6 +696,7 @@ function ClassTimetableTab({ canWrite }) {
         res.data?.data?.classes,
       );
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: timetable, isLoading, isError: timetableError, error: timetableErr } = useQuery({
@@ -709,7 +710,8 @@ function ClassTimetableTab({ canWrite }) {
       );
       return list[0] ?? null;
     },
-    enabled: !!selectedClass,
+    enabled: !!selectedClass && !!selectedTerm && !!selectedYear,
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: subjects } = useQuery({
@@ -749,7 +751,8 @@ function ClassTimetableTab({ canWrite }) {
         res.data?.data?.timetables,
       );
     },
-    enabled: canWrite && editMode,
+    enabled: canWrite && editMode && !!selectedTerm && !!selectedYear,
+    staleTime: 2 * 60 * 1000,
   });
 
   // Build teacher busy map: teacherId → day → Set<period>  (excluding current timetable)

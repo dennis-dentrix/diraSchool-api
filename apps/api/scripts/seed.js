@@ -265,11 +265,11 @@ async function main() {
   // ── 1. Superadmin ──────────────────────────────────────────────────────────
   console.log('\n👤 Creating superadmin…');
   const superadmin = await User.findOneAndUpdate(
-    { email: 'superadmin@diraschool.com' },
+    { email: 'supercontact@diraschool.com' },
     {
       firstName: 'Super',
       lastName: 'Admin',
-      email: 'superadmin@diraschool.com',
+      email: 'supercontact@diraschool.com',
       password: await hash('SuperAdmin@2025'),
       role: 'superadmin',
       emailVerified: true,
@@ -277,7 +277,7 @@ async function main() {
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
-  console.log(`  superadmin@diraschool.com  /  SuperAdmin@2025`);
+  console.log(`  supercontact@diraschool.com  /  SuperAdmin@2025`);
 
   // ── 2. Schools ─────────────────────────────────────────────────────────────
   console.log('\n🏫 Creating schools…');
@@ -740,7 +740,7 @@ async function main() {
   console.log('═'.repeat(56));
   console.log(`
   SUPERADMIN
-    Email:    superadmin@diraschool.com
+    Email:    supercontact@diraschool.com
     Password: SuperAdmin@2025
 
   SCHOOL 1 — ${school1.name}

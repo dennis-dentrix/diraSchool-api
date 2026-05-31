@@ -52,5 +52,8 @@ timetableSchema.index(
   { unique: true }
 );
 
+// Supports teacher personal schedule queries (filter by slots.teacherId)
+timetableSchema.index({ schoolId: 1, 'slots.teacherId': 1 });
+
 export default mongoose.models.Timetable ||
   mongoose.model('Timetable', timetableSchema);

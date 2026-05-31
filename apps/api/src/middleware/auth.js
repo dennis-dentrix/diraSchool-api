@@ -7,6 +7,7 @@ import { sendUnauthorized, sendForbidden } from '../utils/response.js';
 import { getRedis } from '../config/redis.js';
 import { attachAutoAudit } from '../utils/auditLogger.js';
 import { getCookieDomain } from '../utils/cookies.js';
+import { tenantStore } from '../utils/tenantContext.js';
 
 // ── Per-school rate limit ─────────────────────────────────────────────────────
 // Limits each school tenant to SCHOOL_RATE_LIMIT requests per 60-second window.
@@ -165,7 +166,9 @@ export const protect = async (req, res, next) => {
     }
   }
 
-  next();
+  // Run the rest of the request inside the tenant async context so every
+  // Mongoose query on tenant-scoped models automatically inherits schoolId.
+  tenantStore.run({ schoolId: user.schoolId ?? null }, next);
 };
 
 /**

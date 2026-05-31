@@ -6,7 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const AUTH_FILE = path.join(__dirname, '.auth/user.json');
 
 setup('authenticate as school admin', async ({ page }) => {
-  const email    = process.env.TEST_EMAIL    || 'admin@diraschool.com';
+  const email    = process.env.TEST_EMAIL    || 'contact@diraschool.com';
   const password = process.env.TEST_PASSWORD || 'TestAdmin@2025';
 
   await page.goto('/login');

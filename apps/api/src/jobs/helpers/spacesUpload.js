@@ -5,14 +5,14 @@ import { env } from '../../config/env.js';
 let _client = null;
 
 function isConfigured() {
-  return !!(env.DO_SPACES_KEY && env.DO_SPACES_SECRET && env.DO_SPACES_BUCKET && env.DO_SPACES_REGION);
+  return !!(env.DO_SPACES_KEY && env.DO_SPACES_SECRET && env.DO_SPACES_BUCKET);
 }
 
 function getClient() {
   if (_client) return _client;
   _client = new S3Client({
-    endpoint: `https://${env.DO_SPACES_REGION}.digitaloceanspaces.com`,
-    region: env.DO_SPACES_REGION,
+    endpoint: env.DO_SPACES_ENDPOINT || `https://${env.DO_SPACES_REGION}.digitaloceanspaces.com`,
+    region: env.DO_SPACES_REGION || 'auto',
     credentials: {
       accessKeyId: env.DO_SPACES_KEY,
       secretAccessKey: env.DO_SPACES_SECRET,
@@ -30,6 +30,7 @@ function buildKey(folder, publicId, resourceType, format) {
 
 function buildUrl(key) {
   if (env.DO_SPACES_CDN_ENDPOINT) return `${env.DO_SPACES_CDN_ENDPOINT}/${key}`;
+  if (env.DO_SPACES_ENDPOINT) return `${env.DO_SPACES_ENDPOINT}/${env.DO_SPACES_BUCKET}/${key}`;
   return `https://${env.DO_SPACES_BUCKET}.${env.DO_SPACES_REGION}.digitaloceanspaces.com/${key}`;
 }
 

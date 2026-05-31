@@ -254,7 +254,7 @@ export const sendNewSchoolNotification = ({
   schoolName, schoolEmail, schoolPhone, county, adminName, meta = {},
 }) =>
   sendEmail({
-    to: 'diraschadmin@diraschool.com',
+    to: 'diraschcontact@diraschool.com',
     subject: `New school registered — ${schoolName}`,
     html: _newSchoolTemplate({ schoolName, schoolEmail, schoolPhone, county, adminName }),
     template: 'new-school-notification',
@@ -287,7 +287,7 @@ export const sendSenderIdRequestNotification = ({
   schoolName, schoolId, senderIdRequested, requestedByEmail, meta = {},
 }) =>
   sendEmail({
-    to: 'diraschadmin@diraschool.com',
+    to: 'diraschcontact@diraschool.com',
     subject: `SMS Sender ID request — ${schoolName}`,
     html: _senderIdRequestTemplate({ schoolName, schoolId, senderIdRequested, requestedByEmail }),
     template: 'sender-id-request',
@@ -311,7 +311,7 @@ export const sendSchoolDeactivationRequestNotification = ({
   schoolName, schoolId, schoolEmail, requestedBy, requestedByEmail, reason, meta = {},
 }) =>
   sendEmail({
-    to: 'diraschadmin@diraschool.com',
+    to: 'diraschcontact@diraschool.com',
     subject: `School deactivation request — ${schoolName}`,
     html: _schoolDeactivationRequestTemplate({
       schoolName,

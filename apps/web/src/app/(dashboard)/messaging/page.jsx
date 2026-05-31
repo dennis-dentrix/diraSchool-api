@@ -671,8 +671,8 @@ function ComingSoon() {
       </ul>
       <p className="text-xs text-muted-foreground">
         This feature is currently being rolled out. Contact{' '}
-        <a href="mailto:admin@diraschool.com" className="underline hover:text-foreground">
-          admin@diraschool.com
+        <a href="mailto:contact@diraschool.com" className="underline hover:text-foreground">
+          contact@diraschool.com
         </a>{' '}
         to join the early access list.
       </p>

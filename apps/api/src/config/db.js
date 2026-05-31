@@ -1,5 +1,9 @@
 import mongoose from 'mongoose';
 import { env } from './env.js';
+import { tenantPlugin } from '../utils/tenantContext.js';
+
+// Register before any model is defined so every tenant-scoped schema gets it.
+mongoose.plugin(tenantPlugin);
 
 export const connectDB = async () => {
   try {
