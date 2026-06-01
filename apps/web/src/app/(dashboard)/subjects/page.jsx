@@ -368,13 +368,13 @@ export default function SubjectsPage() {
       const res = await subjectsApi.list({ page, limit: 50, department: deptFilter || undefined });
       return res.data;
     },
-    enabled: adminUser,
+    enabled: !isTeacher,
   });
 
   const { data: deptsData, isLoading: deptsLoading } = useQuery({
     queryKey: ['departments'],
     queryFn: async () => { const res = await departmentsApi.list(); return res.data; },
-    enabled: adminUser,
+    enabled: !isTeacher,
   });
 
   const { data: mySubjectsData, isLoading: myLoading } = useQuery({
@@ -396,7 +396,7 @@ export default function SubjectsPage() {
       const d = res.data;
       return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []);
     },
-    enabled: adminUser,
+    enabled: !isTeacher,
   });
 
   const { data: teachersData } = useQuery({
@@ -405,7 +405,7 @@ export default function SubjectsPage() {
       const res = await usersApi.list({ role: 'teacher,department_head', limit: 100 });
       return res.data;
     },
-    enabled: adminUser,
+    enabled: !isTeacher,
   });
 
   const subjects    = data?.subjects ?? data?.data ?? [];
@@ -434,6 +434,7 @@ export default function SubjectsPage() {
     onSuccess: () => {
       toast.success('Subject created');
       queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      queryClient.refetchQueries({ queryKey: ['subjects', page, deptFilter] });
       setOpen(false);
       reset();
     },

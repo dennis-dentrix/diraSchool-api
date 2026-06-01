@@ -36,6 +36,7 @@ const listSubjectsSchema = z.object({
   classId:    z.string().regex(objectIdRegex, 'Invalid class ID').optional(),
   department: z.string().optional(),
   isActive:   z.enum(['true', 'false']).optional(),
+  all:        z.enum(['true', 'false']).optional(),
   page:       z.coerce.number().int().positive().optional(),
   limit:      z.coerce.number().int().positive().optional(),
 });

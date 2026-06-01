@@ -15,15 +15,6 @@ const validateClassForSubject = async (schoolId, classId) => {
   const cls = await Class.findOne({ _id: classId, schoolId });
   if (!cls) return { error: { message: 'Class not found.', statusCode: 404 } };
 
-  if (cls.levelCategory === LEVEL_CATEGORIES.PRE_PRIMARY) {
-    return {
-      error: {
-        message: 'Pre-Primary classes cannot have subjects.',
-        statusCode: 400,
-      },
-    };
-  }
-
   return { cls };
 };
 
@@ -95,12 +86,15 @@ export const createSubject = asyncHandler(async (req, res) => {
   const hodResult = await resolveHodId(req.user.schoolId, hodId);
   if (hodResult.error) return sendError(res, hodResult.error.message, hodResult.error.statusCode);
 
+  const { tier } = req.body;
+
   const subject = await Subject.create({
     schoolId:   req.user.schoolId,
     classId,
     name:       name.trim(),
     code:       code?.trim().toUpperCase(),
     department: department?.trim(),
+    tier:       tier || undefined,
     teacherIds: tResult.ids,
     hodId:      hodResult.id,
   });
@@ -128,8 +122,9 @@ export const listSubjects = asyncHandler(async (req, res) => {
   }
 
   // Cache unfiltered admin queries (most frequent — sidebar, form selects)
+  // Note: after Zod validation, page/limit are coerced to numbers.
   const isSimpleQuery = !isTeacherRole && !req.query.classId && !req.query.department &&
-    req.query.isActive === undefined && (!req.query.page || req.query.page === '1') && !req.query.limit;
+    req.query.isActive === undefined && (!req.query.page || req.query.page === 1) && !req.query.limit;
 
   const cacheKey = `school:subjects:${req.user.schoolId}:all`;
   const redis = getRedis();

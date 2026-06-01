@@ -41,7 +41,7 @@ router.post(
   enrollStudent
 );
 router.post('/import', adminOnly, requireFeature(PLAN_FEATURES.BULK_IMPORT), uploadCsv, importStudents);
-router.patch('/:id', adminOnly, validateUpdateStudent, updateStudent);
+router.patch('/:id', authorize(...ROLE_GROUPS.ACADEMIC), validateUpdateStudent, updateStudent);
 router.post('/:id/photo', adminOnly, uploadImage('photo'), uploadStudentPhoto);
 router.post('/:id/transfer', adminOnly, validateTransferStudent, transferStudent);
 router.post('/:id/withdraw', adminOnly, withdrawStudent);

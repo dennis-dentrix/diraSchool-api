@@ -418,6 +418,26 @@ export const updateStudent = asyncHandler(async (req, res) => {
       return sendError(res, 'Student not found.', 404);
     }
 
+    // Teachers may only edit names of students in their own class
+    if ([ROLES.TEACHER, ROLES.DEPARTMENT_HEAD].includes(req.user.role)) {
+      const isMyClass = await Class.exists({
+        _id: student.classId,
+        schoolId,
+        classTeacherId: req.user._id,
+      });
+      if (!isMyClass) {
+        await session.abortTransaction();
+        return sendError(res, 'Student not found.', 404);
+      }
+      // Teachers are restricted to name changes only
+      const allowedKeys = new Set(['firstName', 'lastName']);
+      const attempted = Object.keys(req.body).filter((k) => !allowedKeys.has(k));
+      if (attempted.length > 0) {
+        await session.abortTransaction();
+        return sendError(res, 'Teachers may only update student first and last names.', 403);
+      }
+    }
+
     const {
       firstName, lastName, gender, dateOfBirth, admissionNumber, birthCertificateNumber, assessmentNumber, enrollmentDate, guardians,
     } = req.body;

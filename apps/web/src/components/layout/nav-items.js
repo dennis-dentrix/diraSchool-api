@@ -66,7 +66,7 @@ export const schoolNavGroups = [
     items: [
       { label: 'Timetable',    href: '/timetable',    icon: Calendar,  roles: ALL_STAFF },
       { label: 'Leave',        href: '/leave',        icon: Umbrella,  roles: ALL_STAFF },
-      { label: 'Classes',      href: '/classes',      icon: BookOpen,  roles: ALL_STAFF },
+      { label: 'Classes',      href: '/classes',      icon: BookOpen,  roles: ADMIN },
       { label: 'Subjects',     href: '/subjects',     icon: BookOpen,  roles: ACADEMIC },
       { label: 'Exams',        href: '/exams',        icon: FileText,  roles: ACADEMIC },
       { label: 'Lesson Plans', href: '/lesson-plans', icon: Image,     roles: ACADEMIC },

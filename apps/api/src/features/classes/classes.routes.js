@@ -19,10 +19,9 @@ router.use(protect, blockIfMustChangePassword);
 // Teacher-facing: "My Class" — the class where they are the class teacher
 router.get('/my-class', authorize(ROLES.TEACHER, ROLES.DEPARTMENT_HEAD), myClass);
 
-const canRead = authorize(...ROLE_GROUPS.ALL_STAFF);
-
-router.get('/', canRead, listClasses);
-router.get('/:id', canRead, getClass);
+// Teachers use GET /classes/my-class — they must not browse the full class list.
+router.get('/', authorize(...ROLE_GROUPS.ADMIN), listClasses);
+router.get('/:id', authorize(...ROLE_GROUPS.ADMIN), getClass);
 
 // Write operations — admin roles only
 router.post('/', adminOnly, validateCreateClass, createClass);
