@@ -327,7 +327,26 @@ export const enrollStudent = asyncHandler(async (req, res) => {
  */
 export const listStudents = asyncHandler(async (req, res) => {
   const filter = { schoolId: req.user.schoolId };
-  if (req.query.classId) filter.classId = req.query.classId;
+
+  // Teachers and department heads only see students in the class(es) where
+  // they are the assigned class teacher. They cannot browse the whole school.
+  if ([ROLES.TEACHER, ROLES.DEPARTMENT_HEAD].includes(req.user.role)) {
+    const myClasses = await Class.find(
+      { schoolId: req.user.schoolId, classTeacherId: req.user._id },
+      '_id'
+    ).lean();
+    if (myClasses.length === 0) return sendSuccess(res, { students: [], meta: { total: 0, page: 1, pages: 0, limit: 25 } });
+    const myClassIds = myClasses.map((c) => c._id);
+    // Allow further narrowing by classId, but only within their own classes
+    if (req.query.classId && myClassIds.some((id) => id.toString() === req.query.classId)) {
+      filter.classId = req.query.classId;
+    } else {
+      filter.classId = { $in: myClassIds };
+    }
+  } else if (req.query.classId) {
+    filter.classId = req.query.classId;
+  }
+
   if (req.query.status) filter.status = req.query.status;
   if (req.query.gender && ['male', 'female'].includes(req.query.gender)) filter.gender = req.query.gender;
 
@@ -369,6 +388,16 @@ export const getStudent = asyncHandler(async (req, res) => {
     .populate('parentIds', 'firstName lastName phone email');
 
   if (!student) return sendError(res, 'Student not found.', 404);
+
+  // Teachers may only view students in their own class(es)
+  if ([ROLES.TEACHER, ROLES.DEPARTMENT_HEAD].includes(req.user.role)) {
+    const isMyClass = await Class.exists({
+      _id: student.classId,
+      schoolId: req.user.schoolId,
+      classTeacherId: req.user._id,
+    });
+    if (!isMyClass) return sendError(res, 'Student not found.', 404);
+  }
 
   return sendSuccess(res, { student });
 });
