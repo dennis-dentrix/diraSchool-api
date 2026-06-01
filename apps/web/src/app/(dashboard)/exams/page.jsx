@@ -96,7 +96,11 @@ export default function ExamsPage() {
 
   const { data: classesData } = useQuery({
     queryKey: ['classes'],
-    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; },
+    queryFn: async () => {
+      const res = await classesApi.list({ limit: 100 });
+      const d = res.data;
+      return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []);
+    },
   });
 
   const { data: subjectsData } = useQuery({
@@ -122,7 +126,7 @@ export default function ExamsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const classes = classesData?.data ?? classesData?.classes ?? [];
+  const classes = Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? []);
   const allExams = data?.data ?? data?.exams ?? [];
 
   // Group by term → type

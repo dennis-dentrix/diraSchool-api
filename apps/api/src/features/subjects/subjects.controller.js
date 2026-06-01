@@ -89,16 +89,24 @@ export const createSubject = asyncHandler(async (req, res) => {
 
   const { tier } = req.body;
 
-  const subject = await Subject.create({
-    schoolId:   req.user.schoolId,
-    classId,
-    name:       name.trim(),
-    code:       code?.trim().toUpperCase(),
-    department: department?.trim(),
-    tier:       tier || undefined,
-    teacherIds: tResult.ids,
-    hodId:      hodResult.id,
-  });
+  let subject;
+  try {
+    subject = await Subject.create({
+      schoolId:   req.user.schoolId,
+      classId,
+      name:       name.trim(),
+      code:       code?.trim().toUpperCase(),
+      department: department?.trim(),
+      tier:       tier || undefined,
+      teacherIds: tResult.ids,
+      hodId:      hodResult.id,
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      return sendError(res, `A subject named "${name.trim()}" already exists for this class.`, 409);
+    }
+    throw err;
+  }
 
   await bustSubjectCache(req.user.schoolId);
   const populated = await populateSubject(Subject.findById(subject._id));

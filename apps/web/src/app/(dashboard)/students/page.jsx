@@ -199,10 +199,10 @@ export default function StudentsPage() {
 
   const { data: classesData } = useQuery({
     queryKey: ['classes'],
-    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; },
+    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); const d = res.data; return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []); },
     enabled: !isTeacher,
   });
-  const classes = classesData?.classes ?? classesData?.data ?? [];
+  const classes = Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? []);
 
   // Fee stats for the current page of students
   const students   = data?.students ?? data?.data ?? [];

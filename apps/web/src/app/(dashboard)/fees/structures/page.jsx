@@ -259,7 +259,7 @@ export default function FeeStructuresPage() {
 
   const { data: classesData } = useQuery({
     queryKey: ['classes'],
-    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; },
+    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); const d = res.data; return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []); },
   });
 
   const { data: schoolData } = useQuery({
@@ -332,7 +332,7 @@ export default function FeeStructuresPage() {
   });
 
   const structures = data?.data ?? [];
-  const classes    = classesData?.data ?? classesData?.classes ?? [];
+  const classes    = Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? []);
   const hasFilters = filterYear || filterTerm || filterClass;
 
   // Sort structures by class name then term

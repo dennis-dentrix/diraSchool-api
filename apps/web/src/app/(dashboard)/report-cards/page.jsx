@@ -73,7 +73,7 @@ export default function ReportCardsPage() {
 
   const { data: classesData } = useQuery({
     queryKey: ['classes'],
-    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); return res.data; },
+    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); const d = res.data; return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []); },
   });
 
   const { data: studentsData } = useQuery({
@@ -99,7 +99,7 @@ export default function ReportCardsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const classes  = classesData?.data ?? classesData?.classes ?? [];
+  const classes  = Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? []);
   const cards    = data?.data ?? data?.reportCards ?? [];
   const totalPgs = data?.pagination?.totalPages ?? 1;
 

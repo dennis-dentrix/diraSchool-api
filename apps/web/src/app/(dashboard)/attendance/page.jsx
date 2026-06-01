@@ -585,7 +585,8 @@ export default function AttendancePage() {
         return res.data?.data ?? res.data;
       }
       const res = await classesApi.list({ limit: 100 });
-      return res.data?.data ?? res.data?.classes ?? [];
+      const d = res.data;
+      return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []);
     },
   });
 

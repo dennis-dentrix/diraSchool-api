@@ -5,20 +5,10 @@ import Result from '../results/Result.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
-import { LEVEL_CATEGORIES } from '../../constants/index.js';
 
 const validateClassAndSubject = async (schoolId, classId, subjectId) => {
   const cls = await Class.findOne({ _id: classId, schoolId });
   if (!cls) return { error: { message: 'Class not found.', statusCode: 404 } };
-
-  if (cls.levelCategory === LEVEL_CATEGORIES.PRE_PRIMARY) {
-    return {
-      error: {
-        message: 'Pre-Primary classes cannot have exams.',
-        statusCode: 400,
-      },
-    };
-  }
 
   const subject = await Subject.findOne({ _id: subjectId, schoolId, classId });
   if (!subject) {
