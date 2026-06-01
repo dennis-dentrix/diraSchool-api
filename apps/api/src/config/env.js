@@ -32,8 +32,15 @@ export const validateEnv = () => {
     process.exit(1);
   }
 
-  if (!process.env.ZEPTOMAIL_API_KEY) {
-    writeStderr('\n[ENV ERROR] ZEPTOMAIL_API_KEY is required.\n');
+  // ZEPTOMAIL_API_KEY is optional — Resend is the active provider.
+  // Re-enable this check once ZeptoMail credits are topped up.
+  // if (!process.env.ZEPTOMAIL_API_KEY) {
+  //   writeStderr('\n[ENV ERROR] ZEPTOMAIL_API_KEY is required.\n');
+  //   process.exit(1);
+  // }
+
+  if (!process.env.RESEND_API_KEY) {
+    writeStderr('\n[ENV ERROR] RESEND_API_KEY is required.\n');
     process.exit(1);
   }
 
@@ -44,8 +51,8 @@ export const validateEnv = () => {
   ) {
     writeStderr(
       '\n[ENV WARNING] CLIENT_URL contains "localhost" in production — email links will point to localhost!\n' +
-      `  Current value: ${process.env.CLIENT_URL}\n` +
-      '  Set CLIENT_URL=https://diraschool.com in your .env file.\n'
+        `  Current value: ${process.env.CLIENT_URL}\n` +
+        '  Set CLIENT_URL=https://diraschool.com in your .env file.\n'
     );
     // Non-fatal — warn but don't exit, so the server can still start
   }
@@ -57,7 +64,7 @@ export const validateEnv = () => {
   ) {
     writeStderr(
       '\n[ENV ERROR] SMS_TEST_NUMBERS / AT_TEST_NUMBERS must not be set in production.\n' +
-      'It redirects every SMS, including broadcasts, to the test phone numbers.\n'
+        'It redirects every SMS, including broadcasts, to the test phone numbers.\n'
     );
     process.exit(1);
   }
@@ -66,7 +73,9 @@ export const validateEnv = () => {
     process.env.NODE_ENV === 'production' &&
     String(process.env.AT_USERNAME ?? '').toLowerCase() === 'sandbox'
   ) {
-    writeStderr('\n[ENV ERROR] AT_USERNAME must be your live Africa\'s Talking username in production — not "sandbox".\n');
+    writeStderr(
+      '\n[ENV ERROR] AT_USERNAME must be your live Africa\'s Talking username in production — not "sandbox".\n'
+    );
     process.exit(1);
   }
 
@@ -75,7 +84,9 @@ export const validateEnv = () => {
     process.env.NODE_ENV === 'production' &&
     String(productionSenderId ?? '').toLowerCase() === 'sandbox'
   ) {
-    writeStderr('\n[ENV ERROR] AT_SENDER_ID cannot be "sandbox" in production. Use an approved sender ID or leave it blank.\n');
+    writeStderr(
+      '\n[ENV ERROR] AT_SENDER_ID cannot be "sandbox" in production. Use an approved sender ID or leave it blank.\n'
+    );
     process.exit(1);
   }
 
@@ -85,11 +96,11 @@ export const validateEnv = () => {
   if (configuredR2Vars.length > 0 && configuredR2Vars.length < r2Vars.length) {
     writeStderr(
       '\n[ENV ERROR] Partial Cloudflare R2 configuration detected.\n' +
-      'Set all 4 variables or none:\n' +
-      '  R2_ACCESS_KEY_ID\n' +
-      '  R2_SECRET_ACCESS_KEY\n' +
-      '  R2_BUCKET\n' +
-      '  R2_ENDPOINT\n'
+        'Set all 4 variables or none:\n' +
+        '  R2_ACCESS_KEY_ID\n' +
+        '  R2_SECRET_ACCESS_KEY\n' +
+        '  R2_BUCKET\n' +
+        '  R2_ENDPOINT\n'
     );
     process.exit(1);
   }
@@ -116,9 +127,13 @@ export const env = {
   // Approved AT sender ID / shortcode (e.g. "DIRASCHOOL"). Leave blank to use AT shared shortcode.
   AT_SENDER_ID: process.env.AT_SENDER_ID || null,
   // Comma-separated E.164 numbers. When set, ALL SMS are redirected to these — dev/QA only.
-  SMS_TEST_NUMBERS: (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS)
-    ? (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS).split(',').map((n) => n.trim()).filter(Boolean)
-    : null,
+  SMS_TEST_NUMBERS:
+    process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS
+      ? (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS)
+          .split(',')
+          .map((n) => n.trim())
+          .filter(Boolean)
+      : null,
   EMAIL_FROM: process.env.EMAIL_FROM,
   RESEND_API_KEY: process.env.RESEND_API_KEY,
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
@@ -140,15 +155,17 @@ export const env = {
   MPESA_PASSKEY: process.env.MPESA_PASSKEY,
   MPESA_SHORTCODE: process.env.MPESA_SHORTCODE,
   MPESA_ENV: process.env.MPESA_ENV || 'production',
-  MPESA_BASE_URL: process.env.MPESA_BASE_URL || (
-    process.env.MPESA_ENV === 'sandbox'
+  MPESA_BASE_URL:
+    process.env.MPESA_BASE_URL ||
+    (process.env.MPESA_ENV === 'sandbox'
       ? 'https://sandbox.safaricom.co.ke'
-      : 'https://api.safaricom.co.ke'
-  ),
+      : 'https://api.safaricom.co.ke'),
   MPESA_CALLBACK_BASE_URL: process.env.MPESA_CALLBACK_BASE_URL,
   MPESA_IP_WHITELIST_ENABLED: process.env.MPESA_IP_WHITELIST_ENABLED,
   MPESA_ALLOWED_IPS: process.env.MPESA_ALLOWED_IPS
-    ? process.env.MPESA_ALLOWED_IPS.split(',').map((ip) => ip.trim()).filter(Boolean)
+    ? process.env.MPESA_ALLOWED_IPS.split(',')
+        .map((ip) => ip.trim())
+        .filter(Boolean)
     : [],
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV === 'development',
