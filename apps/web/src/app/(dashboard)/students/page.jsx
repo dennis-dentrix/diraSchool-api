@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp, Download, X } from 'lucide-react';
+import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp, Download, X, Pencil } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -132,6 +132,7 @@ export default function StudentsPage() {
 
   const [search, setSearch]               = useState('');
   const [page, setPage]                   = useState(1);
+  const [editNameTarget, setEditNameTarget] = useState(null); // { _id, firstName, lastName }
   const [open, setOpen]                   = useState(false);
   const [importOpen, setImportOpen]         = useState(false);
   const [importMode, setImportMode]         = useState('single'); // 'single' | 'all'
@@ -253,6 +254,16 @@ export default function StudentsPage() {
       toast.success('Student withdrawn');
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['students-status-counts'] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
+  const { mutate: updateStudentName, isPending: isUpdatingName } = useMutation({
+    mutationFn: ({ id, firstName, lastName }) => studentsApi.update(id, { firstName, lastName }),
+    onSuccess: () => {
+      toast.success('Name updated');
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      setEditNameTarget(null);
     },
     onError: (err) => toast.error(getErrorMessage(err)),
   });
@@ -569,25 +580,28 @@ export default function StudentsPage() {
                         </span>
                       </td>
                       <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                        {!isTeacher && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {!isTeacher && (
                               <DropdownMenuItem onClick={() => router.push(`/students/${s._id}`)}>View details</DropdownMenuItem>
-                              {s.status === 'active' && (
-                                <DropdownMenuItem className="text-destructive" onClick={() => confirm(
-                                  `Withdraw ${s.firstName} ${s.lastName}?`,
-                                  'The student will be marked as withdrawn. This can be reversed later.',
-                                  () => withdrawStudent({ id: s._id }),
-                                )}>Withdraw</DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
+                            )}
+                            <DropdownMenuItem onClick={() => setEditNameTarget({ _id: s._id, firstName: s.firstName, lastName: s.lastName })}>
+                              Edit name
+                            </DropdownMenuItem>
+                            {!isTeacher && s.status === 'active' && (
+                              <DropdownMenuItem className="text-destructive" onClick={() => confirm(
+                                `Withdraw ${s.firstName} ${s.lastName}?`,
+                                'The student will be marked as withdrawn. This can be reversed later.',
+                                () => withdrawStudent({ id: s._id }),
+                              )}>Withdraw</DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   );
@@ -866,6 +880,42 @@ export default function StudentsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Edit name dialog (teachers + admins) ───────────────────────── */}
+      {editNameTarget && (
+        <Dialog open onOpenChange={(v) => { if (!v) setEditNameTarget(null); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Edit Student Name</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <div className="space-y-1.5">
+                <Label>First Name</Label>
+                <Input
+                  defaultValue={editNameTarget.firstName}
+                  onChange={(e) => setEditNameTarget((p) => ({ ...p, firstName: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Last Name</Label>
+                <Input
+                  defaultValue={editNameTarget.lastName}
+                  onChange={(e) => setEditNameTarget((p) => ({ ...p, lastName: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditNameTarget(null)}>Cancel</Button>
+              <Button
+                disabled={isUpdatingName || !editNameTarget.firstName?.trim() || !editNameTarget.lastName?.trim()}
+                onClick={() => updateStudentName({ id: editNameTarget._id, firstName: editNameTarget.firstName.trim(), lastName: editNameTarget.lastName.trim() })}
+              >
+                {isUpdatingName ? 'Saving…' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
