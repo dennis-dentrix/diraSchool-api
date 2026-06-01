@@ -14,7 +14,7 @@ import PDFDocument from 'pdfkit';
 import Payment from '../../features/fees/Payment.model.js';
 import School from '../../features/schools/School.model.js';
 import SchoolSettings from '../../features/settings/SchoolSettings.model.js';
-import { uploadBuffer } from '../helpers/spacesUpload.js';
+import { uploadBuffer } from '../helpers/r2Upload.js';
 import logger from '../../config/logger.js';
 
 // ── PDF renderer ──────────────────────────────────────────────────────────────

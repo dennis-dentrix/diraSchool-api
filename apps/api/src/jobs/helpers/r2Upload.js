@@ -5,17 +5,17 @@ import { env } from '../../config/env.js';
 let _client = null;
 
 function isConfigured() {
-  return !!(env.DO_SPACES_KEY && env.DO_SPACES_SECRET && env.DO_SPACES_BUCKET);
+  return !!(env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET && env.R2_ENDPOINT);
 }
 
 function getClient() {
   if (_client) return _client;
   _client = new S3Client({
-    endpoint: env.DO_SPACES_ENDPOINT || `https://${env.DO_SPACES_REGION}.digitaloceanspaces.com`,
-    region: env.DO_SPACES_REGION || 'auto',
+    endpoint: env.R2_ENDPOINT,
+    region: 'auto', // R2 always uses 'auto'
     credentials: {
-      accessKeyId: env.DO_SPACES_KEY,
-      secretAccessKey: env.DO_SPACES_SECRET,
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
     },
   });
   return _client;
@@ -29,17 +29,17 @@ function buildKey(folder, publicId, resourceType, format) {
 }
 
 function buildUrl(key) {
-  if (env.DO_SPACES_CDN_ENDPOINT) return `${env.DO_SPACES_CDN_ENDPOINT}/${key}`;
-  if (env.DO_SPACES_ENDPOINT) return `${env.DO_SPACES_ENDPOINT}/${env.DO_SPACES_BUCKET}/${key}`;
-  return `https://${env.DO_SPACES_BUCKET}.${env.DO_SPACES_REGION}.digitaloceanspaces.com/${key}`;
+  // R2_PUBLIC_URL — custom domain or R2.dev public bucket URL (recommended)
+  if (env.R2_PUBLIC_URL) return `${env.R2_PUBLIC_URL}/${key}`;
+  // Fallback: direct account endpoint (requires bucket to have public access enabled)
+  return `${env.R2_ENDPOINT}/${env.R2_BUCKET}/${key}`;
 }
 
 /**
- * Upload a buffer to DigitalOcean Spaces.
- * Drop-in replacement for cloudinaryUpload.uploadBuffer.
+ * Upload a buffer to Cloudflare R2.
  *
  * @param {Buffer} buffer
- * @param {object} options  — folder, public_id, resource_type, format, overwrite (ignored — S3 overwrites by default)
+ * @param {object} options  — folder, public_id, resource_type, format
  * @returns {Promise<{ url: string, publicId: string } | null>}
  */
 export async function uploadBuffer(buffer, options = {}) {
@@ -59,19 +59,18 @@ export async function uploadBuffer(buffer, options = {}) {
     contentType = 'image/jpeg';
   } else if (format === 'pdf' || resource_type === 'raw') {
     contentType = 'application/pdf';
-    // Set Content-Disposition at rest so every download works without URL tricks
     contentDisposition = `attachment; filename="${public_id}.pdf"`;
   }
 
   const key = buildKey(folder, public_id, resource_type, format);
 
   await getClient().send(new PutObjectCommand({
-    Bucket: env.DO_SPACES_BUCKET,
+    Bucket: env.R2_BUCKET,
     Key: key,
     Body: body,
     ContentType: contentType,
     ContentDisposition: contentDisposition,
-    ACL: 'public-read',
+    // R2 does not support S3 ACLs — public access is controlled at the bucket level in the dashboard
     CacheControl: 'public, max-age=31536000, immutable',
   }));
 
@@ -79,15 +78,14 @@ export async function uploadBuffer(buffer, options = {}) {
 }
 
 /**
- * Delete a file from DigitalOcean Spaces by its key (publicId).
- * Drop-in replacement for cloudinaryUpload.deleteFile.
+ * Delete a file from Cloudflare R2 by its key (publicId).
  *
- * @param {string} publicId — the full S3 key returned by uploadBuffer
+ * @param {string} publicId — the full R2 object key returned by uploadBuffer
  */
 export async function deleteFile(publicId) {
   if (!isConfigured() || !publicId) return null;
   await getClient().send(new DeleteObjectCommand({
-    Bucket: env.DO_SPACES_BUCKET,
+    Bucket: env.R2_BUCKET,
     Key: publicId,
   }));
 }

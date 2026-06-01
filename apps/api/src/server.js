@@ -159,7 +159,7 @@ app.get('/health', async (req, res) => {
       mongodb: 'up',
       redis: redisStatus,
       storage:
-        env.DO_SPACES_KEY && env.DO_SPACES_SECRET && env.DO_SPACES_BUCKET
+        env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET && env.R2_ENDPOINT
           ? 'configured'
           : 'not_configured',
     },

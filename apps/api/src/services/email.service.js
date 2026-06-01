@@ -1,4 +1,5 @@
-import { SendMailClient } from 'zeptomail';
+// import { SendMailClient } from 'zeptomail'; // ← ZeptoMail (re-enable once credits topped up)
+import { Resend } from 'resend';
 import { env } from '../config/env.js';
 import logger from '../config/logger.js';
 import EmailEvent from '../features/email/EmailEvent.model.js';
@@ -14,16 +15,16 @@ const parseFrom = (raw) => {
 const FROM_RAW = env.EMAIL_FROM ?? 'Diraschool <noreply@contact.diraschool.com>';
 const FROM = parseFrom(FROM_RAW);
 
-const normalizeZeptoUrl = (url) => {
-  const trimmed = String(url || '').trim() || 'api.zeptomail.com/';
-  return trimmed.includes('/v1.1') || trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
-};
-
-const normalizeZeptoToken = (token) => {
-  const trimmed = String(token || '').trim();
-  if (!trimmed || trimmed.toLowerCase().startsWith('zoho-enczapikey ')) return trimmed;
-  return `Zoho-enczapikey ${trimmed}`;
-};
+// ── ZeptoMail helpers (kept for when credits are restored) ───────────────────
+// const normalizeZeptoUrl = (url) => {
+//   const trimmed = String(url || '').trim() || 'api.zeptomail.com/';
+//   return trimmed.includes('/v1.1') || trimmed.endsWith('/') ? trimmed : `${trimmed}/`;
+// };
+// const normalizeZeptoToken = (token) => {
+//   const trimmed = String(token || '').trim();
+//   if (!trimmed || trimmed.toLowerCase().startsWith('zoho-enczapikey ')) return trimmed;
+//   return `Zoho-enczapikey ${trimmed}`;
+// };
 
 const decodeHtmlEntities = (value) =>
   value
@@ -62,31 +63,50 @@ const htmlToText = (html) => {
   return decodeHtmlEntities(text);
 };
 
-const zeptoClient = new SendMailClient({
-  url: normalizeZeptoUrl(env.ZEPTOMAIL_API_URL),
-  token: normalizeZeptoToken(env.ZEPTOMAIL_API_KEY),
-});
+// ── ZeptoMail client (commented out — re-enable once credits are topped up) ──
+// const zeptoClient = new SendMailClient({
+//   url: normalizeZeptoUrl(env.ZEPTOMAIL_API_URL),
+//   token: normalizeZeptoToken(env.ZEPTOMAIL_API_KEY),
+// });
+// const sendViaZeptoApi = async ({ to, subject, html }) => {
+//   const data = await zeptoClient.sendMail({
+//     from: { address: FROM.address, name: FROM.name },
+//     to: [{ email_address: { address: to } }],
+//     subject,
+//     textbody: htmlToText(html),
+//     htmlbody: html,
+//   });
+//   return {
+//     provider: 'zeptomail',
+//     providerMessageId: data?.data?.[0]?.message_id ?? data?.request_id,
+//     providerStatus: 'accepted',
+//   };
+// };
 
-logger.info('[Email] ZeptoMail configured', {
-  url: normalizeZeptoUrl(env.ZEPTOMAIL_API_URL),
-  from: FROM.address,
-  tokenFormat: String(env.ZEPTOMAIL_API_KEY || '').trim().toLowerCase().startsWith('zoho-enczapikey ')
-    ? 'authorization-header'
-    : 'raw-token',
-});
+// ── Resend client (active) ───────────────────────────────────────────────────
+const resendClient = new Resend(env.RESEND_API_KEY);
 
-const sendViaZeptoApi = async ({ to, subject, html }) => {
-  const data = await zeptoClient.sendMail({
-    from: { address: FROM.address, name: FROM.name },
-    to: [{ email_address: { address: to } }],
+logger.info('[Email] Resend configured', { from: FROM.address });
+
+const sendViaResend = async ({ to, subject, html }) => {
+  const { data, error } = await resendClient.emails.send({
+    from: `${FROM.name} <${FROM.address}>`,
+    to,
     subject,
-    textbody: htmlToText(html),
-    htmlbody: html,
+    html,
+    text: htmlToText(html),
   });
 
+  if (error) {
+    const err = new Error(error.message ?? 'Resend delivery error');
+    err.code = error.name;
+    err.providerError = error;
+    throw err;
+  }
+
   return {
-    provider: 'zeptomail',
-    providerMessageId: data?.data?.[0]?.message_id ?? data?.request_id,
+    provider: 'resend',
+    providerMessageId: data?.id,
     providerStatus: 'accepted',
   };
 };
@@ -176,11 +196,11 @@ const persistEmailEvent = async ({
 
 const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
   try {
-    const result = await sendViaZeptoApi({ to, subject, html });
+    const result = await sendViaResend({ to, subject, html });
 
     await persistEmailEvent({
       to, subject, template,
-      provider: 'zeptomail',
+      provider: 'resend',
       status: 'sent',
       accepted: [to],
       rejected: [],
@@ -194,7 +214,7 @@ const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
     const normalized = normalizeError(err);
     await persistEmailEvent({
       to, subject, template,
-      provider: 'zeptomail',
+      provider: 'resend',
       status: 'failed',
       errorMessage: normalized.message,
       errorCode: normalized.code,
@@ -209,7 +229,7 @@ const sendEmail = async ({ to, subject, html, template, meta = {} }) => {
     });
     const wrapped = new Error(normalized.message);
     wrapped.code = normalized.code;
-    wrapped.provider = 'zeptomail';
+    wrapped.provider = 'resend';
     wrapped.providerError = normalized.details;
     wrapped.cause = err;
     throw wrapped;

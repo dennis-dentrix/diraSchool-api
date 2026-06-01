@@ -125,7 +125,7 @@ const jsonLd = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
       <body className={`${font.variable} font-sans antialiased`}>
         <script
           type="application/ld+json"

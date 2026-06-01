@@ -439,7 +439,18 @@ function PlanDetailPane({ plan, currentUser, onShare, onDelete }) {
           )}
           {plan.pdfUrl && (
             <Button size="sm" variant="outline" className="h-8 text-xs gap-1 border-ok/30 text-ok hover:bg-ok/8" asChild>
-              <a href={plan.pdfUrl} download><Download className="h-3.5 w-3.5" /> PDF</a>
+              <a
+                href={plan.pdfUrl}
+                download={[
+                  'lesson_plan',
+                  cls?.replace(/\s+/g, '_'),
+                  subject?.replace(/\s+/g, '_'),
+                  plan.term?.replace(/\s+/g, '_'),
+                  plan.academicYear,
+                ].filter(Boolean).join('_') + '.pdf'}
+              >
+                <Download className="h-3.5 w-3.5" /> PDF
+              </a>
             </Button>
           )}
           {admin && (

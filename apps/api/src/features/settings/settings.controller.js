@@ -3,7 +3,7 @@ import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { cacheGet, cacheSet, cacheDel } from '../../config/redis.js';
 import { CACHE_TTL } from '../../constants/index.js';
-import { uploadBuffer } from '../../jobs/helpers/spacesUpload.js';
+import { uploadBuffer } from '../../jobs/helpers/r2Upload.js';
 
 const settingsCacheKey = (schoolId) => `settings:${schoolId}`;
 
@@ -144,7 +144,7 @@ export const uploadSchoolLogo = asyncHandler(async (req, res) => {
   if (!upload?.url) {
     return sendError(
       res,
-      'Logo upload unavailable. Configure DO_SPACES_KEY, DO_SPACES_SECRET, DO_SPACES_BUCKET, and DO_SPACES_REGION.',
+      'Logo upload unavailable. Configure R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, and R2_ENDPOINT.',
       503
     );
   }

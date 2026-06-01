@@ -15,7 +15,7 @@ import { getRedis } from '../../config/redis.js';
 import { logAction } from '../../utils/auditLogger.js';
 import { env } from '../../config/env.js';
 import { queueEmailWithDirectFallback } from '../../utils/emailJobs.js';
-import { uploadBuffer } from '../../jobs/helpers/spacesUpload.js';
+import { uploadBuffer } from '../../jobs/helpers/r2Upload.js';
 import { parseImportFile } from '../../utils/parseImportFile.js';
 import { LEVEL_CATEGORIES, TERMS } from '../../constants/index.js';
 import { resolveCurrentTermAndYear } from '../../utils/term.js';
@@ -612,7 +612,7 @@ export const uploadStudentPhoto = asyncHandler(async (req, res) => {
   if (!upload?.url) {
     return sendError(
       res,
-      'Photo upload unavailable. Configure DO_SPACES_KEY, DO_SPACES_SECRET, DO_SPACES_BUCKET, and DO_SPACES_REGION.',
+      'Photo upload unavailable. Configure R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, and R2_ENDPOINT.',
       503
     );
   }

@@ -79,17 +79,17 @@ export const validateEnv = () => {
     process.exit(1);
   }
 
-  // DO Spaces — partial config is always a mistake
-  const spacesVars = ['DO_SPACES_KEY', 'DO_SPACES_SECRET', 'DO_SPACES_BUCKET', 'DO_SPACES_REGION'];
-  const configuredSpacesVars = spacesVars.filter((key) => !!process.env[key]);
-  if (configuredSpacesVars.length > 0 && configuredSpacesVars.length < spacesVars.length) {
+  // Cloudflare R2 — partial config is always a mistake
+  const r2Vars = ['R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET', 'R2_ENDPOINT'];
+  const configuredR2Vars = r2Vars.filter((key) => !!process.env[key]);
+  if (configuredR2Vars.length > 0 && configuredR2Vars.length < r2Vars.length) {
     writeStderr(
-      '\n[ENV ERROR] Partial DO Spaces configuration detected.\n' +
+      '\n[ENV ERROR] Partial Cloudflare R2 configuration detected.\n' +
       'Set all 4 variables or none:\n' +
-      '  DO_SPACES_KEY\n' +
-      '  DO_SPACES_SECRET\n' +
-      '  DO_SPACES_BUCKET\n' +
-      '  DO_SPACES_REGION\n'
+      '  R2_ACCESS_KEY_ID\n' +
+      '  R2_SECRET_ACCESS_KEY\n' +
+      '  R2_BUCKET\n' +
+      '  R2_ENDPOINT\n'
     );
     process.exit(1);
   }
@@ -120,13 +120,15 @@ export const env = {
     ? (process.env.SMS_TEST_NUMBERS || process.env.AT_TEST_NUMBERS).split(',').map((n) => n.trim()).filter(Boolean)
     : null,
   EMAIL_FROM: process.env.EMAIL_FROM,
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
   ZEPTOMAIL_API_URL: process.env.ZEPTOMAIL_API_URL || 'api.zeptomail.com/',
-  DO_SPACES_KEY: process.env.DO_SPACES_KEY,
-  DO_SPACES_SECRET: process.env.DO_SPACES_SECRET,
-  DO_SPACES_BUCKET: process.env.DO_SPACES_BUCKET,
-  DO_SPACES_REGION: process.env.DO_SPACES_REGION || 'ams3',
-  DO_SPACES_CDN_ENDPOINT: process.env.DO_SPACES_CDN_ENDPOINT,
+  // Cloudflare R2 — set all 4 to enable file uploads
+  R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+  R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+  R2_BUCKET: process.env.R2_BUCKET,
+  R2_ENDPOINT: process.env.R2_ENDPOINT, // e.g. https://<account_id>.r2.cloudflarestorage.com
+  R2_PUBLIC_URL: process.env.R2_PUBLIC_URL || null, // custom domain or R2.dev URL for serving files
   // Monitoring — optional
   SENTRY_DSN: process.env.SENTRY_DSN,
   // Paystack — optional. Set PAYSTACK_ENABLED=true to activate checkout endpoints.
