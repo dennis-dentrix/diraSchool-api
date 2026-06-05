@@ -74,9 +74,9 @@ function SummaryCards({ counts }) {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-2.5">
       {cards.map(({ label, value, hint, tone, dot }) => (
-        <div key={label} className="rounded-lg border border-border bg-card px-4 py-3">
+        <div key={label} className="rounded-lg border border-border bg-card px-3 sm:px-4 py-2.5 sm:py-3">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 flex items-center gap-1.5">
             {dot && <span className="w-1.5 h-1.5 rounded-full bg-ok inline-block" />}
             {label}
