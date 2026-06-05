@@ -85,24 +85,24 @@ function StudentFeesTab({ studentId }) {
   return (
     <div className="space-y-4">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
         <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 flex items-center gap-1.5">
             <TrendingUp className="h-3 w-3" />
             Total Paid
           </p>
-          <p className="font-mono text-xl font-semibold tabular-nums text-ok">{formatCurrency(totalPaid)}</p>
+          <p className="font-mono text-lg sm:text-xl font-semibold tabular-nums text-ok">{formatCurrency(totalPaid)}</p>
           <p className="text-[11px] text-muted-foreground mt-1">across all terms</p>
         </div>
         <div className="rounded-lg border border-border bg-card px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Transactions</p>
-          <p className="font-mono text-xl font-semibold tabular-nums text-foreground">{paymentCount}</p>
+          <p className="font-mono text-lg sm:text-xl font-semibold tabular-nums text-foreground">{paymentCount}</p>
           <p className="text-[11px] text-muted-foreground mt-1">completed receipts</p>
         </div>
         {Object.keys(byTerm).length > 0 && (
           <div className="rounded-lg border border-border bg-card px-4 py-3">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Terms Paid</p>
-            <p className="font-mono text-xl font-semibold tabular-nums text-foreground">{Object.keys(byTerm).length}</p>
+            <p className="font-mono text-lg sm:text-xl font-semibold tabular-nums text-foreground">{Object.keys(byTerm).length}</p>
             <p className="text-[11px] text-muted-foreground mt-1">active billing periods</p>
           </div>
         )}
@@ -142,7 +142,7 @@ function StudentFeesTab({ studentId }) {
                 const isCompleted = p.status === 'completed';
                 const isReversed  = p.status === 'reversed';
                 return (
-                  <div key={p._id} className="flex items-center gap-4 px-4 py-3">
+                  <div key={p._id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">{p.term} {p.academicYear}</p>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -167,7 +167,7 @@ function StudentFeesTab({ studentId }) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 shrink-0"
+                          className="h-8 w-8 shrink-0"
                           onClick={() => window.open(`/fees/payments/${p._id}/print`, '_blank')}
                           title="Print receipt"
                         >
@@ -226,7 +226,7 @@ function StudentAttendanceTab({ studentId, classId }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         {[
           { label: 'Attendance Rate', value: rate !== null ? `${rate}%` : '—', color: rate !== null ? (rate >= 80 ? 'text-green-600' : rate >= 60 ? 'text-amber-600' : 'text-destructive') : '' },
           { label: 'Days Present', value: present, color: 'text-green-600' },
@@ -267,7 +267,7 @@ function StudentAttendanceTab({ studentId, classId }) {
                   });
                   const statusColors = { present: 'bg-green-100 text-green-700', absent: 'bg-red-100 text-red-700', late: 'bg-amber-100 text-amber-700', excused: 'bg-blue-100 text-blue-700' };
                   return (
-                    <div key={reg._id} className="flex items-center justify-between px-4 py-2.5">
+                    <div key={reg._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-2.5">
                       <p className="text-sm">{formatDate(reg.date)}</p>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[entry?.status] ?? 'bg-muted text-muted-foreground'}`}>
                         {capitalize(entry?.status ?? 'unknown')}
@@ -406,7 +406,7 @@ export default function StudentDetailPage() {
   return (
     <div className="space-y-6">
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
@@ -419,7 +419,7 @@ export default function StudentDetailPage() {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold">{student?.firstName} {student?.lastName}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{student?.firstName} {student?.lastName}</h1>
           <p className="text-muted-foreground text-sm font-mono">{student?.admissionNumber}</p>
         </div>
         <span className={`text-sm px-3 py-1 rounded-full font-medium ${getStatusColor(student?.status)}`}>
@@ -439,7 +439,7 @@ export default function StudentDetailPage() {
               <Input
                 type="file"
                 accept="image/*"
-                className="max-w-sm"
+                className="w-full sm:max-w-sm"
                 onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
               />
               <Button size="sm" onClick={() => uploadPhoto()} disabled={!photoFile || uploadingPhoto}>
@@ -506,7 +506,7 @@ export default function StudentDetailPage() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium">{g?.firstName} {g?.lastName}</p>
-                            <div className="mt-1 grid grid-cols-2 gap-x-4 text-muted-foreground text-xs">
+                            <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground text-xs">
                               <span>Relationship: {capitalize(g?.relationship ?? '')}</span>
                               <span>Phone: {g?.phone ?? '—'}</span>
                               {g?.email && <span className="col-span-2">Email: {g.email}</span>}
@@ -573,7 +573,7 @@ export default function StudentDetailPage() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Edit Student Details</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit(updateStudent)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>First Name</Label>
                 <Input {...register('firstName')} />

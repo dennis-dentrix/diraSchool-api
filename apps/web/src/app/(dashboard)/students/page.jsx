@@ -74,9 +74,9 @@ function SummaryCards({ counts }) {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-2.5">
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
       {cards.map(({ label, value, hint, tone, dot }) => (
-        <div key={label} className="rounded-lg border border-border bg-card px-3 sm:px-4 py-2.5 sm:py-3">
+        <div key={label} className="rounded-lg border border-border bg-card px-3 sm:px-4 py-3 sm:py-3">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 flex items-center gap-1.5">
             {dot && <span className="w-1.5 h-1.5 rounded-full bg-ok inline-block" />}
             {label}
@@ -412,9 +412,9 @@ export default function StudentsPage() {
       {!isTeacher && statusCounts && <SummaryCards counts={statusCounts} />}
 
       {/* Filter row */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap">
         {/* Search */}
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Name or admission no."
@@ -463,7 +463,7 @@ export default function StudentsPage() {
         {/* Class filter — admin only */}
         {!isTeacher && classes.length > 0 && (
           <Select value={classFilter || '__all__'} onValueChange={(v) => { setClassFilter(v === '__all__' ? '' : v); setPage(1); }}>
-            <SelectTrigger className="h-8 text-xs w-36 shrink-0"><SelectValue placeholder="All classes" /></SelectTrigger>
+            <SelectTrigger className="h-8 text-xs w-full sm:w-40 shrink-0"><SelectValue placeholder="All classes" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">All classes</SelectItem>
               {classes.map((cls) => (
@@ -477,7 +477,7 @@ export default function StudentsPage() {
 
         {/* Gender filter */}
         <Select value={genderFilter || '__all__'} onValueChange={(v) => { setGenderFilter(v === '__all__' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="h-8 text-xs w-28 shrink-0"><SelectValue placeholder="Gender" /></SelectTrigger>
+          <SelectTrigger className="h-8 text-xs w-full sm:w-32 shrink-0"><SelectValue placeholder="Gender" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">All genders</SelectItem>
             <SelectItem value="male">Male</SelectItem>
@@ -517,15 +517,16 @@ export default function StudentsPage() {
         </div>
       ) : (
         <>
-          <div className="rounded-lg border overflow-hidden">
+          {/* Desktop table view */}
+          <div className="hidden md:block rounded-lg border overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/30">
-                  <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground w-28 hidden sm:table-cell">Adm. Nº</th>
-                  <th className="text-left py-2.5 px-4 sm:px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
-                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden sm:table-cell">Class</th>
+                  <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground w-28">Adm. Nº</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
+                  <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Class</th>
                   <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Parent / Guardian</th>
-                  {!isTeacher && <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden md:table-cell">Fee Balance</th>}
+                  {!isTeacher && <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground hidden lg:table-cell">Fee Balance</th>}
                   <th className="text-center py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Status</th>
                   <th className="py-2.5 px-3 w-10" />
                 </tr>
@@ -538,25 +539,24 @@ export default function StudentsPage() {
                   return (
                     <tr key={s._id} className="hover:bg-muted/20 cursor-pointer transition-colors"
                       onClick={() => router.push(`/students/${s._id}`)}>
-                      <td className="py-3 px-4 hidden sm:table-cell">
+                      <td className="py-3 px-4">
                         <span className="font-mono text-xs tabular-nums text-muted-foreground">{s.admissionNumber ?? '—'}</span>
                       </td>
-                      <td className="py-3 px-4 sm:px-3">
+                      <td className="py-3 px-3">
                         <div className="flex items-center gap-2.5">
                           {s.photo ? (
-                            <img src={s.photo} alt="" className="w-7 h-7 rounded-full object-cover border shrink-0" />
+                            <img src={s.photo} alt="" className="w-8 h-8 rounded-full object-cover border shrink-0" />
                           ) : (
-                            <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0 border border-primary/15 uppercase">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0 border border-primary/15 uppercase">
                               {s.firstName?.[0]}{s.lastName?.[0]}
                             </div>
                           )}
                           <div className="min-w-0">
                             <p className="font-medium text-sm truncate">{s.firstName} {s.lastName}</p>
-                            <p className="text-[11px] text-muted-foreground font-mono sm:hidden">{s.admissionNumber}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-3 text-muted-foreground hidden sm:table-cell">{cls}</td>
+                      <td className="py-3 px-3 text-muted-foreground text-sm">{cls}</td>
                       <td className="py-3 px-3 hidden lg:table-cell">
                         {guardianName ? (
                           <div>
@@ -566,7 +566,7 @@ export default function StudentsPage() {
                         ) : <span className="text-xs text-muted-foreground">—</span>}
                       </td>
                       {!isTeacher && (
-                        <td className="py-3 px-3 hidden md:table-cell">
+                        <td className="py-3 px-3 hidden lg:table-cell">
                           <FeeBalance stats={feeStatsData?.[s._id] ?? null} />
                         </td>
                       )}
@@ -579,7 +579,7 @@ export default function StudentsPage() {
                       <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -606,6 +606,91 @@ export default function StudentsPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile card view */}
+          <div className="md:hidden space-y-3">
+            {students.map((s) => {
+              const cls = typeof s.classId === 'object' ? `${s.classId.name}${s.classId.stream ? ` ${s.classId.stream}` : ''}` : '—';
+              const g = s.parentIds?.[0] ?? s.guardians?.[0];
+              const guardianName = g ? [g.firstName, g.lastName].filter(Boolean).join(' ') : null;
+              return (
+                <div
+                  key={s._id}
+                  className="rounded-lg border bg-card p-4 cursor-pointer hover:bg-muted/40 transition-colors"
+                  onClick={() => router.push(`/students/${s._id}`)}
+                >
+                  {/* Header: Name + Status + Menu */}
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      {s.photo ? (
+                        <img src={s.photo} alt="" className="w-10 h-10 rounded-full object-cover border shrink-0" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center shrink-0 border border-primary/15 uppercase">
+                          {s.firstName?.[0]}{s.lastName?.[0]}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm">{s.firstName} {s.lastName}</p>
+                        <p className="text-xs text-muted-foreground">{s.admissionNumber}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={cn('inline-flex items-center h-6 px-2 rounded-full text-[10px] font-medium border capitalize',
+                        studentStatusStyle[s.status] ?? 'text-muted-foreground border-border')}>
+                        {s.status}
+                      </span>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {!isTeacher && (
+                              <DropdownMenuItem onClick={() => router.push(`/students/${s._id}`)}>View details</DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => setEditNameTarget({ _id: s._id, firstName: s.firstName, lastName: s.lastName })}>
+                              Edit name
+                            </DropdownMenuItem>
+                            {!isTeacher && s.status === 'active' && (
+                              <DropdownMenuItem className="text-destructive" onClick={() => confirm(
+                                `Withdraw ${s.firstName} ${s.lastName}?`,
+                                'The student will be marked as withdrawn. This can be reversed later.',
+                                () => withdrawStudent({ id: s._id }),
+                              )}>Withdraw</DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Details grid */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Class</p>
+                      <p className="font-medium">{cls}</p>
+                    </div>
+                    {guardianName && (
+                      <div>
+                        <p className="text-muted-foreground">Guardian</p>
+                        <p className="font-medium truncate">{guardianName}</p>
+                      </div>
+                    )}
+                    {!isTeacher && (
+                      <div>
+                        <p className="text-muted-foreground">Fee Balance</p>
+                        <div>
+                          <FeeBalance stats={feeStatsData?.[s._id] ?? null} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           {(pagination?.totalPages ?? 1) > 1 && (
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Page {page} of {pagination.totalPages} · {totalCount} students</span>
@@ -621,7 +706,7 @@ export default function StudentsPage() {
       {/* ── Import dialog ─────────────────────────────────────────────────── */}
       {!isTeacher && (
         <Dialog open={importOpen} onOpenChange={(v) => { setImportOpen(v); if (!v) resetImportDialog(); }}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-sm md:max-w-md">
             <DialogHeader>
               <DialogTitle>Import Students</DialogTitle>
             </DialogHeader>
@@ -693,12 +778,12 @@ export default function StudentsPage() {
       {/* ── Enroll dialog ─────────────────────────────────────────────────── */}
       {!isTeacher && (
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setShowGuardian(false); }}>
-          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-sm md:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Enroll New Student</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit(createStudent)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>First Name *</Label>
                   <Input {...register('firstName')} placeholder="John" />
@@ -711,7 +796,7 @@ export default function StudentsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Admission No. *</Label>
                   <Input {...register('admissionNumber')} placeholder="ADM/2024/001" className="font-mono" />
@@ -723,14 +808,14 @@ export default function StudentsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Birth Certificate No.</Label>
                   <Input {...register('birthCertificateNumber')} placeholder="12345678" className="font-mono" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Gender *</Label>
                   <Select onValueChange={(v) => setValue('gender', v)}>
@@ -795,7 +880,7 @@ export default function StudentsPage() {
                             </Button>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
                             <Label>First Name</Label>
                             <Input {...register(`guardians.${idx}.firstName`)} placeholder="Mary" />
@@ -805,7 +890,7 @@ export default function StudentsPage() {
                             <Input {...register(`guardians.${idx}.lastName`)} placeholder="Kamau" />
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
                             <Label>Relationship</Label>
                             <Select
@@ -825,7 +910,7 @@ export default function StudentsPage() {
                             <Input {...register(`guardians.${idx}.occupation`)} placeholder="Farmer" />
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
                             <Label>Phone</Label>
                             <Input {...register(`guardians.${idx}.phone`)} placeholder="0712 345 678" className="font-mono" />
