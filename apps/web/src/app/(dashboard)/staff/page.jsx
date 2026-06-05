@@ -336,9 +336,11 @@ function CheckInsTab() {
     setDate(d.toISOString().split('T')[0]);
   }
 
-  const present  = data?.present ?? [];
-  const absent   = data?.absent  ?? [];
-  const counts   = data?.counts  ?? {};
+  // Extract present and absent from roster
+  const roster = data?.roster ?? [];
+  const present  = roster.filter((r) => r.present).map((r) => r.morningIn).filter(Boolean);
+  const absent   = roster.filter((r) => !r.present);
+  const counts   = data?.counts ?? {};
 
   const TYPE_LABEL = { morning_in: 'Morning In', afternoon_out: 'Afternoon Out', afternoon_in: 'Afternoon In', evening_out: 'Evening Out' };
 
@@ -453,15 +455,18 @@ function CheckInsTab() {
               <p className="text-sm text-muted-foreground py-4 text-center">All staff have checked in</p>
             ) : (
               <div className="divide-y">
-                {absent.map((s) => (
-                  <div key={s._id} className="flex items-center gap-3 py-2.5">
-                    <AlertCircle className="h-4 w-4 text-bad shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{s.firstName} {s.lastName}</p>
-                      <p className="text-xs text-muted-foreground">{ROLE_LABELS[s.role] ?? s.role}</p>
+                {absent.map((item) => {
+                  const staff = item.staff;
+                  return (
+                    <div key={staff._id} className="flex items-center gap-3 py-2.5">
+                      <AlertCircle className="h-4 w-4 text-bad shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{staff.firstName} {staff.lastName}</p>
+                        <p className="text-xs text-muted-foreground">{ROLE_LABELS[staff.role] ?? staff.role}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </SectionCard>
