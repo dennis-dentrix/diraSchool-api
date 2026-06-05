@@ -44,9 +44,9 @@ function TodayRail({
   studentsOverdue, termWeek, termTotalWeeks, router,
 }) {
   return (
-    <div className="space-y-2 sm:space-y-3">
+    <div className="space-y-3">
       {/* Date display */}
-      <div className="rounded-lg border border-border bg-card px-3 sm:px-4 py-2 sm:py-3">
+      <div className="rounded-lg border border-border bg-card px-4 py-3">
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Today</p>
         <p className="font-display text-base font-semibold text-foreground">{dateLabel}</p>
         {termWeek != null && termTotalWeeks != null && (
@@ -57,10 +57,10 @@ function TodayRail({
       </div>
 
       {/* Fee big number */}
-      <div className="rounded-lg border border-border bg-card px-3 sm:px-4 py-3 sm:py-4">
+      <div className="rounded-lg border border-border bg-card px-4 py-4">
         <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Term Collection</p>
         <p className={cn(
-          'font-mono text-3xl sm:text-4xl md:text-5xl font-bold tabular-nums leading-none',
+          'font-mono text-5xl font-bold tabular-nums leading-none',
           feeCollectionPct >= 80 ? 'text-ok' : feeCollectionPct >= 50 ? 'text-warn' : 'text-bad',
         )}>
           {feeCollectionPct}%
@@ -116,7 +116,7 @@ function CollectionProgressBar({ collected, target, percent }) {
             {formatCurrency(collected)} collected of {formatCurrency(target)} target
           </p>
         </div>
-        <span className={cn('font-mono text-lg sm:text-xl md:text-2xl font-bold tabular-nums', text)}>{percent}%</span>
+        <span className={cn('font-mono text-2xl font-bold tabular-nums', text)}>{percent}%</span>
       </div>
       <div className="h-2 rounded-full bg-border overflow-hidden" role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
         <div className={cn('h-2 rounded-full transition-all duration-500', bar)} style={{ width: `${Math.min(100, percent)}%` }} />
@@ -565,7 +565,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 3-column grid — stacked on mobile, all 3 cols from lg */}
-        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_240px] xl:grid-cols-[280px_1fr_300px] gap-3 sm:gap-4" data-tour="dashboard-header">
+        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_240px] xl:grid-cols-[280px_1fr_300px] gap-4" data-tour="dashboard-header">
           {/* LEFT: Today rail — hidden on mobile */}
           <div className="hidden lg:block space-y-3">
             <TodayRail
@@ -593,7 +593,7 @@ export default function DashboardPage() {
               <AdminWorkQueue tasks={adminTasks} />
             </div>
             {/* Ledger stat strip — 1 col mobile, 2 sm, 3 md, 4 lg */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3" data-tour="stats-grid">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-tour="stats-grid">
               <div data-tour="staff-attendance-widget">
                 <StatCard
                   label="Today's Collections"
@@ -680,7 +680,7 @@ export default function DashboardPage() {
           {totalTarget > 0 && <CollectionProgressBar collected={totalCollected} target={totalTarget} percent={feeCollectionPct} />}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3" data-tour="stats-grid">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-tour="stats-grid">
           <StatCard label="Today's Collections" value={formatCurrency(feeData.todayAmount ?? 0)} hint={`${feeData.todayCount ?? 0} payments today`} tone="green" onClick={() => router.push('/fees/payments')} />
           <StatCard label="This Week" value={formatCurrency(feeData.weekAmount ?? 0)} hint="Completed payments this week" tone="blue" onClick={() => router.push('/fees/payments')} />
           <StatCard label="This Month" value={formatCurrency(feeData.monthAmount ?? 0)} hint={`${feeData.monthCount ?? 0} transactions`} tone="neutral" onClick={() => router.push('/fees/payments')} />
@@ -851,7 +851,7 @@ export default function DashboardPage() {
           <RefreshButton queryKeys={[['dashboard-summary', role]]} />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3" data-tour="stats-grid">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-tour="stats-grid">
           <StatCard label="Active Students" value={activeStudents} hint="Currently enrolled" tone="blue" onClick={() => router.push('/students')} />
           <StatCard label="Staff Members" value={summary?.staff?.total ?? 0} hint="Teaching and non-teaching" tone="neutral" onClick={() => router.push('/staff')} />
           <StatCard label="Today's Attendance" value={attendancePct !== null ? `${attendancePct}%` : '—'} hint={attendance.total > 0 ? `${attendance.present} present · ${attendance.absent} absent` : 'No registers submitted yet'} tone={attendancePct !== null ? (attendancePct < 85 ? 'amber' : 'green') : 'neutral'} onClick={() => router.push('/attendance')} />
@@ -970,7 +970,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3" data-tour="stats-grid">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" data-tour="stats-grid">
         <StatCard label="My Class" value={myClass ? myClass.fullName : '—'} hint={myClass ? `${myClass.studentCount} active students` : 'Not assigned as class teacher'} tone="blue" onClick={() => router.push('/students')} />
         <StatCard label="Today's Lessons" value={todaySlots.length} hint={todaySlots.length > 0 ? `First at ${todaySlots[0].startTime}` : 'No lessons scheduled today'} tone={todaySlots.length > 0 ? 'neutral' : 'neutral'} onClick={() => router.push('/timetable')} />
         <StatCard label="Attendance" value={att ? `${att.percent ?? 0}%` : (myClass ? 'Pending' : '—')} hint={att ? `${att.present}/${att.total} present` : (myClass ? 'Register not taken yet' : 'No class assigned')} tone={!att ? 'amber' : att.percent >= 90 ? 'green' : att.percent >= 75 ? 'amber' : 'red'} onClick={() => router.push('/attendance')} />
