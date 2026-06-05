@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Zap, Printer, ChevronRight, BookOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { reportCardsApi, classesApi, studentsApi, getErrorMessage } from '@/lib/api';
+import { reportCardsApi, getErrorMessage } from '@/lib/api';
+import { useClasses, useAllStudents } from '@/hooks/use-app-queries';
 import { capitalize } from '@/lib/utils';
 import { ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { useSchoolTermDefaults } from '@/hooks/use-school-term-defaults';
@@ -71,15 +72,8 @@ export default function ReportCardsPage() {
     },
   });
 
-  const { data: classesData } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); const d = res.data; return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []); },
-  });
-
-  const { data: studentsData } = useQuery({
-    queryKey: ['students', 'all'],
-    queryFn: async () => { const res = await studentsApi.list({ limit: 200, status: 'active' }); return res.data; },
-  });
+  const { data: classesData  } = useClasses();
+  const { data: studentsData } = useAllStudents();
 
   const { mutate: generate, isPending: generating } = useMutation({
     mutationFn: () => genType === 'class'
@@ -99,7 +93,7 @@ export default function ReportCardsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
-  const classes  = Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? []);
+  const classes  = classesData ?? [];
   const cards    = data?.data ?? data?.reportCards ?? [];
   const totalPgs = data?.pagination?.totalPages ?? 1;
 
@@ -277,7 +271,7 @@ export default function ReportCardsPage() {
                 <Select onValueChange={(v) => setGenData((p) => ({ ...p, studentId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Select student" /></SelectTrigger>
                   <SelectContent>
-                    {(studentsData?.data ?? studentsData?.students ?? []).map((s) => (
+                    {(studentsData ?? []).map((s) => (
                       <SelectItem key={s._id} value={s._id}>{s.firstName} {s.lastName}</SelectItem>
                     ))}
                   </SelectContent>

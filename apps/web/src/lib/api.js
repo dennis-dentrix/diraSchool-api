@@ -254,10 +254,12 @@ export const examsApi = {
 
 // ─── Results ──────────────────────────────────────────────────────────────────
 export const resultsApi = {
-  bulkUpsert: (data) => api.post('/results/bulk', data),
-  list: (params) => api.get('/results', { params }),
-  get: (id) => api.get(`/results/${id}`),
-  update: (id, data) => api.patch(`/results/${id}`, data),
+  bulkUpsert:  (data)   => api.post('/results/bulk', data),
+  list:        (params) => api.get('/results', { params }),
+  get:         (id)     => api.get(`/results/${id}`),
+  update:      (id, data) => api.patch(`/results/${id}`, data),
+  sessionGet:  (params) => api.get('/results/session', { params }),
+  sessionSave: (data)   => api.post('/results/session', data),
 };
 
 // ─── Fees ─────────────────────────────────────────────────────────────────────

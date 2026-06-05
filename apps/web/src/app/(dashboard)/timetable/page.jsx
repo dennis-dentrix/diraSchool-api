@@ -7,7 +7,8 @@ import {
   Calendar, Plus, Pencil, Trash2, Save, X,
   CalendarDays, Users, BookOpen, Clock, AlertTriangle, Printer,
 } from 'lucide-react';
-import { timetableApi, classesApi, subjectsApi, usersApi, settingsApi, getErrorMessage } from '@/lib/api';
+import { timetableApi, settingsApi, getErrorMessage } from '@/lib/api';
+import { useClasses, useAllSubjects, useTeachers } from '@/hooks/use-app-queries';
 import { useAuthStore } from '@/store/auth.store';
 import { ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { useSchoolTermDefaults } from '@/hooks/use-school-term-defaults';
@@ -686,18 +687,7 @@ function ClassTimetableTab({ canWrite }) {
     setEditMode(false);
   }, [defaultTerm, defaultAcademicYear]);
 
-  const { data: classesData, isError: classesError } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const res = await classesApi.list({ limit: 100 });
-      return firstArray(
-        res.data?.data,
-        res.data?.classes,
-        res.data?.data?.classes,
-      );
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: classesData, isError: classesError } = useClasses();
 
   const { data: timetable, isLoading, isError: timetableError, error: timetableErr } = useQuery({
     queryKey: ['timetable', selectedClass, selectedTerm, selectedYear],
@@ -714,31 +704,8 @@ function ClassTimetableTab({ canWrite }) {
     staleTime: 2 * 60 * 1000,
   });
 
-  const { data: subjects } = useQuery({
-    queryKey: ['subjects-all'],
-    queryFn: async () => {
-      const res = await subjectsApi.list({ limit: 200 });
-      return firstArray(
-        res.data?.data,
-        res.data?.subjects,
-        res.data?.data?.subjects,
-      );
-    },
-    enabled: canWrite,
-  });
-
-  const { data: teachers } = useQuery({
-    queryKey: ['users', 'teachers-list'],
-    queryFn: async () => {
-      const res = await usersApi.list({ role: 'teacher,department_head', limit: 200 });
-      return firstArray(
-        res.data?.data,
-        res.data?.users,
-        res.data?.data?.users,
-      );
-    },
-    enabled: canWrite,
-  });
+  const { data: subjects  } = useAllSubjects();
+  const { data: teachers  } = useTeachers();
 
   // Fetch all timetables for this term/year to detect teacher conflicts
   const { data: allTimetables } = useQuery({

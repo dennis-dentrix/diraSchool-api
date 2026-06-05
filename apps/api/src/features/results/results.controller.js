@@ -1,11 +1,20 @@
 import Result from './Result.model.js';
 import Exam from '../exams/Exam.model.js';
+import Class from '../classes/Class.model.js';
+import Subject from '../subjects/Subject.model.js';
 import Student from '../students/Student.model.js';
 import asyncHandler from '../../utils/asyncHandler.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { paginate } from '../../utils/pagination.js';
 import { computeCBCGrade } from '../../utils/grading.js';
 import { STUDENT_STATUSES } from '../../constants/index.js';
+
+const TYPE_LABEL_MAP = {
+  opener: 'Opener',
+  midterm: 'Mid Term',
+  endterm: 'End Term',
+  sba: 'SBA',
+};
 
 const computeResultPayload = (exam, marks) => {
   const percentage = Number(((marks / exam.totalMarks) * 100).toFixed(2));
@@ -159,4 +168,91 @@ export const updateResult = asyncHandler(async (req, res) => {
   await result.save();
 
   return sendSuccess(res, { result });
+});
+
+/**
+ * GET /api/v1/results/session
+ * Load existing exams + results for a (classId, type, term, academicYear) session.
+ */
+export const getSessionResults = asyncHandler(async (req, res) => {
+  const { classId, type, term, academicYear } = req.query;
+  const schoolId = req.user.schoolId;
+
+  const exams = await Exam.find({ schoolId, classId, type, term, academicYear })
+    .populate('subjectId', 'name code')
+    .lean();
+
+  if (exams.length === 0) {
+    return sendSuccess(res, { exams: [], results: [] });
+  }
+
+  const examIds = exams.map((e) => e._id);
+  const results = await Result.find({ schoolId, examId: { $in: examIds } }).lean();
+
+  return sendSuccess(res, { exams, results });
+});
+
+/**
+ * POST /api/v1/results/session
+ * Find-or-create exams per subject and bulk-upsert results for a session.
+ * subjects: [{ subjectId, totalMarks, entries: [{ studentId, marks }] }]
+ */
+export const sessionSaveResults = asyncHandler(async (req, res) => {
+  const { classId, type, term, academicYear, subjects } = req.body;
+  const schoolId = req.user.schoolId;
+
+  const cls = await Class.findOne({ _id: classId, schoolId });
+  if (!cls) return sendError(res, 'Class not found.', 404);
+
+  const examName = TYPE_LABEL_MAP[type] ?? type;
+  const allResults = [];
+
+  for (const subjectData of subjects) {
+    const { subjectId, totalMarks, entries = [] } = subjectData;
+    if (!entries.length) continue;
+
+    const subject = await Subject.findOne({ _id: subjectId, schoolId, classId });
+    if (!subject) continue;
+
+    for (const entry of entries) {
+      if (entry.marks > totalMarks) {
+        return sendError(
+          res,
+          `Marks for student ${entry.studentId} exceed total marks (${totalMarks}) for subject ${subject.name}.`,
+          400
+        );
+      }
+    }
+
+    // Find or create the exam for this subject in this session
+    let exam = await Exam.findOne({ schoolId, classId, subjectId, type, term, academicYear });
+    if (!exam) {
+      exam = await Exam.create({
+        schoolId, classId, subjectId,
+        name: examName, type, term, academicYear,
+        levelCategory: cls.levelCategory,
+        totalMarks,
+      });
+    } else if (exam.totalMarks !== totalMarks) {
+      exam.totalMarks = totalMarks;
+      await exam.save();
+    }
+
+    const ops = entries.map((entry) => {
+      const computed = computeResultPayload(exam, entry.marks);
+      return Result.findOneAndUpdate(
+        { schoolId, examId: exam._id, studentId: entry.studentId },
+        {
+          schoolId, examId: exam._id, classId, subjectId,
+          studentId: entry.studentId, term, academicYear, ...computed,
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    });
+
+    const saved = await Promise.all(ops);
+    allResults.push(...saved);
+  }
+
+  return sendSuccess(res, { count: allResults.length }, 201);
 });

@@ -11,7 +11,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
-import { classesApi, usersApi, lessonPlansApi, getErrorMessage } from '@/lib/api';
+import { classesApi, lessonPlansApi, getErrorMessage } from '@/lib/api';
+import { useTeachers } from '@/hooks/use-app-queries';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { LEVEL_CATEGORIES, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
@@ -129,14 +130,7 @@ export default function ClassesPage() {
     },
   });
 
-  const { data: teachers } = useQuery({
-    queryKey: ['users', 'teachers'],
-    queryFn: async () => {
-      const res = await usersApi.list({ role: 'teacher,department_head', limit: 100 });
-      return res.data;
-    },
-    enabled: adminUser,
-  });
+  const { data: teachersRaw } = useTeachers();
 
   const [sheetTab, setSheetTab] = useState('students');
 
@@ -248,7 +242,7 @@ export default function ClassesPage() {
   };
 
   const classes = data?.data ?? [];
-  const teacherList = teachers?.users ?? teachers?.data ?? [];
+  const teacherList = teachersRaw ?? [];
 
   return (
     <div className="space-y-5">

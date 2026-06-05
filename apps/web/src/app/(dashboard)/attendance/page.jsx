@@ -7,7 +7,8 @@ import {
   ClipboardCheck, ChevronRight, CheckCircle2, Clock, AlertCircle,
   BarChart3, Users, CalendarDays, Filter, UserCheck,
 } from 'lucide-react';
-import { attendanceApi, classesApi, settingsApi, usersApi, getErrorMessage } from '@/lib/api';
+import { attendanceApi, classesApi, settingsApi, getErrorMessage } from '@/lib/api';
+import { useClasses, useTeachers } from '@/hooks/use-app-queries';
 import { formatDate, capitalize } from '@/lib/utils';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
@@ -576,27 +577,26 @@ export default function AttendancePage() {
   const schoolClosedReason = checkSchoolClosedToday(schoolSettings);
   const termDefaults = useMemo(() => getSchoolTermDefaults(schoolSettings), [schoolSettings]);
 
-  const { data: classesData, isLoading: classesLoading } = useQuery({
-    queryKey: isTeacher ? ['my-class'] : ['classes'],
+  // Teachers use myClass endpoint; admins use the shared cached list.
+  const { data: myClassData, isLoading: myClassLoading } = useQuery({
+    queryKey: ['my-class'],
     queryFn: async () => {
-      if (isTeacher) {
-        const res = await classesApi.myClass();
-        // Return the full API payload so it's compatible with the dashboard cache shape
-        return res.data?.data ?? res.data;
-      }
-      const res = await classesApi.list({ limit: 100 });
-      const d = res.data;
-      return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []);
+      const res = await classesApi.myClass();
+      return res.data?.data ?? res.data;
     },
+    enabled: isTeacher,
   });
+  const { data: allClassesData, isLoading: allClassesLoading } = useClasses();
+  const classesLoading = isTeacher ? myClassLoading : allClassesLoading;
 
-  // Normalise: dashboard stores { class, students, feeStructure }, attendance page
-  // expects an array. Handle both shapes so they can share the same cache key.
   const classes = (() => {
-    if (!classesData) return [];
-    if (Array.isArray(classesData)) return classesData;
-    if (classesData?.class) return [classesData.class];
-    return [];
+    if (isTeacher) {
+      if (!myClassData) return [];
+      if (Array.isArray(myClassData)) return myClassData;
+      if (myClassData?.class) return [myClassData.class];
+      return [];
+    }
+    return allClassesData ?? [];
   })();
 
   const { data: todayRegisters, isLoading: todayLoading } = useQuery({
@@ -611,19 +611,7 @@ export default function AttendancePage() {
   const [assignDialog, setAssignDialog] = useState({ open: false, classId: null });
   const [substituteId, setSubstituteId] = useState('');
 
-  const { data: teachersData } = useQuery({
-    queryKey: ['teachers-list'],
-    queryFn: async () => {
-      const res = await usersApi.list({ role: 'teacher', limit: 100 });
-      const res2 = await usersApi.list({ role: 'department_head', limit: 100 });
-      const all = [
-        ...(res.data?.data ?? res.data?.users ?? []),
-        ...(res2.data?.data ?? res2.data?.users ?? []),
-      ];
-      return all;
-    },
-    enabled: adminView,
-  });
+  const { data: teachersData } = useTeachers();
   const teachersList = teachersData ?? [];
 
   const { mutate: createRegister, isPending: isCreating } = useMutation({

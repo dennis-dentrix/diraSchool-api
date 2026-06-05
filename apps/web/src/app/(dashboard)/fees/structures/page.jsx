@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Trash2, Printer, Copy, Pencil, Layers, Check, X } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { feesApi, classesApi, schoolsApi, getErrorMessage } from '@/lib/api';
+import { feesApi, schoolsApi, getErrorMessage } from '@/lib/api';
+import { useClasses } from '@/hooks/use-app-queries';
 import { buildDocumentHeaderHtml, getDocumentHeaderCss, getDocumentHeaderData } from '@/lib/document-print';
 import { formatCurrency } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -257,10 +258,7 @@ export default function FeeStructuresPage() {
     },
   });
 
-  const { data: classesData } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); const d = res.data; return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []); },
-  });
+  const { data: classesData } = useClasses();
 
   const { data: schoolData } = useQuery({
     queryKey: ['school-me-structures'],
@@ -332,7 +330,7 @@ export default function FeeStructuresPage() {
   });
 
   const structures = data?.data ?? [];
-  const classes    = Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? []);
+  const classes    = classesData ?? [];
   const hasFilters = filterYear || filterTerm || filterClass;
 
   // Sort structures by class name then term

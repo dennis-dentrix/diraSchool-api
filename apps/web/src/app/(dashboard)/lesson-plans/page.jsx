@@ -6,7 +6,8 @@ import {
   Upload, Trash2, Share2, X, Image as ImageIcon, FileText, Eye, UserCheck,
   Download, ChevronLeft, ChevronRight, Camera, BookOpen, Plus,
 } from 'lucide-react';
-import { lessonPlansApi, usersApi, classesApi, subjectsApi } from '@/lib/api';
+import { lessonPlansApi, usersApi } from '@/lib/api';
+import { useClasses, useAllSubjects } from '@/hooks/use-app-queries';
 import { useAuthStore } from '@/store/auth.store';
 import { TERMS, ACADEMIC_YEARS } from '@/lib/constants';
 import { useSchoolTermDefaults } from '@/hooks/use-school-term-defaults';
@@ -50,17 +51,9 @@ function UploadDialog({ open, onClose }) {
     setForm((prev) => ({ ...prev, academicYear: defaultAcademicYear, term: defaultTerm }));
   }, [defaultAcademicYear, defaultTerm]);
 
-  const { data: classesData } = useQuery({
-    queryKey: ['classes-list'],
-    queryFn: () => classesApi.list().then((r) => r.data?.classes ?? []),
-    staleTime: 60_000,
-  });
-  const { data: subjectsData } = useQuery({
-    queryKey: ['subjects-list'],
-    queryFn: () => subjectsApi.list().then((r) => r.data?.subjects ?? []),
-    staleTime: 60_000,
-  });
-  const classes  = classesData ?? [];
+  const { data: classesData }  = useClasses();
+  const { data: subjectsData } = useAllSubjects();
+  const classes  = classesData  ?? [];
   const subjects = subjectsData ?? [];
 
   const { mutate, isPending } = useMutation({

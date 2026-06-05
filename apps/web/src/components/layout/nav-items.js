@@ -24,6 +24,8 @@ import {
   Trash2,
   Megaphone,
   SlidersHorizontal,
+  ClipboardCheck,
+  TableProperties,
 } from 'lucide-react';
 
 // Role groups
@@ -52,7 +54,8 @@ export const schoolNavGroups = [
           { label: 'Fee Structures', href: '/fees/structures' },
         ],
       },
-      { label: 'Staff',      href: '/staff',     icon: Users,           roles: ADMIN },
+      { label: 'Staff',            href: '/staff',            icon: Users,           roles: ADMIN },
+      { label: 'Staff Attendance', href: '/staff-attendance',  icon: ClipboardCheck,  roles: ADMIN },
       {
         label: 'Messaging',
         href: '/messaging',
@@ -68,7 +71,7 @@ export const schoolNavGroups = [
       { label: 'Leave',        href: '/leave',        icon: Umbrella,  roles: ALL_STAFF },
       { label: 'Classes',      href: '/classes',      icon: BookOpen,  roles: ADMIN },
       { label: 'Subjects',     href: '/subjects',     icon: BookOpen,  roles: ACADEMIC },
-      { label: 'Exams',        href: '/exams',        icon: FileText,  roles: ACADEMIC },
+      { label: 'Results',       href: '/results',      icon: TableProperties, roles: ACADEMIC },
       { label: 'Lesson Plans', href: '/lesson-plans', icon: Image,     roles: ACADEMIC },
     ],
   },

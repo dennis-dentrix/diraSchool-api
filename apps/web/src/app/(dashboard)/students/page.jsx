@@ -7,7 +7,8 @@ import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp, Download,
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { studentsApi, classesApi, feesApi, exportApi, downloadBlob, getErrorMessage } from '@/lib/api';
+import { studentsApi, feesApi, exportApi, downloadBlob, getErrorMessage } from '@/lib/api';
+import { useClasses } from '@/hooks/use-app-queries';
 import { useAuthStore } from '@/store/auth.store';
 import { formatDate, capitalize, studentStatusStyle } from '@/lib/utils';
 import { STUDENT_STATUSES } from '@/lib/constants';
@@ -198,12 +199,8 @@ export default function StudentsPage() {
     staleTime: 60 * 1000,
   });
 
-  const { data: classesData } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => { const res = await classesApi.list({ limit: 100 }); const d = res.data; return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []); },
-    enabled: !isTeacher,
-  });
-  const classes = Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? []);
+  const { data: classesData } = useClasses();
+  const classes = classesData ?? [];
 
   // Fee stats for the current page of students
   const students   = data?.students ?? data?.data ?? [];

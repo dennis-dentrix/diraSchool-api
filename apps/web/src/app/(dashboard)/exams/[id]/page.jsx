@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ChevronLeft, BookOpen, ExternalLink, BarChart2 } from 'lucide-react';
-import { examsApi, resultsApi, studentsApi, getErrorMessage } from '@/lib/api';
+import { examsApi, resultsApi, getErrorMessage } from '@/lib/api';
+import { useStudentsByClass } from '@/hooks/use-app-queries';
 import { capitalize } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -296,14 +297,7 @@ export default function ExamDetailPage() {
 
   const classId = examData?.classId?._id ?? examData?.classId;
 
-  const { data: studentsData, isLoading: studentsLoading } = useQuery({
-    queryKey: ['students', 'class', classId],
-    queryFn: async () => {
-      const res = await studentsApi.list({ classId, limit: 100, status: 'active' });
-      return res.data?.students ?? res.data?.data ?? res.data ?? [];
-    },
-    enabled: !!classId,
-  });
+  const { data: studentsData, isLoading: studentsLoading } = useStudentsByClass(classId);
 
   const { data: existingResults } = useQuery({
     queryKey: ['results', 'exam', id],

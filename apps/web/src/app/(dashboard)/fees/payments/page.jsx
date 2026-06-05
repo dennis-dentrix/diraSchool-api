@@ -8,9 +8,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  feesApi, studentsApi, classesApi, exportApi, settingsApi, schoolsApi,
+  feesApi, exportApi, settingsApi, schoolsApi,
   downloadBlob, getErrorMessage,
 } from '@/lib/api';
+import { useClasses, useAllStudents } from '@/hooks/use-app-queries';
 import { formatCurrency, formatDate, capitalize } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { PAYMENT_METHODS, ACADEMIC_YEARS, TERMS } from '@/lib/constants';
@@ -178,7 +179,7 @@ function RecordPaymentPanel({ open, onClose, settingsData, schoolData, studentsD
   };
 
   const filteredStudents = useMemo(() => {
-    const all = studentsData?.data ?? studentsData ?? [];
+    const all = studentsData ?? [];
     const byClass = selectedClassId
       ? all.filter((s) => (s.classId?._id ?? s.classId) === selectedClassId)
       : all;
@@ -198,8 +199,8 @@ function RecordPaymentPanel({ open, onClose, settingsData, schoolData, studentsD
     const valid = await trigger(['amount', 'method']);
     if (!valid) return;
     const values   = getValues();
-    const student  = (studentsData?.data ?? studentsData ?? []).find((s) => s._id === values.studentId);
-    const cls      = (Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? [])).find((c) => c._id === selectedClassId);
+    const student  = (studentsData ?? []).find((s) => s._id === values.studentId);
+    const cls      = (classesData ?? []).find((c) => c._id === selectedClassId);
     const payload  = {
       studentId:    values.studentId,
       amount:       Number(values.amount),
@@ -231,8 +232,8 @@ function RecordPaymentPanel({ open, onClose, settingsData, schoolData, studentsD
     setStep(3);
   };
 
-  const classes = Array.isArray(classesData) ? classesData : (classesData?.classes ?? classesData?.data ?? []);
-  const selectedStudent = (studentsData?.data ?? studentsData ?? []).find((s) => s._id === watch('studentId'));
+  const classes = classesData ?? [];
+  const selectedStudent = (studentsData ?? []).find((s) => s._id === watch('studentId'));
 
   return (
     <Sheet open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
@@ -501,7 +502,7 @@ function BalanceDialog({ open, onClose, studentsData, settingsData }) {
     enabled: false,
   });
 
-  const students = studentsData?.data ?? studentsData ?? [];
+  const students = studentsData ?? [];
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -631,18 +632,8 @@ export default function PaymentsPage() {
     queryKey: ['school', 'me'],
     queryFn: async () => { const res = await schoolsApi.me(); return res.data.data ?? res.data; },
   });
-  const { data: studentsData } = useQuery({
-    queryKey: ['students', 'all'],
-    queryFn: async () => { const res = await studentsApi.list({ limit: 500, status: 'active' }); return res.data; },
-  });
-  const { data: classesData } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const res = await classesApi.list({ limit: 100 });
-      const d = res.data;
-      return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []);
-    },
-  });
+  const { data: studentsData } = useAllStudents();
+  const { data: classesData  } = useClasses();
 
   const { data, isLoading } = useQuery({
     queryKey: ['payments', page, debouncedSearch, methodFilter, statusFilter, yearFilter, termFilter, dateFilter],

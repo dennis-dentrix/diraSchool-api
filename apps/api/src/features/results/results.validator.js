@@ -51,6 +51,29 @@ const validateQuery = (schema) => (req, res, next) => {
   next();
 };
 
+const sessionSubjectSchema = z.object({
+  subjectId: z.string().regex(objectIdRegex, 'Invalid subject ID'),
+  totalMarks: z.number().int().positive('Total marks must be positive'),
+  entries: z.array(resultEntrySchema).default([]),
+});
+
+const sessionSaveSchema = z.object({
+  classId:      z.string().regex(objectIdRegex, 'Invalid class ID'),
+  type:         z.enum(['opener', 'midterm', 'endterm', 'sba']),
+  term:         z.string().min(1, 'Term is required'),
+  academicYear: z.string().regex(/^\d{4}$/, 'Academic year must be 4 digits'),
+  subjects:     z.array(sessionSubjectSchema).min(1, 'At least one subject is required'),
+});
+
+const sessionGetSchema = z.object({
+  classId:      z.string().regex(objectIdRegex, 'Invalid class ID'),
+  type:         z.enum(['opener', 'midterm', 'endterm', 'sba']),
+  term:         z.string().min(1),
+  academicYear: z.string().regex(/^\d{4}$/),
+});
+
 export const validateBulkUpsertResults = validateBody(bulkUpsertResultsSchema);
-export const validateUpdateResult = validateBody(updateResultSchema);
-export const validateListResults = validateQuery(listResultsSchema);
+export const validateUpdateResult      = validateBody(updateResultSchema);
+export const validateListResults       = validateQuery(listResultsSchema);
+export const validateSessionSave       = validateBody(sessionSaveSchema);
+export const validateSessionGet        = validateQuery(sessionGetSchema);

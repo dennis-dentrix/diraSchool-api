@@ -186,21 +186,51 @@ export const getDailyRoster = asyncHandler(async (req, res) => {
     }).select('firstName lastName role').lean(),
   ]);
 
-  // Build present/absent lists
-  const checkedInIds = new Set(checkIns.map((c) => String(c.staffId?._id ?? c.staffId)));
-  const present  = checkIns;
-  const absent   = allStaff.filter((s) => !checkedInIds.has(String(s._id)));
+  // Group check-in records by staffId, separating morning_in from evening_out
+  const checkInMap = new Map();
+  for (const record of checkIns) {
+    const staffId = String(record.staffId?._id ?? record.staffId);
+    if (!checkInMap.has(staffId)) {
+      checkInMap.set(staffId, { staff: record.staffId, morningIn: null, eveningOut: null });
+    }
+    const entry = checkInMap.get(staffId);
+    if (record.check_in_type === 'morning_in') entry.morningIn = record;
+    else if (record.check_in_type === 'evening_out') entry.eveningOut = record;
+  }
+
+  // Build full roster: one row per staff member
+  const roster = allStaff.map((staff) => {
+    const entry = checkInMap.get(String(staff._id));
+    return {
+      staff,
+      morningIn:  entry?.morningIn  ?? null,
+      eveningOut: entry?.eveningOut ?? null,
+      present:    !!(entry?.morningIn),
+    };
+  });
+
+  // Include any staff who checked in but whose role may have changed
+  for (const [staffId, entry] of checkInMap) {
+    if (!roster.some((r) => String(r.staff._id ?? r.staff) === staffId)) {
+      roster.push({ staff: entry.staff, morningIn: entry.morningIn, eveningOut: entry.eveningOut, present: true });
+    }
+  }
+
+  const present    = roster.filter((r) => r.present);
+  const absent     = roster.filter((r) => !r.present);
+  const checkedOut = roster.filter((r) => r.eveningOut);
 
   return sendSuccess(res, {
     date:    dayStart.toISOString().split('T')[0],
-    present,
-    absent,
+    roster,
     counts: {
-      present:  present.length,
-      absent:   absent.length,
-      late:     present.filter((c) => c.status === 'late').length,
-      on_time:  present.filter((c) => c.status === 'on_time').length,
-      off_site: present.filter((c) => c.off_site).length,
+      total:      roster.length,
+      present:    present.length,
+      absent:     absent.length,
+      checkedOut: checkedOut.length,
+      late:       present.filter((r) => r.morningIn?.status === 'late').length,
+      on_time:    present.filter((r) => r.morningIn?.status === 'on_time').length,
+      off_site:   present.filter((r) => r.morningIn?.off_site).length,
     },
   });
 });

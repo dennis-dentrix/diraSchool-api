@@ -10,7 +10,8 @@ import {
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { subjectsApi, departmentsApi, classesApi, usersApi, getErrorMessage } from '@/lib/api';
+import { subjectsApi, departmentsApi, getErrorMessage } from '@/lib/api';
+import { useClasses, useTeachers } from '@/hooks/use-app-queries';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -389,30 +390,14 @@ export default function SubjectsPage() {
     enabled: isTeacher && teacherTab === 'browse',
   });
 
-  const { data: classesData } = useQuery({
-    queryKey: ['classes'],
-    queryFn: async () => {
-      const res = await classesApi.list({ limit: 100 });
-      const d = res.data;
-      return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []);
-    },
-    enabled: !isTeacher,
-  });
-
-  const { data: teachersData } = useQuery({
-    queryKey: ['users', 'teachers'],
-    queryFn: async () => {
-      const res = await usersApi.list({ role: 'teacher,department_head', limit: 100 });
-      return res.data;
-    },
-    enabled: !isTeacher,
-  });
+  const { data: classesData  } = useClasses();
+  const { data: teachersData } = useTeachers();
 
   const subjects    = data?.subjects ?? data?.data ?? [];
   const departments = deptsData?.departments ?? deptsData?.data ?? [];
   const mySubjects  = mySubjectsData?.subjects ?? mySubjectsData?.data ?? [];
   const allSubjects = allSubjectsData?.subjects ?? allSubjectsData?.data ?? [];
-  const teachers    = teachersData?.users ?? teachersData?.data ?? [];
+  const teachers    = teachersData ?? [];
   const meta        = data?.meta ?? data?.pagination;
 
   const deptNames = useMemo(() => departments.map((d) => d.name), [departments]);

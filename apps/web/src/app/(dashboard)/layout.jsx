@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { NavigationProgress } from '@/components/layout/navigation-progress';
@@ -13,6 +13,7 @@ import { schoolNavItems, superadminNavItems } from '@/components/layout/nav-item
 import { Skeleton } from '@/components/ui/skeleton';
 import { TourProvider } from '@/components/tour/TourProvider';
 import { TourBanner } from '@/components/tour/TourTrigger';
+import { prefetchAppData } from '@/hooks/use-app-queries';
 
 const ADMIN_ROLES = ['school_admin', 'director', 'headteacher', 'deputy_headteacher', 'accountant', 'secretary'];
 
@@ -42,6 +43,13 @@ export default function DashboardLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  // Warm the cache for reference data as soon as the user is known.
+  // prefetchAppData is a no-op if fresh data is already cached.
+  useEffect(() => {
+    if (user) prefetchAppData(queryClient, user);
+  }, [user?._id]); // eslint-disable-line react-hooks/exhaustive-deps
   const title = getPageTitle(pathname, user);
   const schoolName = user?.school?.name ?? (typeof user?.schoolId === 'object' ? user?.schoolId?.name : '');
   const isAdmin = user && ADMIN_ROLES.includes(user.role);
