@@ -60,14 +60,6 @@ export const createCheckIn = asyncHandler(async (req, res) => {
   const schoolId = req.user.schoolId;
   const role = req.user.role;
 
-  // Reject readings with poor accuracy (already validated by client, server double-checks)
-  if (accuracy > 200) {
-    return sendError(res,
-      'Location accuracy too low. Please move to an open area and try again.',
-      400
-    );
-  }
-
   // Fetch school settings (geofence + check-in deadline)
   const settings = await SchoolSettings.findOne({ schoolId }).lean();
 
@@ -76,24 +68,54 @@ export const createCheckIn = asyncHandler(async (req, res) => {
   const checkOutTime   = settings?.checkOutTime    ?? '17:00';
   const relevantDeadline = check_in_type === 'morning_in' ? deadline : checkOutTime;
 
-  // If no geofence is configured, allow check-in but note it
+  // Check if location is available and accurate
+  const hasValidLocation = latitude && longitude && accuracy && accuracy <= 200;
+
+  // If no geofence is configured, always allow check-in
   if (!geofence?.latitude || !geofence?.longitude) {
     const status = isLateCheckIn(relevantDeadline) ? 'late' : 'on_time';
     const record = await CheckIn.create({
-      staffId, schoolId, latitude, longitude, accuracy,
+      staffId, schoolId,
+      latitude: hasValidLocation ? latitude : null,
+      longitude: hasValidLocation ? longitude : null,
+      accuracy: hasValidLocation ? accuracy : null,
       distance_from_center: 0,
-      status, check_in_type,
+      status,
+      check_in_type,
       off_site: false,
+      locationAvailable: hasValidLocation,
       synced_offline,
       client_timestamp: client_timestamp ? new Date(client_timestamp) : undefined,
     });
     return sendSuccess(res, {
-      checkIn: { _id: record._id, status, distance_from_center: 0 },
-      message: 'Checked in (no geofence configured for this school).',
+      checkIn: { _id: record._id, status, distance_from_center: 0, locationAvailable: hasValidLocation },
+      message: 'Checked in.',
     }, 201);
   }
 
-  // Calculate distance
+  // If location is not available, allow check-in without geofence validation
+  if (!hasValidLocation) {
+    const status = isLateCheckIn(relevantDeadline) ? 'late' : 'on_time';
+    const record = await CheckIn.create({
+      staffId, schoolId,
+      latitude: null,
+      longitude: null,
+      accuracy: null,
+      distance_from_center: 0,
+      status,
+      check_in_type,
+      off_site: false,
+      locationAvailable: false,
+      synced_offline,
+      client_timestamp: client_timestamp ? new Date(client_timestamp) : undefined,
+    });
+    return sendSuccess(res, {
+      checkIn: { _id: record._id, status, distance_from_center: 0, locationAvailable: false },
+      message: 'Checked in.',
+    }, 201);
+  }
+
+  // Calculate distance (only if we have valid location)
   const distance = Math.round(
     getDistanceMeters(latitude, longitude, geofence.latitude, geofence.longitude)
   );
@@ -132,6 +154,7 @@ export const createCheckIn = asyncHandler(async (req, res) => {
     check_in_type,
     off_site,
     off_site_reason: off_site ? off_site_reason : undefined,
+    locationAvailable: true,
     synced_offline,
     client_timestamp: client_timestamp ? new Date(client_timestamp) : undefined,
   });
@@ -142,6 +165,7 @@ export const createCheckIn = asyncHandler(async (req, res) => {
       status,
       distance_from_center: distance,
       off_site,
+      locationAvailable:    true,
     },
     message: off_site
       ? `Off-site check-in recorded. You are ${distance}m from school.`

@@ -11,9 +11,10 @@ const validateBody = (schema) => (req, res, next) => {
 };
 
 const checkInSchema = z.object({
-  latitude:         z.number({ required_error: 'latitude is required' }),
-  longitude:        z.number({ required_error: 'longitude is required' }),
-  accuracy:         z.number({ required_error: 'accuracy is required' }).positive(),
+  // Location is optional for devices without GPS or when location unavailable
+  latitude:         z.number().optional(),
+  longitude:        z.number().optional(),
+  accuracy:         z.number().positive().optional(),
   check_in_type:    z.enum(['morning_in', 'evening_out']).default('morning_in'),
   off_site_reason:  z.string().trim().max(500).optional(),
   synced_offline:   z.boolean().optional().default(false),

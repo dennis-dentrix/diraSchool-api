@@ -14,13 +14,16 @@ const checkInSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    // GPS coordinates captured at check-in time
-    latitude:  { type: Number, required: true },
-    longitude: { type: Number, required: true },
-    accuracy:  { type: Number, required: true }, // metres reported by browser
+    // GPS coordinates captured at check-in time (optional for devices without GPS)
+    latitude:  { type: Number },
+    longitude: { type: Number },
+    accuracy:  { type: Number }, // metres reported by browser
 
-    // Calculated server-side using Haversine
-    distance_from_center: { type: Number, required: true },
+    // Calculated server-side using Haversine (0 if no GPS)
+    distance_from_center: { type: Number, default: 0 },
+
+    // Flag indicating whether location data was available at check-in
+    locationAvailable: { type: Boolean, default: false },
 
     // on_time | late
     status: {
