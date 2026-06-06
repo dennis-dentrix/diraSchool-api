@@ -47,7 +47,11 @@ export default function LoginPage() {
   const { mutate, isPending } = useMutation({
     mutationFn: (data) => authApi.login(data),
     onSuccess: (res) => {
-      const user = res.data.data?.user;
+      const user = res.data.data || res.data.user;
+      if (!user) {
+        toast.error('Login failed: no user data received');
+        return;
+      }
       setUser(user);
       queryClient.setQueryData(['auth', 'me'], user);
       if (user.role === 'parent') router.push('/portal');
