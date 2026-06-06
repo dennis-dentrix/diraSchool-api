@@ -26,7 +26,7 @@ const STALE = {
 // ── Raw fetchers (used both by hooks and by prefetchAppData) ──────────────────
 
 const fetchClasses = async () => {
-  const res = await classesApi.list({ limit: 100 });
+  const res = await classesApi.list({});
   const d = res.data;
   return Array.isArray(d) ? d : (d?.classes ?? d?.data ?? []);
 };
@@ -34,32 +34,31 @@ const fetchClasses = async () => {
 const fetchTeachers = async () => {
   const res = await usersApi.list({
     role: "teacher,department_head",
-    limit: 200,
   });
   const d = res.data;
   return Array.isArray(d) ? d : (d?.users ?? d?.data ?? []);
 };
 
 const fetchAllSubjects = async () => {
-  const res = await subjectsApi.list({ limit: 200 });
+  const res = await subjectsApi.list({});
   const d = res.data;
   return Array.isArray(d) ? d : (d?.subjects ?? d?.data ?? []);
 };
 
 const fetchSubjectsByClass = async (classId) => {
-  const res = await subjectsApi.list({ classId, limit: 100 });
+  const res = await subjectsApi.list({ classId });
   const d = res.data;
   return Array.isArray(d) ? d : (d?.subjects ?? d?.data ?? []);
 };
 
 const fetchStudentsByClass = async (classId) => {
-  const res = await studentsApi.list({ classId, limit: 200, status: "active" });
+  const res = await studentsApi.list({ classId, status: "active" });
   const d = res.data;
   return Array.isArray(d) ? d : (d?.students ?? d?.data ?? []);
 };
 
 const fetchAllStudents = async () => {
-  const res = await studentsApi.list({ limit: 10000, status: "active" });
+  const res = await studentsApi.list({ status: "active" });
   const d = res.data;
   return Array.isArray(d) ? d : (d?.students ?? d?.data ?? []);
 };
