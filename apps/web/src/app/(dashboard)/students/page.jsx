@@ -34,7 +34,7 @@ const schema = z.object({
   firstName:              z.string().min(1, 'Required'),
   lastName:               z.string().min(1, 'Required'),
   admissionNumber:        z.string().min(1, 'Required'),
-  assessmentNumber:       z.string().min(1, 'Required'),
+  assessmentNumber:       z.string().optional(),
   gender:                 z.enum(['male', 'female']),
   dateOfBirth:            z.string().optional(),
   birthCertificateNumber: z.string().optional(),
@@ -919,7 +919,7 @@ export default function StudentsPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Birth Certificate No.</Label>
+                  <Label>Birth Certificate No. <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
                   <Input {...register('birthCertificateNumber')} placeholder="12345678" className="font-mono" />
                 </div>
               </div>
@@ -937,11 +937,11 @@ export default function StudentsPage() {
                   {errors.gender && <p className="text-xs text-destructive">{errors.gender.message}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Date of Birth</Label>
+                  <Label>Date of Birth <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
                   <Input type="date" {...register('dateOfBirth')} min={minDobDate} max={today} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Enrollment Date</Label>
+                  <Label>Enrollment Date <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
                   <Input type="date" {...register('enrollmentDate')} max={today} />
                 </div>
               </div>
