@@ -76,14 +76,54 @@ function TotalsStrip({ payments, loading }) {
     { label: 'Week to date',  value: loading ? '—' : formatCurrency(weekItems.reduce((s, p) => s + (p.amount ?? 0), 0)) },
   ];
 
+  // Itemize by payment type for all payments
+  const feesTotal = all.filter((p) => p.paymentType === 'fees').reduce((s, p) => s + (p.amount ?? 0), 0);
+  const otherByType = {};
+  all.filter((p) => p.paymentType === 'other').forEach((p) => {
+    const type = p.feeItemName || 'Other';
+    otherByType[type] = (otherByType[type] ?? 0) + (p.amount ?? 0);
+  });
+
   return (
-    <div className="grid grid-cols-3 gap-px rounded-lg border bg-border overflow-hidden mb-4">
-      {stats.map((s) => (
-        <div key={s.label} className="bg-card px-3 py-3 sm:px-4">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 leading-tight">{s.label}</p>
-          <p className="font-mono text-sm sm:text-base font-semibold tabular-nums">{s.value}</p>
+    <div className="space-y-4 mb-4">
+      {/* Daily and weekly totals */}
+      <div className="grid grid-cols-3 gap-px rounded-lg border bg-border overflow-hidden">
+        {stats.map((s) => (
+          <div key={s.label} className="bg-card px-3 py-3 sm:px-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 leading-tight">{s.label}</p>
+            <p className="font-mono text-sm sm:text-base font-semibold tabular-nums">{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Itemized breakdown */}
+      {!loading && all.length > 0 && (
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <div className="px-4 py-3 border-b bg-muted/30">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Payment Breakdown</p>
+          </div>
+          <div className="divide-y">
+            {feesTotal > 0 && (
+              <div className="flex justify-between items-center px-4 py-2.5">
+                <span className="text-sm text-foreground">School Fees</span>
+                <span className="font-mono font-semibold text-sm tabular-nums">{formatCurrency(feesTotal)}</span>
+              </div>
+            )}
+            {Object.entries(otherByType).map(([type, amount]) => (
+              <div key={type} className="flex justify-between items-center px-4 py-2.5">
+                <span className="text-sm text-foreground capitalize">{type}</span>
+                <span className="font-mono font-semibold text-sm tabular-nums">{formatCurrency(amount)}</span>
+              </div>
+            ))}
+            {all.length > 0 && (
+              <div className="flex justify-between items-center px-4 py-2.5 bg-muted/20 font-medium">
+                <span className="text-sm">Total</span>
+                <span className="font-mono font-semibold text-sm tabular-nums">{formatCurrency(all.reduce((s, p) => s + (p.amount ?? 0), 0))}</span>
+              </div>
+            )}
+          </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -607,6 +647,8 @@ export default function PaymentsPage() {
   const [yearFilter, setYearFilter]   = useState('');
   const [termFilter, setTermFilter]   = useState('');
   const [dateFilter, setDateFilter]   = useState('');
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState('');
+  const [feeItemFilter, setFeeItemFilter] = useState('');
   const debouncedSearch = useDebounce(search, 400);
 
   // Compute date range from dateFilter preset
@@ -637,7 +679,7 @@ export default function PaymentsPage() {
   const { data: classesData  } = useClasses();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['payments', page, debouncedSearch, methodFilter, statusFilter, yearFilter, termFilter, dateFilter],
+    queryKey: ['payments', page, debouncedSearch, methodFilter, statusFilter, yearFilter, termFilter, dateFilter, paymentTypeFilter, feeItemFilter],
     queryFn: async () => {
       const res = await feesApi.listPayments({
         page, limit: 25,
@@ -646,6 +688,7 @@ export default function PaymentsPage() {
         status: statusFilter || undefined,
         academicYear: yearFilter || undefined,
         term: termFilter || undefined,
+        paymentType: paymentTypeFilter || undefined,
         dateFrom: dateRange.from || undefined,
         dateTo: dateRange.to || undefined,
       });
@@ -653,9 +696,26 @@ export default function PaymentsPage() {
     },
   });
 
-  const payments    = data?.data ?? [];
+  const allPayments = data?.data ?? [];
   const pagination  = data?.pagination ?? {};
-  const hasFilters  = search || methodFilter || statusFilter || yearFilter || termFilter || dateFilter;
+  const hasFilters  = search || methodFilter || statusFilter || yearFilter || termFilter || dateFilter || paymentTypeFilter || feeItemFilter;
+
+  // Apply client-side filtering for fee item name
+  const payments = useMemo(() => {
+    if (!feeItemFilter) return allPayments;
+    return allPayments.filter((p) => p.feeItemName === feeItemFilter);
+  }, [allPayments, feeItemFilter]);
+
+  // Extract unique fee item names from all payments (for filtering)
+  const uniqueFeeItems = useMemo(() => {
+    const items = new Set();
+    allPayments.forEach((p) => {
+      if (p.paymentType === 'other' && p.feeItemName) {
+        items.add(p.feeItemName);
+      }
+    });
+    return Array.from(items).sort();
+  }, [allPayments]);
 
   return (
     <div>
@@ -725,9 +785,28 @@ export default function PaymentsPage() {
               <SelectItem value="month">This month</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={paymentTypeFilter} onValueChange={(v) => { setPaymentTypeFilter(v === 'all' ? '' : v); setFeeItemFilter(''); setPage(1); }}>
+            <SelectTrigger className="h-9 flex-1 min-w-[110px] sm:w-[140px] sm:flex-none"><SelectValue placeholder="Payment Type" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="fees">School Fees</SelectItem>
+              <SelectItem value="other">Other Fees</SelectItem>
+            </SelectContent>
+          </Select>
+          {paymentTypeFilter === 'other' && uniqueFeeItems.length > 0 && (
+            <Select value={feeItemFilter} onValueChange={(v) => { setFeeItemFilter(v === 'all' ? '' : v); setPage(1); }}>
+              <SelectTrigger className="h-9 flex-1 min-w-[110px] sm:w-[140px] sm:flex-none"><SelectValue placeholder="Fee Item" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All items</SelectItem>
+                {uniqueFeeItems.map((item) => (
+                  <SelectItem key={item} value={item}>{capitalize(item)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {hasFilters && (
             <Button variant="ghost" size="sm" className="h-9"
-              onClick={() => { setSearch(''); setMethodFilter(''); setStatusFilter(''); setYearFilter(''); setTermFilter(''); setDateFilter(''); setPage(1); }}>
+              onClick={() => { setSearch(''); setMethodFilter(''); setStatusFilter(''); setYearFilter(''); setTermFilter(''); setDateFilter(''); setPaymentTypeFilter(''); setFeeItemFilter(''); setPage(1); }}>
               Clear
             </Button>
           )}
