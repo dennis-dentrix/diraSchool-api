@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp, Download, X, Pencil } from 'lucide-react';
+import { Plus, Search, Upload, MoreHorizontal, ChevronDown, ChevronUp, Download, X, Pencil, MoveRight } from 'lucide-react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { studentsApi, feesApi, exportApi, downloadBlob, getErrorMessage } from '@/lib/api';
+import { studentsApi, feesApi, exportApi, downloadBlob, classesApi, getErrorMessage } from '@/lib/api';
 import { useClasses } from '@/hooks/use-app-queries';
 import { useAuthStore } from '@/store/auth.store';
 import { formatDate, capitalize, studentStatusStyle } from '@/lib/utils';
@@ -145,6 +145,10 @@ export default function StudentsPage() {
   const [classFilter, setClassFilter]       = useState('');
   const [genderFilter, setGenderFilter]     = useState('');
   const [showGuardian, setShowGuardian]   = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState(new Set());
+  const [bulkTransferOpen, setBulkTransferOpen] = useState(false);
+  const [bulkTransferClassId, setBulkTransferClassId] = useState(null);
+  const [bulkTransferNote, setBulkTransferNote] = useState('');
   const { dialog: confirmDialog, openConfirm, closeConfirm } = useConfirmDialog();
   const debouncedSearch = useDebounce(search, 400);
 
@@ -265,6 +269,29 @@ export default function StudentsPage() {
     onError: (err) => toast.error(getErrorMessage(err)),
   });
 
+  const { mutate: bulkTransferStudents, isPending: isBulkTransferring } = useMutation({
+    mutationFn: async () => {
+      const selectedIds = Array.from(selectedStudentIds);
+      const transferPromises = selectedIds.map((id) =>
+        studentsApi.transfer(id, {
+          newClassId: bulkTransferClassId,
+          ...(bulkTransferNote && { note: bulkTransferNote }),
+        })
+      );
+      await Promise.all(transferPromises);
+      return { transferred: selectedIds.length };
+    },
+    onSuccess: (res) => {
+      toast.success(`${res.transferred} student(s) transferred successfully`);
+      setBulkTransferOpen(false);
+      setSelectedStudentIds(new Set());
+      setBulkTransferClassId(null);
+      setBulkTransferNote('');
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+    },
+    onError: (err) => toast.error(getErrorMessage(err)),
+  });
+
   const resetImportDialog = () => {
     setImportFile(null);
     setImportClassId('');
@@ -362,6 +389,43 @@ export default function StudentsPage() {
 
   const confirm = (title, description, onConfirm) =>
     openConfirm({ title, description, onConfirm });
+
+  const toggleStudentSelection = (studentId) => {
+    const newSelection = new Set(selectedStudentIds);
+    if (newSelection.has(studentId)) {
+      newSelection.delete(studentId);
+    } else {
+      newSelection.add(studentId);
+    }
+    setSelectedStudentIds(newSelection);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedStudentIds.size === students.length) {
+      setSelectedStudentIds(new Set());
+    } else {
+      const allIds = new Set(students.map((s) => s._id));
+      setSelectedStudentIds(allIds);
+    }
+  };
+
+  const openBulkTransferDialog = () => {
+    if (selectedStudentIds.size === 0) {
+      toast.error('Please select at least one student');
+      return;
+    }
+    setBulkTransferClassId(null);
+    setBulkTransferNote('');
+    setBulkTransferOpen(true);
+  };
+
+  const submitBulkTransfer = () => {
+    if (!bulkTransferClassId) {
+      toast.error('Please select a class');
+      return;
+    }
+    bulkTransferStudents();
+  };
 
   const pagination = data?.meta ?? data?.pagination;
   const totalCount = pagination?.total ?? students.length;
@@ -505,6 +569,30 @@ export default function StudentsPage() {
         )}
       </div>
 
+      {/* Selection toolbar */}
+      {!isTeacher && selectedStudentIds.size > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-lg border border-primary/30 bg-primary/5">
+          <span className="text-sm font-medium text-foreground">
+            {selectedStudentIds.size} student{selectedStudentIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <div className="flex gap-2 ml-auto">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setSelectedStudentIds(new Set())}
+            >
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              onClick={openBulkTransferDialog}
+            >
+              <MoveRight className="h-3.5 w-3.5 mr-1.5" /> Transfer
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       {isLoading ? (
         <div className="space-y-2">
@@ -522,6 +610,17 @@ export default function StudentsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-muted/30">
+                  {!isTeacher && (
+                    <th className="text-left py-2.5 px-3 w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedStudentIds.size > 0 && selectedStudentIds.size === students.length}
+                        onChange={toggleSelectAll}
+                        className="rounded border-gray-300 cursor-pointer"
+                        title="Select all students on this page"
+                      />
+                    </th>
+                  )}
                   <th className="text-left py-2.5 px-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground w-28">Adm. Nº</th>
                   <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Name</th>
                   <th className="text-left py-2.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Class</th>
@@ -537,8 +636,18 @@ export default function StudentsPage() {
                   const g = s.parentIds?.[0] ?? s.guardians?.[0];
                   const guardianName = g ? [g.firstName, g.lastName].filter(Boolean).join(' ') : null;
                   return (
-                    <tr key={s._id} className="hover:bg-muted/20 cursor-pointer transition-colors"
-                      onClick={() => router.push(`/students/${s._id}`)}>
+                    <tr key={s._id} className="hover:bg-muted/20 transition-colors"
+                      onClick={() => !isTeacher && router.push(`/students/${s._id}`)}>
+                      {!isTeacher && (
+                        <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedStudentIds.has(s._id)}
+                            onChange={() => toggleStudentSelection(s._id)}
+                            className="rounded border-gray-300 cursor-pointer"
+                          />
+                        </td>
+                      )}
                       <td className="py-3 px-4">
                         <span className="font-mono text-xs tabular-nums text-muted-foreground">{s.admissionNumber ?? '—'}</span>
                       </td>
@@ -962,6 +1071,68 @@ export default function StudentsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Bulk transfer dialog ──────────────────────────────────────── */}
+      {!isTeacher && (
+        <Dialog open={bulkTransferOpen} onOpenChange={setBulkTransferOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Transfer {selectedStudentIds.size} Student{selectedStudentIds.size !== 1 ? 's' : ''}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="bulk-transfer-class">Move to Class</Label>
+                <Select value={bulkTransferClassId || ''} onValueChange={setBulkTransferClassId}>
+                  <SelectTrigger id="bulk-transfer-class">
+                    <SelectValue placeholder="Select a class..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(classes ?? []).map((c) => (
+                      <SelectItem key={c._id} value={c._id}>
+                        {c.name}{c.stream ? ` ${c.stream}` : ''} — {c.levelCategory} ({c.academicYear})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="bulk-transfer-note">Note (optional)</Label>
+                <Input
+                  id="bulk-transfer-note"
+                  placeholder="e.g. End-of-term movement..."
+                  value={bulkTransferNote}
+                  onChange={(e) => setBulkTransferNote(e.target.value)}
+                />
+              </div>
+
+              <div className="rounded-lg bg-muted/40 p-3">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">{selectedStudentIds.size}</span> student{selectedStudentIds.size !== 1 ? 's' : ''} will be transferred
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setBulkTransferOpen(false)}
+                disabled={isBulkTransferring}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={submitBulkTransfer}
+                disabled={isBulkTransferring || !bulkTransferClassId}
+              >
+                {isBulkTransferring ? 'Transferring…' : 'Transfer'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* ── Edit name dialog (teachers + admins) ───────────────────────── */}
       {editNameTarget && (
