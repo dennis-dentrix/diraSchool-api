@@ -52,6 +52,13 @@ export default function LoginPage() {
         toast.error('Login failed: no user data received');
         return;
       }
+
+      // Store token in localStorage for cross-domain authentication
+      const token = res.data.token;
+      if (token && typeof window !== 'undefined') {
+        localStorage.setItem('authToken', token);
+      }
+
       setUser(user);
       queryClient.setQueryData(['auth', 'me'], user);
       if (user.role === 'parent') router.push('/portal');

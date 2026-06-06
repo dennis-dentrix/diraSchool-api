@@ -46,8 +46,16 @@ const checkSchoolRateLimit = async (schoolId) => {
  * Must be the FIRST middleware on every protected route.
  */
 export const protect = async (req, res, next) => {
-  // Read token from HTTP-only cookie
-  const token = req.cookies?.token;
+  // Read token from Authorization header or HTTP-only cookie
+  // Header format: "Bearer <token>"
+  let token = req.cookies?.token;
+
+  if (!token) {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.slice(7); // Remove 'Bearer ' prefix
+    }
+  }
 
   if (!token) {
     return sendUnauthorized(res, 'Not authenticated. Please log in.');

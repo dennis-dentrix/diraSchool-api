@@ -14,6 +14,20 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// Add Authorization header from localStorage before each request
+api.interceptors.request.use(
+  (config) => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("authToken");
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 const normalizeSuccessPayload = (payload) => {
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return payload;

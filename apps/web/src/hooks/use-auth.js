@@ -50,8 +50,12 @@ export function useLogout() {
     try {
       await authApi.logout();
     } catch {
-      // ignore — cookie is cleared regardless
+      // ignore — token will be cleared from localStorage regardless
     } finally {
+      // Clear token from localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('authToken');
+      }
       logout();
       queryClient.clear();
       window.location.href = '/login';
