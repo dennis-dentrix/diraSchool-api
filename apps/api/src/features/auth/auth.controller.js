@@ -233,6 +233,7 @@ export const login = asyncHandler(async (req, res) => {
 
   return sendSuccess(res, {
     user: authUser,
+    token,
     mustChangePassword: user.mustChangePassword,
   });
 });

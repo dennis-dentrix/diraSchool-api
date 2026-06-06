@@ -53,10 +53,12 @@ export default function LoginPage() {
         return;
       }
 
-      // Store token in localStorage for cross-domain authentication
+      // Store token in localStorage (for API Authorization header) and as a
+      // same-domain cookie (so Next.js middleware can read it for route guards)
       const token = res.data.token;
       if (token && typeof window !== 'undefined') {
         localStorage.setItem('authToken', token);
+        document.cookie = `token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
       }
 
       setUser(user);

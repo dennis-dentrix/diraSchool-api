@@ -52,9 +52,10 @@ export function useLogout() {
     } catch {
       // ignore — token will be cleared from localStorage regardless
     } finally {
-      // Clear token from localStorage
+      // Clear token from localStorage and same-domain cookie
       if (typeof window !== 'undefined') {
         localStorage.removeItem('authToken');
+        document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
       }
       logout();
       queryClient.clear();
