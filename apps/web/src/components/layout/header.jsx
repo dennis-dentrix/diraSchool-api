@@ -10,6 +10,7 @@ import { authApi, notificationsApi, checkInsApi, getErrorMessage } from '@/lib/a
 import { TakeTourMenuItem } from '@/components/tour/TourTrigger';
 import { useSocketNotifications } from '@/hooks/use-socket-notifications';
 import { useAuthStore } from '@/store/auth.store';
+import { useLogout } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,8 +81,9 @@ export function Header({
   tomorrowHoliday,
 }) {
   const router = useRouter();
-  const { user, logout, setUser } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const queryClient = useQueryClient();
+  const { logout: doLogout } = useLogout();
   const [profileOpen, setProfileOpen]   = useState(false);
   const [profileForm, setProfileForm]   = useState({ firstName: '', lastName: '', phone: '' });
   const [searchOpen, setSearchOpen]     = useState(false);
@@ -105,15 +107,6 @@ export function Header({
     markAllRead: markAllReadSocket,
   } = useSocketNotifications({ enabled: !!user && user.role !== 'superadmin' });
 
-  const { mutate: doLogout } = useMutation({
-    mutationFn: () => authApi.logout(),
-    onSuccess: () => {
-      logout();
-      queryClient.clear();
-      router.push('/login');
-    },
-    onError: (err) => toast.error(getErrorMessage(err)),
-  });
   const { mutate: markAllRead, isPending: markingAllRead } = useMutation({
     mutationFn: markAllReadSocket,
   });

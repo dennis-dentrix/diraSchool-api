@@ -31,12 +31,12 @@ export const initSocket = (httpServer) => {
   subClient.on('error', (err) => logRedisConnectionError('Redis:socket-sub', err));
   io.adapter(createAdapter(pubClient, subClient));
 
-  // JWT auth via httpOnly cookie (same cookie the REST API uses)
+  // JWT auth — cookie (same-origin) or auth.token (cross-domain / localStorage)
   io.use(async (socket, next) => {
     try {
       const cookieStr = socket.handshake.headers.cookie ?? '';
       const match = cookieStr.match(/(?:^|;\s*)token=([^;]+)/);
-      const raw = match?.[1];
+      const raw = match?.[1] ?? socket.handshake.auth?.token ?? null;
 
       if (!raw) return next(new Error('Authentication required'));
 
@@ -46,9 +46,9 @@ export const initSocket = (httpServer) => {
       const user = await User.findById(decoded.id).select('_id schoolId role').lean();
       if (!user) return next(new Error('User not found'));
 
-      socket.userId   = String(user._id);
+      socket.userId = String(user._id);
       socket.schoolId = user.schoolId ? String(user.schoolId) : null;
-      socket.role     = user.role;
+      socket.role = user.role;
       next();
     } catch {
       next(new Error('Invalid or expired token'));

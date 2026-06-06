@@ -18,7 +18,13 @@ export const getSocket = () => {
   if (socket) return socket;
 
   socket = io(SERVER_URL, {
-    withCredentials: true,          // sends the token httpOnly cookie
+    withCredentials: true,
+    // Pass JWT from localStorage so auth works cross-domain (cookie won't be
+    // sent to a different origin in modern browsers)
+    auth: (cb) => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      cb({ token });
+    },
     transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionDelay: 1_000,
