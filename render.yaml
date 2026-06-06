@@ -1,27 +1,31 @@
 services:
-  - type: web
-    name: diraschool
-    runtime: node
-    buildCommand: cd apps/web && npm install && npm run build
-    startCommand: cd apps/web && npm start
-    envVars:
-      - key: NEXT_PUBLIC_API_URL
-        value: https://diraschool-api.onrender.com
-    port: 5173
-
+  # API Service - Express.js backend
   - type: web
     name: diraschool-api
     runtime: node
+    repo: https://github.com/dennis-dentrix/diraschool-api
+    branch: main
     buildCommand: cd apps/api && npm install
     startCommand: cd apps/api && npm start
     envVars:
-      - key: PORT
-        value: 5000
       - key: NODE_ENV
         value: production
-      # Add your other environment variables here
-      # - key: MONGODB_URI
-      #   value: your-mongodb-uri
-      # - key: REDIS_URL
-      #   value: your-redis-url
-    port: 5000
+      # Required: Add your own values
+      - key: MONGODB_URI
+        value: your-mongodb-uri-here
+      - key: REDIS_URL
+        value: your-redis-url-here
+      - key: JWT_SECRET
+        value: your-jwt-secret-here
+
+  # Web Service - Next.js frontend
+  - type: web
+    name: diraschool
+    runtime: node
+    repo: https://github.com/dennis-dentrix/diraschool-api
+    branch: main
+    buildCommand: cd apps/web && npm install && npm run build
+    startCommand: cd apps/web && bash start.sh
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://diraschool-api.onrender.com
