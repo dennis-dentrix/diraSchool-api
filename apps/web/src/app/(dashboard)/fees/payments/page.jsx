@@ -586,7 +586,6 @@ function BalanceDialog({ open, onClose, studentsData, settingsData, classesData 
                   <SelectValue placeholder="All classes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All classes</SelectItem>
                   {classes.map((c) => (
                     <SelectItem key={c._id} value={c._id}>
                       {c.name}
