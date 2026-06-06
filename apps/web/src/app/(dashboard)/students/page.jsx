@@ -34,11 +34,13 @@ const schema = z.object({
   firstName:              z.string().min(1, 'Required'),
   lastName:               z.string().min(1, 'Required'),
   admissionNumber:        z.string().min(1, 'Required'),
-  assessmentNumber:       z.string().optional(),
+  assessmentNumber:       z.string().optional().or(z.literal('')),
   gender:                 z.enum(['male', 'female']),
-  dateOfBirth:            z.string().optional(),
-  birthCertificateNumber: z.string().optional(),
-  enrollmentDate:         z.string().optional(),
+  dateOfBirth:            z.string().optional().or(z.literal(''))
+    .refine((val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val), 'Invalid date format'),
+  birthCertificateNumber: z.string().optional().or(z.literal('')),
+  enrollmentDate:         z.string().optional().or(z.literal(''))
+    .refine((val) => !val || /^\d{4}-\d{2}-\d{2}$/.test(val), 'Invalid date format'),
   classId:                z.string().min(1, 'Required'),
   guardians: z.array(
     z.object({
@@ -233,8 +235,18 @@ export default function StudentsPage() {
           occupation:   g.occupation?.trim() || undefined,
         }))
         .filter((g) => g.firstName || g.lastName || g.phone || g.email);
-      return studentsApi.create({
+
+      // Clean up empty date fields
+      const cleanedFields = {
         ...studentFields,
+        dateOfBirth: studentFields.dateOfBirth ? studentFields.dateOfBirth : undefined,
+        enrollmentDate: studentFields.enrollmentDate ? studentFields.enrollmentDate : undefined,
+        assessmentNumber: studentFields.assessmentNumber ? studentFields.assessmentNumber.trim() : undefined,
+        birthCertificateNumber: studentFields.birthCertificateNumber ? studentFields.birthCertificateNumber.trim() : undefined,
+      };
+
+      return studentsApi.create({
+        ...cleanedFields,
         ...(normalizedGuardians.length ? { guardians: normalizedGuardians } : {}),
       });
     },
@@ -892,6 +904,7 @@ export default function StudentsPage() {
               <DialogTitle>Enroll New Student</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit(createStudent)} className="space-y-4">
+              {/* Student Name */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>First Name *</Label>
@@ -905,6 +918,7 @@ export default function StudentsPage() {
                 </div>
               </div>
 
+              {/* Admission & Assessment Numbers */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Admission No. *</Label>
@@ -912,18 +926,12 @@ export default function StudentsPage() {
                   {errors.admissionNumber && <p className="text-xs text-destructive">{errors.admissionNumber.message}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Assessment No. <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+                  <Label>Assessment No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
                   <Input {...register('assessmentNumber')} placeholder="e.g. 12345678" className="font-mono" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Birth Certificate No. <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
-                  <Input {...register('birthCertificateNumber')} placeholder="12345678" className="font-mono" />
-                </div>
-              </div>
-
+              {/* Gender & Dates */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Gender *</Label>
@@ -937,28 +945,35 @@ export default function StudentsPage() {
                   {errors.gender && <p className="text-xs text-destructive">{errors.gender.message}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Date of Birth <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+                  <Label>Date of Birth <span className="text-muted-foreground text-xs">(optional)</span></Label>
                   <Input type="date" {...register('dateOfBirth')} min={minDobDate} max={today} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Enrollment Date <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+                  <Label>Enrollment Date <span className="text-muted-foreground text-xs">(optional)</span></Label>
                   <Input type="date" {...register('enrollmentDate')} max={today} />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Class *</Label>
-                <Select onValueChange={(v) => setValue('classId', v)}>
-                  <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
-                  <SelectContent>
-                    {classes.map((cls) => (
-                      <SelectItem key={cls._id} value={cls._id}>
-                        {cls.name}{cls.stream ? ` ${cls.stream}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.classId && <p className="text-xs text-destructive">{errors.classId.message}</p>}
+              {/* Birth Certificate & Class */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Birth Certificate No. <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                  <Input {...register('birthCertificateNumber')} placeholder="12345678" className="font-mono" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Class *</Label>
+                  <Select onValueChange={(v) => setValue('classId', v)}>
+                    <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                    <SelectContent>
+                      {classes.map((cls) => (
+                        <SelectItem key={cls._id} value={cls._id}>
+                          {cls.name}{cls.stream ? ` ${cls.stream}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.classId && <p className="text-xs text-destructive">{errors.classId.message}</p>}
+                </div>
               </div>
 
               {/* Guardian section */}

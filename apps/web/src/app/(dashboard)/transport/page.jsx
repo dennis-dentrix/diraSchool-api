@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Bus, MoreHorizontal, Pencil, Users, Trash2, UserPlus, X, GripVertical, Search, Printer, Eye } from 'lucide-react';
-import { transportApi, studentsApi, schoolsApi, settingsApi, getErrorMessage } from '@/lib/api';
+import { transportApi, studentsApi, schoolsApi, settingsApi, feesApi, getErrorMessage } from '@/lib/api';
 import { buildDocumentHeaderHtml, getDocumentHeaderCss, getDocumentHeaderData, escapeHtml } from '@/lib/document-print';
 import { useAuthStore, isAdmin } from '@/store/auth.store';
 import { PageHeader } from '@/components/shared/page-header';
@@ -346,10 +346,41 @@ export default function TransportPage() {
   const [createStops,   setCreateStops]   = useState([]);
   const [editForm,      setEditForm]      = useState(ROUTE_FORM_INIT);
   const [editStops,     setEditStops]     = useState([]);
+  const [showTransportPayers, setShowTransportPayers] = useState(true);
 
   const { data, isLoading } = useQuery({
     queryKey: ['transport-routes'],
     queryFn: async () => { const res = await transportApi.listRoutes({ limit: 50 }); return res.data; },
+  });
+
+  // Fetch students who paid "Transport" fees
+  const { data: transportPayersData, isLoading: loadingPayers } = useQuery({
+    queryKey: ['transport-fee-payers'],
+    queryFn: async () => {
+      const res = await feesApi.listPayments({ limit: 1000, paymentType: 'other', status: 'completed' });
+      const payments = res.data?.data ?? res.data?.payments ?? [];
+
+      // Filter for transport payments and get unique students
+      const transportPayments = payments.filter((p) => p.feeItemName === 'Transport');
+      const studentMap = new Map();
+
+      for (const payment of transportPayments) {
+        if (payment.studentId?._id) {
+          const sid = payment.studentId._id;
+          if (!studentMap.has(sid)) {
+            studentMap.set(sid, {
+              _id: payment.studentId._id,
+              firstName: payment.studentId.firstName,
+              lastName: payment.studentId.lastName,
+              admissionNumber: payment.studentId.admissionNumber,
+              classId: payment.classId,
+            });
+          }
+        }
+      }
+
+      return Array.from(studentMap.values());
+    },
   });
 
   const cleanForm = (form, stops) => {
@@ -398,6 +429,48 @@ export default function TransportPage() {
           <Button size="sm" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> Add Route</Button>
         )}
       </PageHeader>
+
+      {/* Transport Payers Section */}
+      {showTransportPayers && canManage && (
+        <div className="rounded-lg border bg-card overflow-hidden">
+          <button
+            onClick={() => setShowTransportPayers(!showTransportPayers)}
+            className="w-full flex items-center justify-between px-4 py-3 border-b hover:bg-muted/30 transition-colors"
+          >
+            <div className="text-left">
+              <p className="text-sm font-semibold">Students Who Paid Transport Fees</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {loadingPayers ? 'Loading...' : `${transportPayersData?.length ?? 0} student(s) ready to assign`}
+              </p>
+            </div>
+            <Badge variant="outline">{transportPayersData?.length ?? 0}</Badge>
+          </button>
+
+          {!loadingPayers && (transportPayersData?.length ?? 0) > 0 && (
+            <div className="px-4 py-3 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Select a route below to assign these students with their pickup/dropoff points and vehicle.
+              </p>
+              {routes.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {routes.filter((r) => r.isActive).map((route) => (
+                    <button
+                      key={route._id}
+                      onClick={() => setAssignTarget(route)}
+                      className="text-left px-3 py-2 rounded-md border border-border hover:bg-muted/50 transition-colors"
+                    >
+                      <p className="text-sm font-medium">{route.name}</p>
+                      <p className="text-xs text-muted-foreground">{route.vehicleReg || 'No vehicle assigned'}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Create a route first to assign students.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Schedule strip */}
       {scheduledRoutes.length > 0 && (
