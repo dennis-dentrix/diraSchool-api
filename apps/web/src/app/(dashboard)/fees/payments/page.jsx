@@ -529,10 +529,12 @@ function RecordPaymentPanel({ open, onClose, settingsData, schoolData, studentsD
 }
 
 // ── Check Balance dialog ──────────────────────────────────────────────────────
-function BalanceDialog({ open, onClose, studentsData, settingsData }) {
-  const [studentId, setStudentId] = useState('');
-  const [year, setYear]           = useState(String(new Date().getFullYear()));
-  const [term, setTerm]           = useState(TERMS[0]);
+function BalanceDialog({ open, onClose, studentsData, settingsData, classesData }) {
+  const [studentId, setStudentId]   = useState('');
+  const [year, setYear]             = useState(String(new Date().getFullYear()));
+  const [term, setTerm]             = useState(TERMS[0]);
+  const [classFilter, setClassFilter] = useState('');
+  const [studentSearch, setStudentSearch] = useState('');
 
   const { data: balanceData, isFetching, refetch } = useQuery({
     queryKey: ['balance', studentId, year, term],
@@ -543,26 +545,99 @@ function BalanceDialog({ open, onClose, studentsData, settingsData }) {
     enabled: false,
   });
 
-  const students = studentsData ?? [];
+  const allStudents = studentsData ?? [];
+  const classes = classesData ?? [];
+
+  // Filter students by class and search
+  const filteredStudents = useMemo(() => {
+    let result = [...allStudents];
+
+    // Filter by class if selected
+    if (classFilter) {
+      result = result.filter((s) => s.classId?._id === classFilter || s.classId === classFilter);
+    }
+
+    // Filter by search (name or admission number)
+    if (studentSearch.trim()) {
+      const query = studentSearch.toLowerCase();
+      result = result.filter((s) =>
+        `${s.firstName} ${s.lastName}`.toLowerCase().includes(query) ||
+        (s.admissionNumber ?? '').toLowerCase().includes(query)
+      );
+    }
+
+    return result;
+  }, [allStudents, classFilter, studentSearch]);
+
+  // Get the selected student's class for display
+  const selectedStudent = allStudents.find((s) => s._id === studentId);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Check Fee Balance</DialogTitle></DialogHeader>
         <div className="space-y-3">
+          {/* Class and Search filters */}
+          <div className="space-y-2 p-3 rounded-lg bg-muted/50 border">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Class (optional)</Label>
+              <Select value={classFilter} onValueChange={setClassFilter}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="All classes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All classes</SelectItem>
+                  {classes.map((c) => (
+                    <SelectItem key={c._id} value={c._id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Search by name or admission #</Label>
+              <Input
+                placeholder="Type name or admission number…"
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Student selector */}
           <div className="space-y-1.5">
-            <Label>Student</Label>
+            <Label>Select Student</Label>
             <Select value={studentId} onValueChange={setStudentId}>
-              <SelectTrigger><SelectValue placeholder="Select student" /></SelectTrigger>
-              <SelectContent>
-                {students.map((s) => (
-                  <SelectItem key={s._id} value={s._id}>
-                    {s.firstName} {s.lastName} — {s.admissionNumber}
-                  </SelectItem>
-                ))}
+              <SelectTrigger>
+                <SelectValue placeholder={filteredStudents.length === 0 ? "No students found" : "Choose student…"} />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px]">
+                {filteredStudents.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground text-center">
+                    No students match your filters
+                  </div>
+                ) : (
+                  filteredStudents.map((s) => (
+                    <SelectItem key={s._id} value={s._id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{s.firstName} {s.lastName}</span>
+                        <span className="text-xs text-muted-foreground">{s.admissionNumber} • {s.classId?.name ?? '—'}</span>
+                      </div>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
+            {studentSearch && filteredStudents.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Showing {filteredStudents.length} student{filteredStudents.length !== 1 ? 's' : ''}
+              </p>
+            )}
           </div>
+
+          {/* Year and Term */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Year</Label>
@@ -583,11 +658,19 @@ function BalanceDialog({ open, onClose, studentsData, settingsData }) {
               </Select>
             </div>
           </div>
+
           <Button className="w-full" disabled={!studentId || isFetching} onClick={() => refetch()}>
             {isFetching ? 'Loading…' : 'Fetch Balance'}
           </Button>
+
+          {/* Balance Results */}
           {balanceData && (
-            <div className="rounded-lg border p-3 space-y-1.5 text-sm">
+            <div className="rounded-lg border p-3 space-y-1.5 text-sm bg-card">
+              {selectedStudent && (
+                <div className="pb-2 mb-2 border-b text-xs text-muted-foreground">
+                  {selectedStudent.firstName} {selectedStudent.lastName} • {selectedStudent.classId?.name ?? '—'}
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Expected fee</span>
                 <span className="font-mono font-medium tabular-nums">{formatCurrency(balanceData.feeStructure?.totalAmount ?? 0)}</span>
@@ -947,6 +1030,7 @@ export default function PaymentsPage() {
         onClose={() => setBalanceOpen(false)}
         studentsData={studentsData}
         settingsData={settingsData}
+        classesData={classesData}
       />
     </div>
   );
