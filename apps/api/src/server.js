@@ -8,6 +8,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
+import compression from 'compression';
 
 import { validateEnv, env } from './config/env.js';
 import { connectDB } from './config/db.js';
@@ -105,6 +106,11 @@ app.use(globalLimiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// ── Compression middleware ───────────────────────────────────────────────────
+// Compress all responses larger than 1KB (typically 60-80% reduction)
+app.use(compression({ threshold: 1024 }));
+app.enable('etag'); // Enable automatic ETag support for efficient caching
 
 // ── HTTP request logging ─────────────────────────────────────────────────────
 // Silence in tests; use morgan piped through Winston in all other envs.
