@@ -5,8 +5,8 @@ services:
     runtime: node
     repo: https://github.com/dennis-dentrix/diraschool-api
     branch: main
-    buildCommand: cd apps/api && npm install
-    startCommand: cd apps/api && npm start
+    buildCommand: npm install
+    startCommand: npm start -w apps/api
     envVars:
       - key: NODE_ENV
         value: production
@@ -24,8 +24,8 @@ services:
     runtime: node
     repo: https://github.com/dennis-dentrix/diraschool-api
     branch: main
-    buildCommand: cd apps/web && npm install && npm run build
-    startCommand: cd apps/web && bash start.sh
+    buildCommand: npm install && npm run build:web
+    startCommand: npm start -w apps/web
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://diraschool-api.onrender.com

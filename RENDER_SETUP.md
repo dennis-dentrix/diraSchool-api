@@ -35,8 +35,8 @@ Fill in the following fields:
 |-------|-------|
 | **Name** | `diraschool-api` |
 | **Environment** | `Node` |
-| **Build Command** | `cd apps/api && npm install` |
-| **Start Command** | `cd apps/api && npm start` |
+| **Build Command** | `npm install` |
+| **Start Command** | `npm start -w apps/api` |
 | **Root Directory** | `/` (leave blank) |
 
 ### 2c. Add Environment Variables
@@ -73,8 +73,8 @@ Fill in the following fields:
 |-------|-------|
 | **Name** | `diraschool` |
 | **Environment** | `Node` |
-| **Build Command** | `cd apps/web && npm install && npm run build` |
-| **Start Command** | `cd apps/web && bash start.sh` |
+| **Build Command** | `npm install && npm run build:web` |
+| **Start Command** | `npm start -w apps/web` |
 | **Root Directory** | `/` (leave blank) |
 
 ### 3c. Add Environment Variables
