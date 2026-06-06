@@ -25,12 +25,14 @@ const attachCookie = (res, token) => {
   const oneDay = 24 * 60 * 60 * 1000;
   const domain = getCookieDomain();
 
-  // For Render (onrender.com), explicitly set domain and use Lax for cross-subdomain requests.
-  // For DigitalOcean (custom domain), use domain and Strict.
-  // For development (localhost), no domain, use Lax.
+  // Determine cookie domain and SameSite policy based on environment
   const isRender = domain === undefined && env.CLIENT_URL?.includes('onrender.com');
   const cookieDomain = isRender ? '.onrender.com' : domain;
-  const sameSitePolicy = env.isProduction ? 'lax' : 'lax'; // Lax is compatible with both Render and DigitalOcean
+
+  // Use SameSite=None for Render (allows cross-subdomain cookies).
+  // Use SameSite=Strict for DigitalOcean custom domains (more secure).
+  // SameSite=None requires Secure flag (HTTPS), which Render provides.
+  const sameSitePolicy = isRender ? 'none' : 'strict';
 
   res.cookie('token', token, {
     httpOnly: true,

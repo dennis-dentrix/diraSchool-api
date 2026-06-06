@@ -67,11 +67,12 @@ export const protect = async (req, res, next) => {
     const domain = getCookieDomain();
     const isRender = domain === undefined && env.CLIENT_URL?.includes('onrender.com');
     const cookieDomain = isRender ? '.onrender.com' : domain;
+    const sameSitePolicy = isRender ? 'none' : 'strict';
 
     res.cookie('token', newToken, {
       httpOnly: true,
       secure: env.isProduction,
-      sameSite: 'lax',
+      sameSite: sameSitePolicy,
       maxAge: 24 * 60 * 60 * 1000,
       domain: cookieDomain,
     });
