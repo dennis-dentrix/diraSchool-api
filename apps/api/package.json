@@ -14,7 +14,8 @@
     "lint": "eslint src/",
     "seed": "node scripts/seed.js",
     "seed:reset": "node scripts/seed.js --reset",
-    "verify:cloudinary": "node scripts/verify-cloudinary.js"
+    "verify:cloudinary": "node scripts/verify-cloudinary.js",
+    "add-indexes": "node scripts/add-indexes.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1038.0",
@@ -24,6 +25,7 @@
     "africastalking": "^0.5.9",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.0.0",
+    "compression": "^1.7.4",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
