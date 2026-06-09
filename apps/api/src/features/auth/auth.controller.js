@@ -356,6 +356,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     message: 'Password reset successfully. You are now logged in.',
     user: authUser,
+    token: jwtToken,
   });
 });
 
@@ -427,6 +428,7 @@ export const acceptInvite = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     message: 'Your account is set up. Welcome!',
     user: authUser,
+    token: jwtToken,
   });
 });
 
@@ -487,6 +489,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     message: 'Email verified! Welcome to Diraschool.',
     user: authUser,
+    token: jwtToken,
   });
 });
 
@@ -525,6 +528,7 @@ export const verifyEmailByToken = asyncHandler(async (req, res) => {
   return sendSuccess(res, {
     message: 'Email verified! Welcome to Diraschool.',
     user: authUser,
+    token: jwtToken,
   });
 });
 

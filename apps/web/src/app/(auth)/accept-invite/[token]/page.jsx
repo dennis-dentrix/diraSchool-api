@@ -38,7 +38,13 @@ export default function AcceptInvitePage() {
   const { mutate, isPending } = useMutation({
     mutationFn: ({ confirmPassword, ...data }) => authApi.acceptInvite(token, data),
     onSuccess: (res) => {
-      const user = res.data?.data?.user ?? res.data?.user ?? null;
+      const user  = res.data?.user  ?? res.data?.data?.user  ?? null;
+      const token = res.data?.token ?? res.data?.data?.token ?? null;
+      if (token) {
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('authTokenExpiry', String(Date.now() + 20 * 60 * 60 * 1000));
+        document.cookie = `token=${token}; path=/; max-age=${20 * 60 * 60}; SameSite=Lax`;
+      }
       setUser(user);
       toast.success('Account activated! Welcome.');
       router.push('/dashboard');

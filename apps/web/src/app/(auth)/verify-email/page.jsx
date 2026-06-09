@@ -28,7 +28,13 @@ export default function VerifyEmailPage() {
   const { mutate: verify, isPending } = useMutation({
     mutationFn: (code) => authApi.verifyEmail(email, code),
     onSuccess: (res) => {
-      const user = res.data.data?.user ?? res.data.user;
+      const user  = res.data.user  ?? res.data.data?.user;
+      const token = res.data.token ?? res.data.data?.token;
+      if (token) {
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('authTokenExpiry', String(Date.now() + 20 * 60 * 60 * 1000));
+        document.cookie = `token=${token}; path=/; max-age=${20 * 60 * 60}; SameSite=Lax`;
+      }
       setUser(user);
       toast.success('Email verified! Welcome to Diraschool.');
       if (user?.role === 'parent')     router.push('/portal');

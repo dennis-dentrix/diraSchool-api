@@ -19,16 +19,23 @@ export default function VerifyEmailTokenPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['verify-email', token],
     queryFn: async () => {
-      const res = await authApi.verifyEmailByToken(token);
-      return res.data.data?.user ?? res.data.user ?? null;
+      const res      = await authApi.verifyEmailByToken(token);
+      const authUser = res.data.user  ?? res.data.data?.user  ?? null;
+      const authJwt  = res.data.token ?? res.data.data?.token ?? null;
+      return { user: authUser, token: authJwt };
     },
     enabled: !!token,
     retry:   false,
   });
 
   useEffect(() => {
-    if (data) {
-      setUser(data);
+    if (data?.user) {
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
+        localStorage.setItem('authTokenExpiry', String(Date.now() + 20 * 60 * 60 * 1000));
+        document.cookie = `token=${data.token}; path=/; max-age=${20 * 60 * 60}; SameSite=Lax`;
+      }
+      setUser(data.user);
       setTimeout(() => router.push('/dashboard'), 2000);
     }
   }, [data, router, setUser]);

@@ -47,7 +47,10 @@ export default function LoginPage() {
   const { mutate, isPending } = useMutation({
     mutationFn: (data) => authApi.login(data),
     onSuccess: (res) => {
-      const user = res.data.data || res.data.user;
+      // The normalizer may or may not unwrap the payload depending on key count,
+      // so read user and token explicitly from the top-level response fields.
+      const user  = res.data.user  ?? res.data.data?.user;
+      const token = res.data.token ?? res.data.data?.token;
       if (!user) {
         toast.error('Login failed: no user data received');
         return;
@@ -55,7 +58,6 @@ export default function LoginPage() {
 
       // Store token in localStorage (for API Authorization header) and as a
       // same-domain cookie (so Next.js middleware can read it for route guards)
-      const token = res.data.token;
       if (token && typeof window !== 'undefined') {
         localStorage.setItem('authToken', token);
         // Store expiry so the client can proactively logout without an API round-trip
@@ -64,6 +66,8 @@ export default function LoginPage() {
       }
 
       setUser(user);
+      // Seed the cache with the correct user object so useAuth doesn't need
+      // an extra round-trip before the dashboard query becomes enabled.
       queryClient.setQueryData(['auth', 'me'], user);
       if (user.role === 'parent') router.push('/portal');
       else if (user.role === 'superadmin') router.push('/superadmin');
