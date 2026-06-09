@@ -71,6 +71,7 @@ const AUTH_NO_REDIRECT = [
   "/auth/register",
   "/auth/verify-email",
   "/auth/reset-password",
+  "/auth/me", // 401 here means "not logged in" — let useAuth/layout handle the redirect
 ];
 
 // Redirect to login on 401 (session expired / not authenticated)

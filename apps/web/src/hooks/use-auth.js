@@ -52,9 +52,12 @@ export function useAuth() {
       return;
     }
 
-    // Query errored (network error, 5xx, etc.) — don't wipe the stored user.
-    // The 401 interceptor in api.js handles true session expiry by redirecting to /login.
-    setLoading(false);
+    // Query errored (401 = not authenticated). Clear all auth state and the
+    // same-domain cookie so the middleware stops redirecting back to /dashboard.
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('authTokenExpiry');
+    document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
+    setUser(null);
   }, [data, queryLoading, isError, setUser, setLoading]);
 
   return {
