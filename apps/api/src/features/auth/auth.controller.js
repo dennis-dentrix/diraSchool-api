@@ -22,7 +22,7 @@ const signToken = (userId) =>
   jwt.sign({ id: userId }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
 
 const attachCookie = (res, token) => {
-  const oneDay = 24 * 60 * 60 * 1000;
+  const oneDay = 20 * 60 * 60 * 1000;
   const domain = getCookieDomain();
 
   // Determine cookie domain and SameSite policy based on environment

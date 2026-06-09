@@ -58,7 +58,9 @@ export default function LoginPage() {
       const token = res.data.token;
       if (token && typeof window !== 'undefined') {
         localStorage.setItem('authToken', token);
-        document.cookie = `token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+        // Store expiry so the client can proactively logout without an API round-trip
+        localStorage.setItem('authTokenExpiry', String(Date.now() + 20 * 60 * 60 * 1000));
+        document.cookie = `token=${token}; path=/; max-age=${20 * 60 * 60}; SameSite=Lax`;
       }
 
       setUser(user);

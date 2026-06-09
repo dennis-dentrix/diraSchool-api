@@ -5,6 +5,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/auth.store';
 
+function isTokenExpired() {
+  if (typeof window === 'undefined') return false;
+  const expiry = localStorage.getItem('authTokenExpiry');
+  if (!expiry) return false;
+  return Date.now() > Number(expiry);
+}
+
 export function useAuth() {
   const { user, isLoading, setUser, setLoading } = useAuthStore();
 
@@ -17,6 +24,21 @@ export function useAuth() {
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
+
+  // Proactively log out when the token has expired — checked on mount and
+  // whenever the user returns to the tab, so they aren't stuck in a broken state.
+  useEffect(() => {
+    const check = () => {
+      if (!isTokenExpired()) return;
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('authTokenExpiry');
+      document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
+      window.location.href = '/login';
+    };
+    check();
+    window.addEventListener('focus', check);
+    return () => window.removeEventListener('focus', check);
+  }, []);
 
   useEffect(() => {
     if (queryLoading) {
@@ -55,6 +77,7 @@ export function useLogout() {
       // Clear token from localStorage and same-domain cookie
       if (typeof window !== 'undefined') {
         localStorage.removeItem('authToken');
+        localStorage.removeItem('authTokenExpiry');
         document.cookie = 'token=; path=/; max-age=0; SameSite=Lax';
       }
       logout();

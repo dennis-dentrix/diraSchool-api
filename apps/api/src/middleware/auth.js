@@ -68,24 +68,6 @@ export const protect = async (req, res, next) => {
     return sendUnauthorized(res, 'Invalid or expired token. Please log in again.');
   }
 
-  // Sliding session: silently re-issue cookie if < 6 h remain.
-  // Active users are never logged out; idle users expire after 24 h.
-  if (decoded.exp && decoded.exp - Math.floor(Date.now() / 1000) < 6 * 60 * 60) {
-    const newToken = jwt.sign({ id: decoded.id }, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN });
-    const domain = getCookieDomain();
-    const isRender = domain === undefined && env.CLIENT_URL?.includes('onrender.com');
-    const cookieDomain = isRender ? '.onrender.com' : domain;
-    const sameSitePolicy = isRender ? 'none' : 'strict';
-
-    res.cookie('token', newToken, {
-      httpOnly: true,
-      secure: env.isProduction,
-      sameSite: sameSitePolicy,
-      maxAge: 24 * 60 * 60 * 1000,
-      domain: cookieDomain,
-    });
-  }
-
   // Load user — exclude password
   const user = await User.findById(decoded.id).select('-password');
 
